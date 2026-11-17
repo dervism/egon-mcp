@@ -1,0 +1,212 @@
+import { describe, expect, it } from 'vitest';
+import { readEgonFixture } from '../../test/egon-fixtures.js';
+import { parseStoryFile } from '../egon/parse.js';
+import { toEgnJson } from '../egon/serialize.js';
+import type { ShapeElement, StoryElement } from '../egon/types.js';
+import { describeStory } from '../server/describe.js';
+import type { StoryEntry } from '../server/workspace.js';
+import { addSentence, buildStory } from './sentences.js';
+import { Story } from './story.js';
+import { validateStory } from './validate.js';
+
+/** A story from an Egon 3 file with these elements. */
+function opened(elements: object[]): Story {
+  const text = JSON.stringify({ domain: { name: 'default', actors: {}, workObjects: {} }, dst: [...elements, { info: '' }, { version: '3.2.1' }] });
+  return Story.fromDocument(parseStoryFile(text, 'story.egn'));
+}
+
+/** The same story after save_story and open_story. */
+function reopened(story: Story): Story {
+  return Story.fromDocument(parseStoryFile(toEgnJson(story.toDocument()), 'story.egn'));
+}
+
+function parents(story: Story): Record<string, unknown> {
+  return Object.fromEntries(story.elements().map((element: StoryElement) => [element.id, element['parent']]));
+}
+
+/** An element by id, name or annotation text. */
+const find = (story: Story, ref: string) => story.elements().find((element) => element.id === ref || element.name === ref || element['text'] === ref);
+const parentOf = (story: Story, ref: string) => find(story, ref)?.['parent'];
+const group = (id: string, x: number, y: number, width?: number, height?: number, parent?: string) => ({
+  type: 'domainStory:group',
+  id,
+  name: id,
+  x,
+  y,
+  ...(width !== undefined ? { width, height } : {}),
+  ...(parent ? { parent } : {}),
+});
+const actor = (id: string, x: number, y: number, parent?: string) => ({ type: 'domainStory:actorPerson', id, name: id, x, y, ...(parent ? { parent } : {}) });
+const note = (id: string, x: number, y: number) => ({ type: 'domainStory:textAnnotation', id, text: id, x, y, width: 100, height: 30 });
+
+describe('group membership in an opened file', () => {
+  it('puts shapes without parent into the group that holds their top-left corner, as Egon does', () => {
+    // Egon reads parent, but leaves it out for shapes that a group was drawn around.
+    const story = Story.fromDocument(parseStoryFile(readEgonFixture('egn_export_version_4_0_0.json'), 'story.egn'));
+    for (const id of ['shape_0469', 'shape_2543', 'shape_8939']) {
+      expect(parentOf(story, id), id).toBe('shape_1683');
+    }
+    for (const id of ['shape_0798', 'shape_5496', 'shape_5871', 'shape_1683']) {
+      expect(parentOf(story, id), id).toBeUndefined();
+    }
+  });
+
+  it('keeps an explicit parent and puts a group inside the smallest larger group around it', () => {
+    const story = opened([
+      group('outer', 0, 0, 1000, 1000),
+      group('inner', 100, 100, 300, 300),
+      actor('a', 150, 150),
+      actor('b', 600, 600),
+      actor('c', 150, 150, 'outer'),
+    ]);
+    expect(['inner', 'a', 'b', 'c', 'outer'].map((id) => parentOf(story, id))).toEqual(['outer', 'inner', 'outer', 'outer', undefined]);
+  });
+
+  it('counts the edges of the box as inside, like Egon', () => {
+    const story = opened([group('g', 0, 0, 300, 200), actor('corner', 300, 200), actor('outside', 301, 200)]);
+    expect([parentOf(story, 'corner'), parentOf(story, 'outside')]).toEqual(['g', undefined]);
+  });
+
+  it('nests neither of two groups with the same box', () => {
+    const story = opened([group('one', 0, 0, 300, 200), group('two', 0, 0, 300, 200)]);
+    expect([parentOf(story, 'one'), parentOf(story, 'two')]).toEqual([undefined, undefined]);
+  });
+
+  it('puts annotations into the group around them', () => {
+    const story = opened([group('g', 0, 0, 300, 200), note('n', 20, 20)]);
+    expect(parentOf(story, 'n')).toBe('g');
+  });
+
+  it('uses the default group size for a group without width and height', () => {
+    const story = opened([group('g', 0, 0), actor('a', 50, 50)]);
+    expect(parentOf(story, 'a')).toBe('g');
+    expect(validateStory(story.toDocument()).map((issue) => issue.code)).not.toContain('group-encloses-non-member');
+  });
+
+  it('breaks parent loops: a group that names itself, and two groups that name each other', () => {
+    // Drawing A inside B and then resizing A around B leaves B.parent = A in Egon.
+    const story = opened([group('self', 2000, 0, 300, 300, 'self'), group('outer', 0, 0, 1000, 1000, 'inner'), group('inner', 100, 100, 300, 300)]);
+    expect(['self', 'outer', 'inner'].map((id) => parentOf(story, id))).toEqual([undefined, undefined, 'outer']);
+  });
+});
+
+describe('group membership while editing', () => {
+  it('lets a box drawn with coordinates take in the shapes whose top-left corner lies in it', () => {
+    const story = buildStory({ title: 'T', sentences: [{ actor: 'Clerk', activity: 'fills', workObject: 'Form' }] });
+    const clerk = find(story, 'Clerk') as ShapeElement;
+    const box = story.addGroup({ name: 'Office', x: clerk.x - 20, y: clerk.y - 20, width: 800, height: 200 });
+    expect([parentOf(story, 'Clerk'), parentOf(story, 'Form')]).toEqual([box.id, box.id]);
+    expect(validateStory(story.toDocument()).filter((issue) => issue.code.includes('group'))).toEqual([]);
+    expect(parents(reopened(story))).toEqual(parents(story));
+  });
+
+  it('nests a group drawn inside another group', () => {
+    const story = Story.create({ title: 'T' });
+    const outer = story.addGroup({ name: 'Outer', x: 0, y: 0, width: 1000, height: 1000 });
+    const inner = story.addGroup({ name: 'Inner', x: 100, y: 100, width: 300, height: 300 });
+    expect(story.get(inner.id)?.['parent']).toBe(outer.id);
+    expect(parents(reopened(story))).toEqual(parents(story));
+  });
+
+  it('gives a box fitted around members only those members', () => {
+    const story = Story.create({ title: 'T' });
+    const a = story.addActor({ name: 'A', x: 100, y: 100 });
+    story.addWorkObject({ name: 'W', x: 150, y: 150 });
+    const box = story.addGroup({ name: 'G', members: [a.id] });
+    expect([parentOf(story, 'A'), parentOf(story, 'W')]).toEqual([box.id, undefined]);
+    expect(validateStory(story.toDocument()).map((issue) => issue.code)).toContain('group-encloses-non-member');
+  });
+
+  it('puts a shape added inside a group box into that group, as dropping it there in Egon does', () => {
+    const story = Story.create({ title: 'T' });
+    const box = story.addGroup({ name: 'G', x: 0, y: 0, width: 300, height: 200 });
+    story.addActor({ name: 'A', x: 50, y: 50 });
+    story.addWorkObject({ name: 'W', x: 150, y: 50 });
+    story.addAnnotation({ text: 'note', x: 200, y: 150 });
+    expect([parentOf(story, 'A'), parentOf(story, 'W'), parentOf(story, 'note')]).toEqual([box.id, box.id, box.id]);
+    expect(parents(reopened(story))).toEqual(parents(story));
+  });
+
+  it('places shapes without a position outside every group box', () => {
+    const story = Story.create({ title: 'T' });
+    story.addGroup({ name: 'G', x: 0, y: 0, width: 700, height: 500 });
+    addSentence(story, { actor: 'Clerk', activity: 'fills', workObject: 'Form' });
+    expect([parentOf(story, 'Clerk'), parentOf(story, 'Form')]).toEqual([undefined, undefined]);
+    expect(validateStory(story.toDocument()).filter((issue) => issue.code.includes('group'))).toEqual([]);
+  });
+
+  it('moves a shape into a group and out again with updateElement', () => {
+    const story = Story.create({ title: 'T' });
+    const box = story.addGroup({ name: 'G', x: 0, y: 0, width: 300, height: 200 });
+    story.addActor({ name: 'A', x: 600, y: 600 });
+    story.updateElement('A', { x: 50, y: 50 });
+    expect(parentOf(story, 'A')).toBe(box.id);
+    story.updateElement('A', { x: 600 });
+    expect(parentOf(story, 'A')).toBeUndefined();
+  });
+
+  it('moves the members of a group, nested groups and annotations included, along with it', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [{ actor: 'Clerk', activity: 'fills', workObject: 'Form' }],
+      annotations: [{ text: 'monthly', attachTo: 'Form' }],
+    });
+    const inner = story.addGroup({ name: 'Inner', members: ['Form'] });
+    const outer = story.addGroup({ name: 'Outer', members: ['Clerk', inner.id, 'monthly'] });
+    const before = story.elements() as ShapeElement[];
+    story.updateElement(outer.id, { x: outer.x + 500, y: outer.y + 300 });
+    for (const element of before.filter((element) => typeof element.x === 'number')) {
+      const after = story.get(element.id) as ShapeElement;
+      expect([after.x - element.x, after.y - element.y], element.id).toEqual([500, 300]);
+    }
+    expect([parentOf(story, 'Clerk'), parentOf(story, inner.id), parentOf(story, 'Form'), parentOf(story, 'monthly')]).toEqual([
+      outer.id,
+      outer.id,
+      inner.id,
+      outer.id,
+    ]);
+    expect(validateStory(story.toDocument()).filter((issue) => issue.code.includes('group'))).toEqual([]);
+  });
+
+  it('takes in the shapes a resized group now covers', () => {
+    const story = Story.create({ title: 'T' });
+    const box = story.addGroup({ name: 'G', x: 0, y: 0, width: 300, height: 200 });
+    story.addActor({ name: 'A', x: 500, y: 50 });
+    story.updateElement(box.id, { width: 700 });
+    expect(parentOf(story, 'A')).toBe(box.id);
+  });
+
+  it('hands the members of a removed group to the group around it', () => {
+    const story = Story.create({ title: 'T' });
+    const outer = story.addGroup({ name: 'Outer', x: 0, y: 0, width: 1000, height: 1000 });
+    const inner = story.addGroup({ name: 'Inner', x: 100, y: 100, width: 300, height: 300 });
+    story.addActor({ name: 'A', x: 150, y: 150 });
+    expect(parentOf(story, 'A')).toBe(inner.id);
+    story.removeElement(inner.id);
+    expect(parentOf(story, 'A')).toBe(outer.id);
+  });
+});
+
+describe('group checks', () => {
+  it('warns about a non-member whose top-left corner lies in a box, annotations included', () => {
+    const story = Story.create({ title: 'T' });
+    const a = story.addActor({ name: 'A', x: 100, y: 100 });
+    story.addAnnotation({ text: 'stray', x: 110, y: 120 });
+    story.addActor({ name: 'Edge', x: a.x - 60, y: a.y });
+    story.addGroup({ name: 'G', members: [a.id] });
+    const flagged = validateStory(story.toDocument())
+      .filter((issue) => issue.code === 'group-encloses-non-member')
+      .map((issue) => issue.message);
+    expect(flagged.some((message) => message.includes('stray'))).toBe(true);
+    // Edge's top-left corner lies left of the box, so Egon would not count it as inside.
+    expect(flagged.some((message) => message.includes('"Edge"'))).toBe(false);
+  });
+
+  it('lists annotation members of a group by their text', () => {
+    const story = Story.create({ title: 'T' });
+    const annotation = story.addAnnotation({ text: 'every month', x: 0, y: 0 }).annotation;
+    story.addGroup({ name: 'G', members: [annotation.id] });
+    const view = describeStory({ story } as unknown as StoryEntry);
+    expect(view.groups[0]?.members).toEqual(['every month']);
+  });
+});

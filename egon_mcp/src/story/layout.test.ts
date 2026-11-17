@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isActor, isWorkObject, type ActivityElement, type ShapeElement } from '../egon/types.js';
-import { boundsOf } from './geometry.js';
+import { boundsOf, type Bounds } from './geometry.js';
+import { toEgnJson } from '../egon/serialize.js';
 import { readEgonFixture } from '../../test/egon-fixtures.js';
 import { parseStoryFile } from '../egon/parse.js';
 import { autoLayout } from './layout.js';
@@ -160,6 +161,10 @@ describe('autoLayout', () => {
       story.addGroup({ name: 'Outer', members: [ids['A'] as string, ids['B'] as string, ids['C'] as string, inner.id] });
       autoLayout(story);
       expect(groupIssues(story), `run ${run}`).toEqual([]);
+      expect(membersOutsideTheirBox(story), `run ${run}`).toEqual([]);
+      const before = JSON.stringify(story.toDocument());
+      autoLayout(story);
+      expect(JSON.stringify(story.toDocument()), `run ${run}`).toBe(before);
     }
   });
 
@@ -175,6 +180,7 @@ describe('autoLayout', () => {
     story.addGroup({ name: 'Repeated', members: ['Letter', 'every month'] });
     autoLayout(story);
     expect(groupIssues(story)).toEqual([]);
+    expect(membersOutsideTheirBox(story)).toEqual([]);
     const before = JSON.stringify(story.toDocument());
     autoLayout(story);
     expect(JSON.stringify(story.toDocument())).toBe(before);
@@ -186,7 +192,125 @@ describe('autoLayout', () => {
     autoLayout(story);
     expect(groupIssues(story)).toEqual([]);
   });
+  it('puts a note on a group member into that group, so the saved file reopens the same', () => {
+    const sentences = ['W0', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6'].map((workObject) => ({ actor: 'Clerk', activity: 'files', workObject }));
+    const story = buildStory({ title: 'Notes', sentences, annotations: [{ text: 'only on Fridays', attachTo: 'W6' }] });
+    const works = story.addGroup({ name: 'Works', members: ['W0', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6'] });
+    autoLayout(story);
+    expect(story.elements().find((element) => element['text'] === 'only on Fridays')?.['parent']).toBe(works.id);
+    expect(groupIssues(story)).toEqual([]);
+    expect(membersOutsideTheirBox(story)).toEqual([]);
+    expectStableAfterReopening(story);
+  });
+
+  it('keeps the layout and the groups when the story is saved and opened again', () => {
+    const story = buildStory({
+      title: 'Workshop',
+      sentences: [
+        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'writes', workObject: 'Repair slip' },
+        { actor: 'Mechanic', activity: 'orders', workObject: 'Parts', to: [{ activity: 'from', actor: 'Supplier' }] },
+        { actor: 'Mechanic', activity: 'repairs', workObject: 'Bike' },
+      ],
+      annotations: [
+        { text: 'about 40 bikes a week', attachTo: 'Bike' },
+        { text: 'paper slip on the bike', attachTo: 'Repair slip' },
+      ],
+    });
+    const intake = story.addGroup({ name: 'Intake', members: ['Repair slip', 'paper slip on the bike'] });
+    story.addGroup({ name: 'Workshop', members: [intake.id, 'Parts'] });
+    story.addGroup({ name: 'To discuss', x: 3000, y: 3000, width: 300, height: 700 });
+    autoLayout(story);
+    expect(groupIssues(story)).toEqual([]);
+    expectStableAfterReopening(story);
+  });
+
+  it('makes room for the height of an empty group nested in another group', () => {
+    const story = Story.create({ title: 'T' });
+    const a = story.addActor({ name: 'A' });
+    const b = story.addActor({ name: 'B' });
+    const empty = story.addGroup({ name: 'Big empty', x: 5000, y: 5000, width: 300, height: 700 });
+    const other = story.addGroup({ name: 'Other', members: [b.id] });
+    story.addGroup({ name: 'Outer', members: [a.id, empty.id, other.id] });
+    autoLayout(story);
+    expect(groupIssues(story)).toEqual([]);
+    expect(membersOutsideTheirBox(story)).toEqual([]);
+  });
+
+  it('keeps wide notes in a group from overlapping', () => {
+    const story = Story.create({ title: 'T' });
+    const first = story.addAnnotation({ text: 'a note that is about forty-five characters', x: 0, y: 0 }).annotation;
+    const second = story.addAnnotation({ text: 'another note of about forty-five characters', x: 0, y: 300 }).annotation;
+    story.addGroup({ name: 'Notes', members: [first.id, second.id] });
+    autoLayout(story);
+    const [one, two] = [first.id, second.id].map((id) => boundsOf(story.get(id) as ShapeElement));
+    expect(overlaps(one as Bounds, two as Bounds)).toBe(false);
+  });
+
+  it('gives the same layout whatever the order of the elements, which saving changes', () => {
+    const story = stacked();
+    for (const name of ['Legend actor', 'Legend system']) {
+      story.addActor({ name, x: 0, y: 0 });
+    }
+    story.addWorkObject({ name: 'Legend document', x: 0, y: 0 });
+    autoLayout(story);
+    const positions = (of: Story) =>
+      Object.fromEntries(of.elements().filter((element) => typeof element['x'] === 'number').map((element) => [element.id, [element['x'], element['y']]]));
+    const doc = story.toDocument();
+    const reversed = Story.fromDocument({ ...doc, elements: [...doc.elements].reverse() });
+    autoLayout(reversed);
+    expect(positions(reversed)).toEqual(positions(story));
+  });
+
+  it('lays out a file whose groups named each other as parent', () => {
+    const text = JSON.stringify({
+      domain: { name: 'default', actors: {}, workObjects: {} },
+      dst: [
+        { type: 'domainStory:group', id: 'outer', name: 'Outer', x: 0, y: 0, width: 1000, height: 1000, parent: 'inner' },
+        { type: 'domainStory:group', id: 'inner', name: 'Inner', x: 100, y: 100, width: 300, height: 300 },
+        { type: 'domainStory:actorPerson', id: 'a', name: 'A', x: 150, y: 150 },
+        { type: 'domainStory:workObjectDocument', id: 'w', name: 'W', x: 600, y: 600 },
+        { info: '' },
+        { version: '3.2.1' },
+      ],
+    });
+    const story = Story.fromDocument(parseStoryFile(text, 'story.egn'));
+    autoLayout(story);
+    expect(groupIssues(story)).toEqual([]);
+    expect(membersOutsideTheirBox(story)).toEqual([]);
+    const before = JSON.stringify(story.toDocument());
+    autoLayout(story);
+    expect(JSON.stringify(story.toDocument())).toBe(before);
+  });
 });
+
+/** Members, nested groups included, whose bounds stick out of their group's box. */
+function membersOutsideTheirBox(story: Story): string[] {
+  const elements = story.elements();
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  return elements
+    .filter((element) => typeof element['parent'] === 'string' && byId.get(element['parent'] as string)?.type === 'domainStory:group')
+    .filter((element) => !contains(boundsOf(byId.get(element['parent'] as string) as ShapeElement), boundsOf(element as ShapeElement)))
+    .map((element) => element.id);
+}
+
+function contains(outer: Bounds, inner: Bounds): boolean {
+  return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
+}
+
+function overlaps(a: Bounds, b: Bounds): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+/** Saving and opening the story changes no group, and auto_layout then changes nothing. */
+function expectStableAfterReopening(story: Story): void {
+  const reopened = Story.fromDocument(parseStoryFile(toEgnJson(story.toDocument()), 'story.egn'));
+  const parents = (of: Story) => Object.fromEntries(of.elements().map((element) => [element.id, element['parent']]));
+  expect(parents(reopened)).toEqual(parents(story));
+  const before = JSON.stringify(reopened.toDocument().elements);
+  autoLayout(reopened);
+  expect(JSON.stringify(reopened.toDocument().elements)).toBe(before);
+}
 
 function groupIssues(story: Story): string[] {
   return validateStory(story.toDocument())

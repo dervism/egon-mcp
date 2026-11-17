@@ -54,7 +54,7 @@ export function describeStory(entry: StoryEntry, options: { positions?: boolean 
     groups: doc.elements.filter(isGroup).map((group) => ({
       id: group.id,
       name: group.name,
-      members: doc.elements.filter((element) => element['parent'] === group.id).map((element) => element.name),
+      members: doc.elements.filter((element) => element['parent'] === group.id).map((element) => nameOf(element.id)),
       ...color(group),
       ...position(group),
     })),

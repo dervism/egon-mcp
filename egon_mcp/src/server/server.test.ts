@@ -252,6 +252,16 @@ describe('egon-mcp server', () => {
     const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';
     expect(describe('auto_layout')).toMatch(/keeps the members of each group together/);
     expect(describe('validate_story')).toMatch(/group boxes that enclose shapes outside the group/);
+    expect(describe('auto_layout')).toMatch(/A note on a group member joins that group/);
+  });
+
+  it('tells agents how shapes get into a group', async () => {
+    const { tools } = await client.listTools();
+    const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';
+    expect(describe('add_group')).toMatch(/fits around them and holds only them/);
+    expect(describe('add_group')).toMatch(/takes in every shape whose top-left corner lies inside/);
+    expect(describe('update_element')).toMatch(/joins the group whose box it is moved into/);
+    expect(describe('update_element')).toMatch(/Moving a group moves everything in it/);
   });
 
   it('tells agents how sentences pick their work object', async () => {

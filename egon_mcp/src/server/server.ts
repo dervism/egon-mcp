@@ -421,7 +421,8 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     'add_group',
     {
       title: 'Add group',
-      description: 'Draws a box around elements that belong together, such as a department or subdomain. With members the box fits around them; otherwise give x, y, width and height.',
+      description:
+        'Draws a box around elements that belong together, such as a department or subdomain. With members, the box fits around them and holds only them. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.',
       inputSchema: {
         storyId,
         name: z.string().describe('Label in the top-left corner of the box.'),
@@ -481,7 +482,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Update element',
       description:
-        'Changes an element: rename it, change its icon or color, move or resize it, edit an annotation\'s text, or move an activity to another step number (the other steps shift). Pass color: "" to reset the color.',
+        'Changes an element: rename it, change its icon or color, move or resize it, edit an annotation\'s text, or move an activity to another step number (the other steps shift). Pass color: "" to reset the color. As in Egon, a shape joins the group whose box it is moved into and leaves a group it is moved out of. Moving a group moves everything in it, and a moved or resized group takes in the shapes its box now covers.',
       inputSchema: {
         storyId,
         element: elementRef,
@@ -534,7 +535,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     'auto_layout',
     {
       title: 'Auto layout',
-      description: 'Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, refits the group boxes, moves other annotations next to their element and moves groups without members to the end. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.',
+      description: 'Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, refits the group boxes, moves other annotations next to their element and moves groups without members to the end. A note on a group member joins that group, so the story reopens with the same groups. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.',
       inputSchema: { storyId },
       annotations: { idempotentHint: true },
     },

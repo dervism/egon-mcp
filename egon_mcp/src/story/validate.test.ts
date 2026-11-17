@@ -111,12 +111,13 @@ describe('validateStory', () => {
   });
 
   it('warns when a group box encloses an element that is not in the group, or overlaps another group', () => {
+    // Boxes fitted around their members take in nothing else, unlike boxes drawn with coordinates.
     const story = Story.create({ title: 'T' });
     const inside = story.addActor({ name: 'Inside', x: 100, y: 100 });
-    story.addActor({ name: 'Stranger', x: 250, y: 100 });
-    story.addWorkObject({ name: 'Elsewhere', x: 700, y: 100 });
-    story.addGroup({ name: 'Area', members: [inside.id], x: 50, y: 50, width: 350, height: 200 });
-    story.addGroup({ name: 'Other', members: ['Elsewhere'], x: 300, y: 60, width: 500, height: 200 });
+    story.addActor({ name: 'Stranger', x: 150, y: 150 });
+    story.addWorkObject({ name: 'Elsewhere', x: 200, y: 100 });
+    story.addGroup({ name: 'Area', members: [inside.id] });
+    story.addGroup({ name: 'Other', members: ['Elsewhere'] });
     const found = codes(story.toDocument());
     expect(found).toContain('group-encloses-non-member');
     expect(found).toContain('overlapping-groups');

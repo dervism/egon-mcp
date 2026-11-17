@@ -150,34 +150,4 @@ describe('parseStoryFile', () => {
     expect(() => parseStoryFile('{"hello": 1}', 'a.egn')).toThrow(StoryParseError);
     expect(() => parseStoryFile('<svg></svg>', 'a.egn.svg')).toThrow(/no embedded domain story/i);
   });
-
-  it('infers group membership from position when Egon left out parent, as its group tool does', () => {
-    // Egon assigns shapes to a group drawn around them by their top-left corner, but does not export it.
-    const doc = parseStoryFile(readEgonFixture('egn_export_version_4_0_0.json'), 'story.egn');
-    const parentOf = (id: string) => doc.elements.find((element) => element.id === id)?.['parent'];
-    for (const id of ['shape_0469', 'shape_2543', 'shape_8939']) {
-      expect(parentOf(id), id).toBe('shape_1683');
-    }
-    for (const id of ['shape_0798', 'shape_5496', 'shape_5871', 'shape_1683']) {
-      expect(parentOf(id), id).toBeUndefined();
-    }
-  });
-
-  it('keeps an explicit parent and puts a group inside the smallest larger group around it', () => {
-    const text = JSON.stringify({
-      domain: { name: 'default', actors: {}, workObjects: {} },
-      dst: [
-        { type: 'domainStory:group', id: 'outer', name: 'Outer', x: 0, y: 0, width: 1000, height: 1000 },
-        { type: 'domainStory:group', id: 'inner', name: 'Inner', x: 100, y: 100, width: 300, height: 300 },
-        { type: 'domainStory:actorPerson', id: 'a', name: 'A', x: 150, y: 150 },
-        { type: 'domainStory:actorPerson', id: 'b', name: 'B', x: 600, y: 600 },
-        { type: 'domainStory:actorPerson', id: 'c', name: 'C', x: 150, y: 150, parent: 'outer' },
-        { info: '' },
-        { version: '3.2.1' },
-      ],
-    });
-    const doc = parseStoryFile(text, 'story.egn');
-    const parentOf = (id: string) => doc.elements.find((element) => element.id === id)?.['parent'];
-    expect([parentOf('inner'), parentOf('a'), parentOf('b'), parentOf('c'), parentOf('outer')]).toEqual(['outer', 'inner', 'outer', 'outer', undefined]);
-  });
 });

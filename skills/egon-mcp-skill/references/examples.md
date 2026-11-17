@@ -197,9 +197,11 @@ Two things that happen at the same time share a step number (`number` on the sec
 ```text
 1. Cashier prints Invoice. Mechanic cleans Bike.
 2. Customer pays Invoice amount to Cashier.
-3. Customer signs Handover form. Mechanic signs Handover form.
+3. Mechanic signs Handover form. Customer signs Handover form.
 4. Mechanic hands over Bike to Customer.
 ```
+
+`narrate_story` reads sentences that share a number in the order they are drawn, top to bottom and then left to right. `auto_layout` drew the Mechanic first, in step 1, so the Mechanic signs first in the read-back.
 
 Use parallel numbers sparingly: they make a story harder to retell. If the order does not matter, agree on one order instead.
 

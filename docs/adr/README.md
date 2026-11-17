@@ -19,3 +19,4 @@ Each file records one decision for egon-mcp. Fields hold one line each, two sent
 | [0013](0013-new-work-object-per-sentence.md) | Draw a new work object for each sentence | Accepted |
 | [0014](0014-license-gpl-3-or-later.md) | License egon-mcp under GPL-3.0-or-later | Accepted |
 | [0015](0015-replace-files-only-while-unchanged.md) | Replace files only while they hold what the story last saw | Accepted |
+| [0016](0016-group-membership-by-position.md) | Decide group membership by position, as Egon does | Accepted |

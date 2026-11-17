@@ -1,4 +1,4 @@
-import { ACTIVITY_TYPE, CONNECTION_TYPE, isEdge, isGroup, type GroupElement, type IconMap, type IconSet, type Scope, type StoryDocument, type StoryElement } from './types.js';
+import { ACTIVITY_TYPE, CONNECTION_TYPE, type IconMap, type IconSet, type Scope, type StoryDocument, type StoryElement } from './types.js';
 
 export class StoryParseError extends Error {
   override name = 'StoryParseError';
@@ -13,44 +13,6 @@ const BPMN_BOOKKEEPING = ['$type', 'di', '$descriptor'];
  * ImportDomainStoryService.
  */
 export function parseStoryFile(text: string, fileName = 'story.egn'): StoryDocument {
-  const doc = parseDocument(text, fileName);
-  inferGroupMembership(doc.elements);
-  return doc;
-}
-
-/**
- * Egon puts the shapes whose top-left corner lies inside a group into that
- * group when the group is drawn or resized (reworkGroupElements), but it does
- * not export that membership, and its import drops `parent`. So an element
- * without `parent` gets the smallest group whose box holds its top-left corner;
- * a group only goes into a larger group. An explicit `parent` is kept.
- */
-function inferGroupMembership(elements: StoryElement[]): void {
-  const groups = elements.filter(isGroup);
-  const area = (group: GroupElement) => group.width * group.height;
-  for (const element of elements) {
-    if (element['parent'] !== undefined || isEdge(element) || typeof element['x'] !== 'number' || typeof element['y'] !== 'number') {
-      continue;
-    }
-    const x = element['x'] as number;
-    const y = element['y'] as number;
-    const around = groups.filter(
-      (group) =>
-        group.id !== element.id &&
-        (!isGroup(element) || area(group) > area(element)) &&
-        x >= group.x &&
-        x <= group.x + group.width &&
-        y >= group.y &&
-        y <= group.y + group.height,
-    );
-    const smallest = around.sort((a, b) => area(a) - area(b))[0];
-    if (smallest) {
-      element['parent'] = smallest.id;
-    }
-  }
-}
-
-function parseDocument(text: string, fileName: string): StoryDocument {
   const isSvg = /\.svg$/i.test(fileName.trim()) || text.trimStart().startsWith('<');
   const json = isSvg ? extractJsonFromSvg(text) : text;
 

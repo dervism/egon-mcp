@@ -1,5 +1,5 @@
 import { groupAncestors, isActor, isConnection, isGroup, isTextAnnotation, isWorkObject, type ShapeElement, type StoryElement } from '../egon/types.js';
-import { boundsOf, type Bounds } from './geometry.js';
+import { boundsOf, compareKeys, readingPosition, type Bounds } from './geometry.js';
 import { narrate } from './narrate.js';
 import type { Story } from './story.js';
 
@@ -14,18 +14,26 @@ interface Cell {
   row: number;
 }
 
+/** A row of a group block; `height` counts grid rows, so a tall note gets more than one. */
+interface BlockRow {
+  ids: string[];
+  height: number;
+}
+
 /**
  * Arranges actors and work objects on a grid in reading order: each step
  * continues to the right of the element it starts from, and a new row starts
  * when a step introduces an actor that is not on the canvas yet. Members of a
  * group, annotations included, are kept together in a block of their own below
  * the story, one block per outermost group; a group nested in it gets rows of
- * its own inside that block. So no group box encloses anything else. Groups
- * without members move below everything. Annotations outside groups move next
- * to the element they describe, groups are refitted around their members, and
- * every edge is rerouted. Running it twice changes nothing.
+ * its own inside that block. A note on a group member joins the member's group.
+ * So no group box encloses anything else, and the story reopens with the same
+ * groups. Groups without members move below everything. Other annotations move
+ * next to the element they describe, groups are refitted around their members,
+ * and every edge is rerouted. Running it twice changes nothing.
  */
 export function autoLayout(story: Story): void {
+  joinNotesToGroups(story);
   const doc = story.toDocument();
   const byId = new Map(doc.elements.map((element) => [element.id, element]));
   const nodes = doc.elements.filter((element) => isActor(element) || isWorkObject(element)) as ShapeElement[];
@@ -58,7 +66,9 @@ export function autoLayout(story: Story): void {
   // Elements that take part in no step go on rows of their own at the end.
   let leftoverRow = nextRow();
   let leftoverCol = 0;
-  for (const node of nodes) {
+  // In the order they are drawn, since the order of elements in a file means nothing.
+  const drawnOrder = (a: ShapeElement, b: ShapeElement) => compareKeys([...readingPosition(a), a.id], [...readingPosition(b), b.id]);
+  for (const node of [...nodes].sort(drawnOrder)) {
     if (placed.has(node.id) || inGroup(node)) {
       continue;
     }
@@ -89,9 +99,16 @@ export function autoLayout(story: Story): void {
   const firstRank = (groupId: string): number =>
     Math.min(Number.MAX_SAFE_INTEGER, ...children(groupId).map((child) => (isGroup(child) ? firstRank(child.id) : rank(child.id))));
 
+  // Grid cells an element needs: wide or tall notes and empty groups take more than one.
+  const span = (id: string) => {
+    const box = boundsOf(byId.get(id) as ShapeElement);
+    return { cols: Math.max(1, Math.ceil((box.width + 20) / CELL_WIDTH)), rows: Math.max(1, Math.ceil((box.height + 60) / CELL_HEIGHT)) };
+  };
+  const gap: BlockRow = { ids: [], height: 1 };
+
   // The rows of a group's block: its own members first, then each nested group on rows of its
   // own followed by an empty row, so the nested box and the padding around it fit.
-  const blockRows = (groupId: string, seen: Set<string>): string[][] => {
+  const blockRows = (groupId: string, seen: Set<string>): BlockRow[] => {
     if (seen.has(groupId)) {
       return [];
     }
@@ -100,18 +117,44 @@ export function autoLayout(story: Story): void {
       .filter((child) => isActor(child) || isWorkObject(child) || isTextAnnotation(child))
       .sort((a, b) => Number(isTextAnnotation(a)) - Number(isTextAnnotation(b)) || rank(a.id) - rank(b.id) || a.id.localeCompare(b.id))
       .map((child) => child.id);
-    const rows: string[][] = [];
-    for (let index = 0; index < own.length; index += MAX_COLUMNS) {
-      rows.push(own.slice(index, index + MAX_COLUMNS));
+    const rows: BlockRow[] = [];
+    let row: string[] = [];
+    let used = 0;
+    const closeRow = () => {
+      if (row.length > 0) {
+        rows.push({ ids: row, height: Math.max(...row.map((id) => span(id).rows)) });
+      }
+      row = [];
+      used = 0;
+    };
+    for (const id of own) {
+      if (row.length > 0 && used + span(id).cols > MAX_COLUMNS) {
+        closeRow();
+      }
+      row.push(id);
+      used += span(id).cols;
     }
+    closeRow();
     const nested = children(groupId)
       .filter(isGroup)
       .sort((a, b) => firstRank(a.id) - firstRank(b.id) || a.id.localeCompare(b.id));
     for (const group of nested) {
       const inner = blockRows(group.id, seen);
-      rows.push(...(inner.length > 0 ? inner : [[group.id]]), []);
+      rows.push(...(inner.length > 0 ? inner : [{ ids: [group.id], height: span(group.id).rows }]), gap);
     }
     return rows;
+  };
+  const placeRows = (rows: BlockRow[], firstRow: number): number => {
+    let at = firstRow;
+    for (const { ids, height } of rows) {
+      let col = 0;
+      for (const id of ids) {
+        take(id, { col, row: at });
+        col += span(id).cols;
+      }
+      at += height;
+    }
+    return at;
   };
 
   const groups = doc.elements.filter(isGroup);
@@ -122,21 +165,19 @@ export function autoLayout(story: Story): void {
   const emptyGroups: string[] = [];
   for (const group of outermost) {
     const rows = blockRows(group.id, new Set());
-    if (rows.every((row) => row.length === 0)) {
+    if (rows.every((row) => row.ids.length === 0)) {
       emptyGroups.push(group.id);
       continue;
     }
-    rows.forEach((row, offset) => row.forEach((id, col) => take(id, { col, row: blockRow + offset })));
-    blockRow += rows.length + (rows.at(-1)?.length === 0 ? 0 : 1);
+    blockRow = placeRows(rows, blockRow) + (rows.at(-1)?.ids.length === 0 ? 0 : 1);
   }
   // Groups without members get rows of their own at the very end.
   for (const id of emptyGroups) {
-    take(id, { col: 0, row: blockRow });
-    blockRow += Math.ceil(boundsOf(byId.get(id) as ShapeElement).height / CELL_HEIGHT) + 1;
+    blockRow = placeRows([{ ids: [id], height: span(id).rows }, gap], blockRow);
   }
 
   for (const [id, cell] of placed) {
-    story.updateElement(id, { x: ORIGIN.x + cell.col * CELL_WIDTH, y: ORIGIN.y + cell.row * CELL_HEIGHT });
+    story.setBounds(id, { x: ORIGIN.x + cell.col * CELL_WIDTH, y: ORIGIN.y + cell.row * CELL_HEIGHT });
   }
 
   placeAnnotations(story);
@@ -154,7 +195,7 @@ function refitGroups(story: Story): void {
     if (members.length === 0) {
       continue;
     }
-    story.updateElement(group.id, enclose(members.map((member) => boundsOf(member))));
+    story.setBounds(group.id, enclose(members.map((member) => boundsOf(member))));
   }
 }
 
@@ -172,7 +213,24 @@ function placeAnnotations(story: Story): void {
       continue;
     }
     const bounds = boundsOf(anchor as ShapeElement);
-    story.updateElement(annotation.id, { x: bounds.x + bounds.width + 20, y: Math.max(0, bounds.y - 45) });
+    story.setBounds(annotation.id, { x: bounds.x + bounds.width + 20, y: Math.max(0, bounds.y - 45) });
+  }
+}
+
+/**
+ * A note on a group member would land inside the group's box, where Egon
+ * counts it as part of the group, so it joins the member's innermost group.
+ */
+function joinNotesToGroups(story: Story): void {
+  const elements = story.elements();
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  for (const link of elements.filter(isConnection)) {
+    const annotation = byId.get(link.target);
+    const anchorGroup = groupAncestors(byId.get(link.source), byId)[0];
+    if (annotation && isTextAnnotation(annotation) && anchorGroup && groupAncestors(annotation, byId).length === 0) {
+      story.setParent(annotation.id, anchorGroup);
+      annotation['parent'] = anchorGroup;
+    }
   }
 }
 

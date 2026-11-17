@@ -49,9 +49,9 @@ Example 11 in `examples.md` builds such a model. `validate_story` warns about th
 
 Teams use domain stories to decide which DDD building block fits which concept. Heuristics for a first domain model:
 
-- Work objects that have an identity and change over time (an order, a contract, a repair) are candidates for entities or aggregates; the names a work object takes along the story ("Contract", "Voted contract") are its states.
+- Work objects that have an identity and change over time (an order, a repair, an invoice) are candidates for entities or aggregates; the names a work object takes along the story ("Repair estimate", "Accepted estimate") are its states.
 - Work objects that only describe something (a price, an address, a delivery date) are candidates for value objects.
-- Activities are candidates for commands and methods ("approve", "mark seat"); what they cause can become domain events.
+- Activities are candidates for commands and methods ("accept estimate", "order part"); what they cause can become domain events.
 - Annotations with rules ("only after the vote") are candidates for invariants and policies.
 - Actors are candidates for roles and users, or, in digitalized stories, for other systems to integrate with.
 
@@ -61,7 +61,7 @@ Use the experts' terms for the names in the code.
 
 Sometimes the shared understanding from stories is enough to start building, but usually requirements bridge the gap between scenarios and code. Derive them from to-be stories, so the team can discuss priorities and viable products. A heuristic that works well:
 
-- Take a digitalized to-be story and pick the sentences in which the software takes part; steps people do without software ("Customer brings Bike to Mechanic") need no user story. Each picked sentence can become a user story: the actor is the role, the activity with its work object is what the role wants, and the step that this sentence enables is the benefit. Sentence "Cashier searches Available seats in Seating plan app" becomes: as a cashier, I want to search for available seats of a show, so that I can offer them to a moviegoer.
+- Take a digitalized to-be story and pick the sentences in which the software takes part; steps people do without software ("Customer brings Bike to Mechanic") need no user story. Each picked sentence can become a user story: the actor is the role, the activity with its work object is what the role wants, and the step that this sentence enables is the benefit. Sentence "Mechanic checks Part stock in Workshop app" becomes: as a mechanic, I want to check whether a part is in stock, so that I can tell the customer when the bike will be ready.
 - The sentences of a story, in order, form the backbone of a user story map; slices across it give releases.
 - Annotations with variations, rules and assumptions give acceptance criteria and examples, and Example Mapping can take them further.
 - Each requirement keeps a link to its story, so the team knows the context it belongs to.

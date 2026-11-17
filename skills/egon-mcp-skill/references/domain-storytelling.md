@@ -41,14 +41,14 @@ Activities connect actors and work objects into sentences. Every sentence starts
 4. The same, with several recipients: the clerk sends the invoice to the customer and the accountant.
 5. A and B collaborate on w, both arrows with the same number: customer and mechanic sign the handover form.
 
-Only the first arrow of a sentence, the one leaving the actor, carries the number and the main verb. The arrows that continue from the work object carry the connecting words: to, for, in, from, with, using, on. A continuation arrow can also carry a second verb ("checks the ticket and grants entrance to the moviegoer"). Leave it unlabeled only if the sentence reads naturally without a word.
+Only the first arrow of a sentence, the one leaving the actor, carries the number and the main verb. The arrows that continue from the work object carry the connecting words: to, for, in, from, with, using, on. A continuation arrow can also carry a second verb ("test-rides the bike and hands it back to the customer"). Leave it unlabeled only if the sentence reads naturally without a word.
 
 ### Actors once, work objects per sentence
 
 Each actor appears once in a story, and every sentence that involves it connects to the same icon. Work objects are the opposite: every sentence gets its own, even when the same thing appeared before. That keeps the picture readable (otherwise several arrows go in and out of one icon), and it lets a work object change along the way:
 
-- When its state changes, the new copy gets a new name: available seats become the chosen seat and then a sold seat; a contract becomes a voted contract.
-- When its medium changes, the new copy gets a new icon: an order taken on the phone is a call, the same order typed into a system is a document; a ticket arrives by email and is then printed.
+- When its state changes, the new copy gets a new name: a repair estimate becomes an accepted estimate; a bike becomes a repaired bike.
+- When its medium changes, the new copy gets a new icon: an order taken on the phone is a call, the same order typed into a system is a document; an appointment request arrives by email and is then printed.
 - When only information about it changes hands, the information is the work object. Spoken information gets a speech bubble.
 
 ### Annotations and groups
@@ -74,7 +74,7 @@ The picture language has no symbols for conditions, alternatives or loops, on pu
 
 - Start with the standard case, the one that covers most instances, and its happy path: no exceptions, no errors, everything works. It shows what the process is for and why people do what they do.
 - If no case is typical, model several real past cases of increasing difficulty: a simple one, a moderately difficult one, a difficult one.
-- Write down the assumptions that keep the story on its single path, for example that seats are still free.
+- Write down the assumptions that keep the story on its single path, for example that the parts needed are in stock.
 - Later, ask what could go wrong, and tell important variations and error cases as stories of their own. Usually a few stories are enough to understand a process.
 - Small variations such as optional steps are not worth their own story; record them as annotations.
 
@@ -84,7 +84,7 @@ Choose by granularity:
 
 - Coarse: annotate the repeated sentence ("for every line item on the pick list"). The story says what happens, not how often.
 - Medium: draw a labeled group ("repeated for each line item") around the work objects of the repeated sentences.
-- Fine: spell out a concrete case, one sentence per round (four screws, two steel plates, two handles). It is the biggest model, but it shows whether the rounds really are handled the same way. If they are, an annotation or a group is better.
+- Fine: spell out a concrete case, one sentence per round (front brake, rear brake, chain). It is the biggest model, but it shows whether the rounds really are handled the same way. If they are, an annotation or a group is better.
 
 ## Scope
 
@@ -167,11 +167,11 @@ Record the story sentence by sentence, at the pace of the telling, and retell ea
 
 ### Finishing
 
-When the story seems complete, tell it again from the beginning and seek agreement: did we miss something, is something wrong, do all the experts agree? Then go through the annotations for possible alternative stories. The participants decide which are minor variations and which deserve a story of their own. Questions that help:
+When the story seems complete, tell it again from the beginning and seek agreement: did we miss something, is something wrong, do all the experts agree? Then go through the annotations for possible alternative stories. The participants decide which are minor variations and which deserve a story of their own. Ask about:
 
-- Is this one task done in another way, or another task?
-- What would change in the story if ...?
-- So the one difference would be ..., is that right?
+- Whether a variation is the same task done another way, or a task of its own.
+- What would change in the story under one particular condition.
+- A short summary of the difference in your own words, for the participants to confirm or correct.
 
 You will rarely bring everyone to one view. Do not hide conflicts behind abstractions; record unresolved differences as annotations so everyone sees them. If needed, plan a follow-up to look at parts in more detail or at important variations.
 

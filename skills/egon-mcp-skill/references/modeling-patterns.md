@@ -48,7 +48,7 @@ List each recipient. Label the first arrow with its preposition and the others "
 
 ### A second work object: works on w using v
 
-When a sentence involves two things ("writes the defects on the repair slip", "fills out the form with information from the contract"), draw both. Novices tend to hide the second object inside the verb; make it explicit. `build_story` cannot connect two work objects, so build those sentences call by call:
+When a sentence involves two things ("writes the defects on the repair slip", "fills out the warranty claim with data from the receipt"), draw both. Novices tend to hide the second object inside the verb; make it explicit. `build_story` cannot connect two work objects, so build those sentences call by call:
 
 1. `add_sentence` for actor, verb and the first work object.
 2. `add_work_object` for the second work object.
@@ -61,11 +61,11 @@ When a sentence involves two things ("writes the defects on the repair slip", "f
 A continuation arrow can carry a second verb phrase.
 
 ```json
-{ "actor": "Usher", "activity": "checks", "workObject": "Ticket", "workObjectIcon": "Receipt", "to": [{ "activity": "and grants entrance to", "actor": "Moviegoer" }] }
+{ "actor": "Mechanic", "activity": "test-rides", "workObject": "Bike", "workObjectIcon": "Bike", "to": [{ "activity": "and hands it back to", "actor": "Customer" }] }
 ```
 
 ```text
-1. Usher checks Ticket and grants entrance to Moviegoer.
+1. Mechanic test-rides Bike and hands it back to Customer.
 ```
 
 Use it when the two actions are really one step. Otherwise tell two sentences. (7)
@@ -87,13 +87,13 @@ In a longer story, `number` is the number of the first sentence's step. (6)
 
 ### Parallel steps
 
-Two things that happen at the same time share a number: pass the number of the earlier step as `number`. Use this sparingly, because parallel steps make a story harder to read and retell. If the order does not matter, agree on one order. (6)
+Two things that happen at the same time share a number: pass the number of the earlier step as `number`. `narrate_story` reads such sentences top to bottom as they are drawn, since the file keeps no order between them. Use this sparingly, because parallel steps make a story harder to read and retell. If the order does not matter, agree on one order. (6)
 
 ## Work objects over time
 
 ### State changes: a new name
 
-Every sentence gets its own work object, so a later copy can carry the new state in its name: "Contract", then "Voted contract"; "Available seats", then "Chosen seat", then "Sold seat". Do not reuse the old object when its meaning has changed.
+Every sentence gets its own work object, so a later copy can carry the new state in its name: "Repair estimate", then "Accepted estimate"; "Bike", then "Repaired bike". Do not reuse the old object when its meaning has changed.
 
 ### Medium changes: a new icon
 
@@ -101,7 +101,7 @@ The same thing can look different as the story goes on. A repair estimate explai
 
 ### Spoken information
 
-When people only say something, the work object is the information, drawn as a speech bubble (`Conversation`), or `Call` for a phone call. "Customer tells Show to Cashier" uses a speech bubble; when the cashier later works with the show itself, that copy gets a different icon.
+When people only say something, the work object is the information, drawn as a speech bubble (`Conversation`), or `Call` for a phone call. "Customer tells Defects to Mechanic" uses a speech bubble; when the mechanic later writes the defects down, that copy gets a different icon.
 
 ### One thing turns into another
 

@@ -7,6 +7,7 @@ import {
   GROUP_TYPE,
   TEXT_ANNOTATION_TYPE,
   WORK_OBJECT_PREFIX,
+  groupAncestors,
   iconNameOf,
   isActivity,
   isActor,
@@ -27,6 +28,7 @@ import {
   type WorkObjectElement,
 } from '../egon/types.js';
 import { boundsOf, DEFAULT_ANNOTATION_SIZE, edgeWaypoints, routeEdge, type Bounds } from './geometry.js';
+import { cornerInside, joinGroupAt, settleMembership, takeIn } from './membership.js';
 
 export class StoryError extends Error {
   override name = 'StoryError';
@@ -102,7 +104,9 @@ export class Story {
   }
 
   static fromDocument(doc: StoryDocument, catalog: IconCatalog = IconCatalog.builtIn()): Story {
-    return new Story(structuredClone(doc), catalog);
+    const copy = structuredClone(doc);
+    settleMembership(copy.elements);
+    return new Story(copy, catalog);
   }
 
   toDocument(): StoryDocument {
@@ -217,7 +221,8 @@ export class Story {
     let bounds: Bounds;
     // A name shared by several elements (work objects repeat per sentence) groups all of them.
     const members = (input.members ?? []).flatMap((ref) => this.resolveShapes(ref));
-    if (members.length > 0 && input.x === undefined && input.y === undefined) {
+    const fitted = members.length > 0 && input.x === undefined && input.y === undefined;
+    if (fitted) {
       bounds = enclose(members.map((member) => boundsOf(member)), GROUP_PADDING);
     } else {
       bounds = {
@@ -236,11 +241,25 @@ export class Story {
     if (input.color !== undefined) {
       group.pickedColor = this.checkColor(input.color);
     }
+    for (const member of members.filter(isGroup)) {
+      const box = boundsOf(member);
+      if (box.width * box.height >= bounds.width * bounds.height) {
+        throw new StoryError(
+          `The group "${member.name || member.id}" is not smaller than the new box, so it cannot go inside. Leave out x, y, width and height to fit the box around the members.`,
+        );
+      }
+    }
     // Groups go first so Egon draws them underneath the elements they contain.
     this.doc.elements.unshift(group);
     // Egon records group membership on each member (domainStoryUpdater).
     for (const member of members) {
       member['parent'] = group.id;
+    }
+    joinGroupAt(group, this.doc.elements);
+    // A box drawn with coordinates takes in what it covers, as in Egon; a box
+    // fitted around members holds only them.
+    if (!fitted) {
+      takeIn(group, this.doc.elements);
     }
     return structuredClone(group);
   }
@@ -272,6 +291,7 @@ export class Story {
       number: DEFAULT_ANNOTATION_SIZE.height,
     };
     this.doc.elements.push(annotation);
+    joinGroupAt(annotation, this.doc.elements);
     if (!anchor) {
       return { annotation: structuredClone(annotation) };
     }
@@ -318,23 +338,74 @@ export class Story {
       }
       this.moveToStep(element, update.number);
     }
-    if (!isEdge(element)) {
+    const geometry = (['x', 'y', 'width', 'height'] as const).filter((key) => update[key] !== undefined);
+    if (!isEdge(element) && geometry.length > 0) {
       const shape = element as ShapeElement;
-      for (const key of ['x', 'y', 'width', 'height'] as const) {
-        const value = update[key];
-        if (value !== undefined) {
-          if (!Number.isFinite(value) || ((key === 'width' || key === 'height') && value <= 0)) {
-            throw new StoryError(`${key} must be a ${key === 'x' || key === 'y' ? 'finite' : 'positive'} number.`);
+      const before = { x: shape.x, y: shape.y };
+      this.setGeometry(shape, update);
+      if (isGroup(shape)) {
+        // Moving a group in Egon moves everything in it.
+        const dx = shape.x - before.x;
+        const dy = shape.y - before.y;
+        if (dx !== 0 || dy !== 0) {
+          const byId = new Map(this.doc.elements.map((candidate) => [candidate.id, candidate]));
+          for (const inside of this.doc.elements.filter((candidate) => !isEdge(candidate) && groupAncestors(candidate, byId).includes(shape.id))) {
+            const moved = inside as ShapeElement;
+            moved.x += dx;
+            moved.y += dy;
+            this.rerouteEdgesOf(moved.id);
           }
-          shape[key] = Math.round(value);
         }
       }
-      if (isTextAnnotation(shape) && update.height !== undefined) {
-        shape['number'] = shape.height;
+      // As in Egon, a shape moved into a group's box joins that group, and one moved out leaves it.
+      joinGroupAt(shape, this.doc.elements);
+      if (isGroup(shape)) {
+        takeIn(shape, this.doc.elements);
       }
-      this.rerouteEdgesOf(shape.id);
     }
     return structuredClone(element);
+  }
+
+  /**
+   * Moves or resizes a shape and reroutes its edges without touching group
+   * membership. auto_layout uses it, since it decides membership itself.
+   */
+  setBounds(ref: string, bounds: Partial<Bounds>): void {
+    const element = this.resolve(ref);
+    if (isEdge(element)) {
+      throw new StoryError(`"${ref}" is an activity or connection, not a shape.`);
+    }
+    this.setGeometry(element as ShapeElement, bounds);
+  }
+
+  /** Puts an element into a group, or out of every group with undefined. */
+  setParent(ref: string, groupId: string | undefined): void {
+    const element = this.resolve(ref);
+    if (groupId === undefined) {
+      delete element['parent'];
+      return;
+    }
+    const group = this.resolve(groupId);
+    if (!isGroup(group) || group.id === element.id) {
+      throw new StoryError(`"${groupId}" is not a group that "${ref}" can belong to.`);
+    }
+    element['parent'] = group.id;
+  }
+
+  private setGeometry(shape: ShapeElement, update: Partial<Bounds>): void {
+    for (const key of ['x', 'y', 'width', 'height'] as const) {
+      const value = update[key];
+      if (value !== undefined) {
+        if (!Number.isFinite(value) || ((key === 'width' || key === 'height') && value <= 0)) {
+          throw new StoryError(`${key} must be a ${key === 'x' || key === 'y' ? 'finite' : 'positive'} number.`);
+        }
+        shape[key] = Math.round(value);
+      }
+    }
+    if (isTextAnnotation(shape) && update.height !== undefined) {
+      shape['number'] = shape.height;
+    }
+    this.rerouteEdgesOf(shape.id);
   }
 
   /** Removes an element. Removing a shape also removes the activities and connections attached to it. */
@@ -348,9 +419,14 @@ export class Story {
     }
     const removed = this.doc.elements.filter((candidate) => removedIds.has(candidate.id));
     this.doc.elements = this.doc.elements.filter((candidate) => !removedIds.has(candidate.id));
+    // As in Egon, the members of a removed group go to the group around it.
     for (const other of this.doc.elements) {
       if (other['parent'] === element.id) {
-        delete other['parent'];
+        if (typeof element['parent'] === 'string' && isGroup(element)) {
+          other['parent'] = element['parent'];
+        } else {
+          delete other['parent'];
+        }
       }
     }
     if (removed.some((candidate) => isActivity(candidate))) {
@@ -421,6 +497,8 @@ export class Story {
       shape.pickedColor = this.checkColor(input.color);
     }
     this.doc.elements.push(shape);
+    // As in Egon, a shape placed inside a group's box belongs to that group.
+    joinGroupAt(shape, this.doc.elements);
     return structuredClone(shape);
   }
 
@@ -584,6 +662,7 @@ export class Story {
     const occupied = this.doc.elements
       .filter((element) => !isEdge(element) && !isGroup(element))
       .map((element) => boundsOf(element as ShapeElement));
+    const groups = this.doc.elements.filter(isGroup);
     for (let index = 0; ; index += 1) {
       const cell = {
         x: GRID.originX + (index % GRID.columns) * GRID.cellWidth,
@@ -591,7 +670,8 @@ export class Story {
         width: 75,
         height: 75,
       };
-      if (!occupied.some((bounds) => intersects(bounds, cell, 30))) {
+      // A cell inside a group's box would put the new shape into that group.
+      if (!occupied.some((bounds) => intersects(bounds, cell, 30)) && !groups.some((group) => cornerInside(cell, group))) {
         return { x: cell.x, y: cell.y };
       }
     }

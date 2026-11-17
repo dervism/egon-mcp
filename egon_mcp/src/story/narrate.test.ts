@@ -71,6 +71,27 @@ describe('narrate', () => {
     expect(narrate(story.toDocument())[0]?.sentence).toBe('Clerk sends Invoice to Customer And Accountant and android Phone.');
   });
 
+  it('orders parallel sentences and onward arrows by where they are drawn, so saving does not change the reading', () => {
+    // Egon and save_story write elements sorted by id, which says nothing about the story.
+    const story = Story.create({ title: 'T' });
+    const leasing = story.addActor({ name: 'Leasing agent', x: 0, y: 0 });
+    const offer = story.addWorkObject({ name: 'Offer', x: 200, y: 0 });
+    const term = story.addWorkObject({ name: 'Term', x: 400, y: 200 });
+    const rate = story.addWorkObject({ name: 'Rate', x: 400, y: 0 });
+    const customer = story.addActor({ name: 'Customer', x: 0, y: 400 });
+    const signed = story.addWorkObject({ name: 'Signature', x: 200, y: 400 });
+    story.addActivity({ from: leasing.id, to: offer.id, label: 'prepares' });
+    story.addActivity({ from: offer.id, to: term.id, label: 'and' });
+    story.addActivity({ from: offer.id, to: rate.id, label: 'with' });
+    story.addActivity({ from: customer.id, to: signed.id, label: 'gives', number: 1 });
+    const doc = story.toDocument();
+    const expected = ['Leasing agent prepares Offer with Rate and Term. Customer gives Signature.'];
+    expect(narrate(doc).map((step) => step.sentence)).toEqual(expected);
+    for (const order of [[...doc.elements].reverse(), [...doc.elements].sort((a, b) => b.id.localeCompare(a.id))]) {
+      expect(narrate({ ...doc, elements: order }).map((step) => step.sentence)).toEqual(expected);
+    }
+  });
+
   it('lists the elements that take part in each step', () => {
     const { story, customer, order, clerk } = pizza();
     const [first] = narrate(story.toDocument());

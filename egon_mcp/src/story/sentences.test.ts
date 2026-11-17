@@ -197,7 +197,8 @@ describe('buildStory', () => {
       annotations: [{ text: 'Paper', attachTo: 'Slip' }],
     });
     const group = story.elements().find((e) => e.type === 'domainStory:group')!;
-    expect(story.elements().filter((e) => e['parent'] === group.id)).toHaveLength(3);
+    // The note lands next to the first Slip, inside the box, so it joins the group as it would in Egon.
+    expect(story.elements().filter((e) => e['parent'] === group.id).map((e) => e.name || e['text'])).toEqual(['Clerk', 'Slip', 'Slip', 'Paper']);
     expect(story.elements().filter((e) => e.type === 'domainStory:connection')).toHaveLength(1);
   });
 

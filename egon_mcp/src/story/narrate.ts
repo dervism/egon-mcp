@@ -6,6 +6,7 @@ import {
   type StoryDocument,
   type StoryElement,
 } from '../egon/types.js';
+import { compareKeys, readingPosition } from './geometry.js';
 
 export interface NarrativeStep {
   number: number;
@@ -23,11 +24,17 @@ export interface NarrativeStep {
  * From a work object the sentence continues along all of its outgoing
  * activities until it reaches an actor, so "Customer tells Order to Clerk"
  * is one sentence. A work object reached in several steps repeats its onward
- * activities in each of them, as in Egon.
+ * activities in each of them, as in Egon. Sentences that share a number, and
+ * the onward arrows of one work object, are read in the order they are drawn:
+ * top to bottom, then left to right. Element order cannot decide it, because
+ * Egon and save_story write elements sorted by id.
  */
 export function narrate(doc: StoryDocument): NarrativeStep[] {
   const byId = new Map(doc.elements.map((element) => [element.id, element]));
-  const activities = doc.elements.filter(isActivity);
+  const drawn = (activity: ActivityElement) => [...readingPosition(byId.get(activity.source)), ...readingPosition(byId.get(activity.target))];
+  const activities = doc.elements
+    .filter(isActivity)
+    .sort((a, b) => compareKeys([...drawn(a), a.id], [...drawn(b), b.id]));
   const numbered = activities
     .filter((activity) => typeof activity.number === 'number' && isActorId(byId, activity.source))
     .sort((a, b) => (a.number as number) - (b.number as number));

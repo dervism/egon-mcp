@@ -85,7 +85,7 @@ Rules for good sentences:
 3. Every sentence starts with an actor. When the user says "then you check it" or "it gets approved", ask who does it.
 4. Use the domain's own words, in the present tense, and the same name for the same thing in every sentence. Never translate them into technical terms.
 5. Each actor appears once; each sentence gets its own work objects. Actors with the same name are one element. Work objects are drawn again in each sentence, as Domain Storytelling recommends, so a recipient in step 3 does not leak into step 1. Set `reuseWorkObject: true`, or pass the work object's id, when a sentence should continue with the very same object. A new copy takes the icon and color of the previous one with the same name, so give a copy its own name, or recolor it by id with `update_element`, when only that copy should look different.
-6. When a work object changes its state, give the new copy a new name ("Contract" becomes "Signed contract"). When it changes its medium, give it a new icon (an email becomes a printout). Information that is only spoken gets the `Conversation` icon; a phone call gets `Call`.
+6. When a work object changes its state, give the new copy a new name ("Repair estimate" becomes "Accepted estimate"). When it changes its medium, give it a new icon (an email becomes a printout). Information that is only spoken gets the `Conversation` icon; a phone call gets `Call`.
 7. Label everything: every actor, work object and activity. Leave an arrow unlabeled only when the sentence reads naturally without a word.
 8. Do not branch. Tell one case. Important alternatives become stories of their own; small variations and optional steps become annotations.
 9. Show repetition without loops: an annotation in a coarse story ("for every line item"), a labeled group in a medium-grained one, or one sentence per round of a concrete case in a fine-grained one.
@@ -95,14 +95,14 @@ Rules for good sentences:
 
 ## Pure and digitalized stories
 
-- In a pure story only people act. The clerk "writes" the order slip, the seating plan is a paper grid. Pure stories show the business itself and are where most domain stories start.
+- In a pure story only people act. The mechanic "writes" the repair slip, and the parts list is a notebook. Pure stories show the business itself and are where most domain stories start.
 - In a digitalized story systems are actors, and people use them: "Mechanic enters Defects into Workshop app", "Workshop app sends Text message to Customer". Model every tool people really use, including spreadsheets and shared folders, and say in an annotation where it lives. This is how hidden shadow IT shows up.
 - Keep the labels in the domain's words in both. A digitalized story says "enters the order", not "POSTs a JSON payload".
 
 ## Annotations, groups and color
 
 - Annotations hold what the sentences cannot: variations, optional steps, rules, definitions of domain terms, frequencies ("every Thursday"), where something lives, open questions and disagreements. Attach each one to the element it is about with `add_annotation`.
-- Groups (`add_group`) draw a labeled box around elements that belong together: subdomains, organizational boundaries, locations, optional parts, repeated parts, or what a to-be story changes. Always give a group a name that says what it means.
+- Groups (`add_group`) draw a labeled box around elements that belong together: subdomains, organizational boundaries, locations, optional parts, repeated parts, or what a to-be story changes. Always give a group a name that says what it means. A group fitted around `members` holds only them. As in Egon, a box drawn with `x`, `y`, `width` and `height` takes in every shape whose top-left corner lies inside it, a shape added or moved into a box joins the group, and moving a group moves what is in it. Opening a file applies the same rule to shapes the file does not assign to a group.
 - Color (`color` on actors, work objects and groups, or `update_element`) marks differences, typically what is new or changes in a to-be story.
 
 ## Choose icons
@@ -119,7 +119,8 @@ Run `validate_story` after building or editing. Fix every error; the file would 
 - `unnamed-element`, `unlabeled-activity`: add the missing name or word with `update_element`, unless the sentence reads naturally without it.
 - `unconnected-element`: connect it or remove it. Parts of a story that do not connect are often a gap in the story; ask the user why.
 - `numbering-gap`: call `renumber_steps`.
-- `overlapping-shapes`, `group-encloses-non-member`, `overlapping-groups`: call `auto_layout`, which keeps the members of each group together in a block of their own.
+- `overlapping-shapes`, `overlapping-groups`: call `auto_layout`, which keeps the members of each group together in a block of their own.
+- `group-encloses-non-member`: decide whether the element belongs in the group. If not, call `auto_layout`. If it does, set its `x` and `y` with `update_element` (its current position will do): a shape placed in a box joins the group.
 
 Then read `narrate_story` and compare it with what the user said. Each line must read as a correct sentence. Show the user the numbered sentences and retell the whole story from the start: is anything missing, is anything wrong, do all the experts agree? Retelling is where forgotten details come up; put them on the sentence they belong to.
 

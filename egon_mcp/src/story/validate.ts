@@ -13,6 +13,7 @@ import {
   type StoryDocument,
   type StoryElement,
 } from '../egon/types.js';
+import { cornerInside } from './membership.js';
 import { boundsOf, type Bounds } from './geometry.js';
 
 export type Severity = 'error' | 'warning' | 'info';
@@ -72,25 +73,23 @@ export function validateStory(doc: StoryDocument, catalog: IconCatalog = IconCat
 
 /**
  * Group boxes should hold their members and nothing else, because readers take
- * whatever is inside a box as part of the group. Nested groups are fine.
+ * whatever is inside a box as part of the group, and Egon puts an element
+ * whose top-left corner lies in a box into that group when the box is drawn or
+ * moved. Nested groups are fine.
  */
 function checkGroups(doc: StoryDocument, byId: Map<string, StoryElement>, add: AddIssue): void {
   const groups = doc.elements.filter(isGroup) as (ShapeElement & { width?: number; height?: number })[];
   const isInside = (id: string, group: string) => groupAncestors(byId.get(id), byId).includes(group);
+  const enclosable = doc.elements.filter((element) => isNode(element) || isTextAnnotation(element));
   for (const group of groups) {
-    const box = boundsOf(group);
-    for (const shape of doc.elements.filter((element) => isNode(element)) as ShapeElement[]) {
-      const bounds = boundsOf(shape);
-      const centerX = bounds.x + bounds.width / 2;
-      const centerY = bounds.y + bounds.height / 2;
-      const enclosed = centerX > box.x && centerX < box.x + box.width && centerY > box.y && centerY < box.y + box.height;
-      if (enclosed && !isInside(shape.id, group.id)) {
+    for (const element of enclosable) {
+      if (cornerInside(element, group) && !isInside(element.id, group.id)) {
         add(
           'warning',
           'group-encloses-non-member',
-          `The group "${group.name || group.id}" encloses "${shape.name || shape.id}", which is not in it. Run auto_layout or move one of them.`,
+          `The group "${group.name || group.id}" encloses "${element.name || element['text'] || element.id}", which is not in it. Run auto_layout, or move one of them; a shape moved into the box joins the group.`,
           group.id,
-          shape.id,
+          element.id,
         );
       }
     }

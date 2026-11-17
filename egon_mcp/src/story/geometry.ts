@@ -140,3 +140,25 @@ function segmentHitsBox(a: Point, b: Point, box: Bounds): boolean {
   }
   return true;
 }
+
+/** Rows of 100 pixels from the top, then left to right, so small slips in a hand-drawn row do not count. */
+export function readingPosition(element: object | undefined): number[] {
+  const x = (element as Record<string, unknown> | undefined)?.['x'];
+  const y = (element as Record<string, unknown> | undefined)?.['y'];
+  if (typeof x !== 'number' || typeof y !== 'number') {
+    return [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
+  }
+  return [Math.floor(y / 100), x, y];
+}
+
+/** Compares two keys element by element. */
+export function compareKeys(a: (number | string)[], b: (number | string)[]): number {
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    const left = a[index] as number | string;
+    const right = b[index] as number | string;
+    if (left !== right) {
+      return left < right ? -1 : 1;
+    }
+  }
+  return 0;
+}
