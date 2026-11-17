@@ -120,7 +120,7 @@ export interface StepPicks {
 }
 
 /**
- * Where a new group goes and what it holds (ADR 18). An existing group goes in
+ * Where a new group goes and what it holds (ADR 19). An existing group goes in
  * whole when all its actors and work objects are chosen: named, inside a named
  * group, or used by the steps alone. Named elements always move in. Elements
  * the steps picked move in only from the group the new one goes into; one in

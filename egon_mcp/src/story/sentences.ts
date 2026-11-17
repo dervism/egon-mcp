@@ -212,7 +212,7 @@ function shapeInput(spec: ShapeSpec) {
 }
 
 /**
- * The work objects of the sentences with these step numbers (ADR 18), the
+ * The work objects of the sentences with these step numbers (ADR 19), the
  * second work object of a sentence included, never their actors, which
  * usually take part in several subdomains: `picked` are those that first
  * appear in these steps, as a work object that later sentences use too

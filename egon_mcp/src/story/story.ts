@@ -274,7 +274,7 @@ export class Story {
   }
 
   /**
-   * A box fitted around members (ADR 18): it holds them and the notes attached
+   * A box fitted around members (ADR 19): it holds them and the notes attached
    * to them, goes into the innermost group that holds every member, and that
    * group and the ones around it grow to fit.
    */
