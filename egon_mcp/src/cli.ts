@@ -66,6 +66,10 @@ export function parseOptions(argv: string[], env: Record<string, string | undefi
     }
   }
 
+  // Help and version answer whatever the environment holds.
+  if (flags.help || flags.version) {
+    return { root: resolve(cwd, root ?? '.'), ...flags };
+  }
   if (egonAppUrl !== undefined && !/^https?:\/\//i.test(egonAppUrl)) {
     throw new Error(`The Egon URL must start with http:// or https://, got "${egonAppUrl}".`);
   }

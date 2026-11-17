@@ -25,7 +25,6 @@
   },
   "files": [
     "dist",
-    "!dist/**/*.map",
     "!dist/docs",
     "skill"
   ],
@@ -42,7 +41,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/index.js",
     "docs": "npm run build && node scripts/generate-docs.mjs",
-    "prepack": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && npm run build && node scripts/pack-extras.mjs",
+    "prepack": "node scripts/clean-dist.mjs && npm run build && node scripts/pack-extras.mjs",
     "release": "node scripts/publish.mjs"
   },
   "dependencies": {

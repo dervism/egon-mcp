@@ -59,36 +59,36 @@ Add the server to `claude_desktop_config.json` (on macOS in `~/Library/Applicati
 }
 ```
 
-Claude Desktop does not start servers with your shell's `PATH`. If it cannot find `npx`, or `node` when Node comes from a version manager such as nvm, run the server with the full path to Node that `which node` prints:
+Claude Desktop does not start servers with your shell's `PATH`, so it may not find `npx`, or `node` when Node comes from Homebrew or a version manager such as nvm. Then install egon-mcp with npm or Homebrew and give both full paths:
 
 ```json
 {
   "mcpServers": {
     "egon": {
       "command": "/full/path/to/node",
-      "args": ["/full/path/to/node_modules/egon-mcp/dist/index.js", "--root", "/path/to/your/stories"]
+      "args": ["/full/path/to/egon-mcp/dist/index.js", "--root", "/path/to/your/stories"]
     }
   }
 }
 ```
 
-After `npm install -g egon-mcp`, `npm root -g` prints the `node_modules` folder that holds `egon-mcp`.
+After `npm install -g egon-mcp`, `which node` prints the first path, and the second is `dist/index.js` in the folder `echo "$(npm root -g)/egon-mcp"` prints. After a Homebrew install, they are `$(brew --prefix)/bin/node` and `dist/index.js` in `$(brew --prefix egon-mcp)/libexec/lib/node_modules/egon-mcp`.
 
 ### The skill
 
 The skill tells an agent which tool to use when and how to write good domain stories. It comes with the package. Link it into your personal Claude Code skills after an npm install:
 
 ```bash
-mkdir -p ~/.claude/skills && ln -s "$(npm root -g)/egon-mcp/skill" ~/.claude/skills/egon-mcp-skill
+mkdir -p ~/.claude/skills && ln -sfn "$(npm root -g)/egon-mcp/skill" ~/.claude/skills/egon-mcp-skill
 ```
 
 Or after a Homebrew install:
 
 ```bash
-mkdir -p ~/.claude/skills && ln -s "$(brew --prefix egon-mcp)/share/egon-mcp/skill" ~/.claude/skills/egon-mcp-skill
+mkdir -p ~/.claude/skills && ln -sfn "$(brew --prefix egon-mcp)/share/egon-mcp/skill" ~/.claude/skills/egon-mcp-skill
 ```
 
-Both links keep working after upgrades. With a Node version manager, the npm link belongs to the Node version you installed with; link again after switching. Inside this repository Claude Code loads the skill from [skills/egon-mcp-skill](skills/egon-mcp-skill/SKILL.md) by itself.
+Both links keep working after upgrades. With a Node version manager, the npm link points into the Node version you installed with; after installing egon-mcp under another version, run the command again. Inside this repository Claude Code loads the skill from [skills/egon-mcp-skill](skills/egon-mcp-skill/SKILL.md) by itself.
 
 ### From source
 
