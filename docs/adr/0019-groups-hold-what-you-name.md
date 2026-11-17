@@ -1,4 +1,4 @@
-# 18. Groups hold what you name
+# 19. Groups hold what you name
 
 - Status: Accepted, supersedes [ADR 17](0017-group-by-steps-and-whole-groups.md)
 - Date: 2026-11-17
