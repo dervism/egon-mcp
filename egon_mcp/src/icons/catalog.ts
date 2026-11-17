@@ -29,15 +29,43 @@ export function readErrorReason(error: unknown): string {
   return typeof message === 'string' ? message : 'unknown error';
 }
 
-/** The closest existing ancestor of `path` if it is a file instead of a folder. */
+/**
+ * The closest existing ancestor of `path` if it is a file instead of a folder.
+ * Never throws: a folder it cannot look into counts as no file in the way.
+ */
 export function blockingAncestor(path: string): string | undefined {
   for (let dir = dirname(path); dir !== dirname(dir); dir = dirname(dir)) {
-    const stats = statSync(dir, { throwIfNoEntry: false });
+    let stats;
+    try {
+      stats = statSync(dir, { throwIfNoEntry: false });
+    } catch {
+      return undefined;
+    }
     if (stats) {
       return stats.isDirectory() ? undefined : dir;
     }
   }
   return undefined;
+}
+
+const ICON_DATA_FIX = `${ICON_FIX} in egon_mcp (needs the egon.io submodule).`;
+
+/**
+ * The error to report when the icon data at `path` could not be read. A file
+ * standing where a folder should be shows as ENOTDIR on POSIX and as a missing
+ * path on Windows; both get a message that names it.
+ */
+export function iconReadError(path: string, error: unknown): Error {
+  const { code } = (error ?? {}) as NodeJS.ErrnoException;
+  const blocker = code === 'ENOENT' || code === 'ENOTDIR' ? blockingAncestor(path) : undefined;
+  if (code === 'ENOENT' && !blocker) {
+    return new Error(`Built-in icon data ${path} is missing; ${ICON_DATA_FIX}`);
+  }
+  const reason = blocker ? `${blocker} is a file, not a folder` : readErrorReason(error);
+  return new Error(
+    `Built-in icon data ${path} cannot be read (${reason}). ` +
+      `Fix what stops it from being read, such as access rights or a file or folder in the way, then ${ICON_DATA_FIX}`,
+  );
 }
 
 export class IconCatalog {
@@ -64,26 +92,14 @@ export class IconCatalog {
   /** Reads an icon list as the icon generator writes it, after the same check the build makes. */
   static fromFile(file: URL): IconCatalog {
     const path = fileURLToPath(file);
-    const fix = `${ICON_FIX} in egon_mcp (needs the egon.io submodule).`;
     let content: string;
     try {
       content = readFileSync(file, 'utf8');
     } catch (error) {
-      const { code } = error as NodeJS.ErrnoException;
-      // A file standing where a folder should be shows as ENOTDIR on POSIX and as a
-      // missing path on Windows; both get a message that names it.
-      const blocker = code === 'ENOENT' || code === 'ENOTDIR' ? blockingAncestor(path) : undefined;
-      if (code === 'ENOENT' && !blocker) {
-        throw new Error(`Built-in icon data ${path} is missing; ${fix}`);
-      }
-      const reason = blocker ? `${blocker} is a file, not a folder` : readErrorReason(error);
-      throw new Error(
-        `Built-in icon data ${path} cannot be read (${reason}). ` +
-          `Fix what stops it from being read, such as access rights or a file or folder in the way, then ${fix}`,
-      );
+      throw iconReadError(path, error);
     }
     if (!isIconList(content)) {
-      throw new Error(`Built-in icon data ${path} is not usable; ${fix}`);
+      throw new Error(`Built-in icon data ${path} is not usable; ${ICON_DATA_FIX}`);
     }
     return new IconCatalog(JSON.parse(content) as BuiltInIcon[]);
   }
