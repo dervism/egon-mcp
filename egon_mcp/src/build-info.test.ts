@@ -165,6 +165,11 @@ describe('copyAssets', () => {
     expect(copiedFiles()).toEqual(['builtin-icons.json']);
   });
 
+  it('fails when an asset folder is missing, so the build stops before writing its record', () => {
+    rmSync(generated, { recursive: true });
+    expect(() => copyAssets(packageDir)).toThrow(/src\/icons\/generated is missing.*npm run generate:icons/);
+  });
+
   it.runIf(links)('copies links as the files they point to and skips dangling ones', () => {
     writeFileSync(join(outside, 'extra.json'), '{}');
     symlinkSync(join(outside, 'extra.json'), join(generated, 'extra.json'));

@@ -85,13 +85,18 @@ export function startBuildRecord(packageDir: string): void {
  * Copies the asset folders from src/ into cleared folders in dist/, file by
  * file from the same walk sourceHash uses, so dist/ holds exactly what was
  * hashed: links copied as the files they point to, nothing hidden or stale.
+ * Fails when an asset folder is missing.
  */
 export function copyAssets(packageDir: string): void {
   for (const assets of ASSET_DIRS) {
     const from = join(packageDir, 'src', assets);
     const to = join(packageDir, 'dist', assets);
     rmSync(to, { recursive: true, force: true });
-    for (const file of existsSync(from) ? walk(from) : []) {
+    if (!existsSync(from)) {
+      // The server cannot run without its assets, so the build must not count as complete.
+      throw new Error(`src/${assets} is missing; run "npm run generate:icons" or "npm run build".`);
+    }
+    for (const file of walk(from)) {
       mkdirSync(dirname(join(to, file)), { recursive: true });
       copyFileSync(join(from, file), join(to, file));
     }
