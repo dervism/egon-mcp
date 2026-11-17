@@ -1,0 +1,4 @@
+[submodule "modules/egon.io"]
+	path = modules/egon.io
+	url = https://github.com/dervism/egon.io.git
+	branch = main

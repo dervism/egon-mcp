@@ -1,0 +1,18 @@
+# OS / editor
+.DS_Store
+.idea/
+*.swp
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+.venv/
+__pycache__/
+
+# Local environment
+.env
+.env.*
+!.env.example
+*.log
