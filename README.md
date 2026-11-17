@@ -20,25 +20,29 @@ egon-mcp/
 
 `modules/egon.io` is read-only reference material and stays unchanged ([ADR 2](docs/adr/0002-leave-egon-io-unchanged.md)). The server's build reads Egon's built-in icons from it, so check it out before building.
 
-## Quick start
+## Install
 
-Requires Node 22.18 or newer.
-
-```bash
-git clone --recurse-submodules https://github.com/dervism/egon-mcp.git
-```
+Egon-MCP needs Node 22.18 or newer. Install it with npm:
 
 ```bash
-cd egon-mcp/egon_mcp && npm ci && npm run build
+npm install -g egon-mcp
 ```
+
+Or with Homebrew, which brings its own Node:
+
+```bash
+brew install dervism/tap/egon-mcp
+```
+
+Both put an `egon-mcp` command on your path. To run it without installing, use `npx -y egon-mcp` wherever the examples below say `egon-mcp`.
 
 ### Claude Code
 
-Inside this repository the server is already registered in [.mcp.json](.mcp.json), with `examples/` as its workspace. To use it in any project:
-
 ```bash
-claude mcp add egon -- node /path/to/egon-mcp/egon_mcp/dist/index.js --root /path/to/your/stories
+claude mcp add egon -- egon-mcp --root /path/to/your/stories
 ```
+
+`--root` is the folder the server may read and write stories in. Inside this repository the server is already registered in [.mcp.json](.mcp.json), with `examples/` as its workspace.
 
 ### Claude Desktop
 
@@ -48,20 +52,44 @@ Add the server to `claude_desktop_config.json` (on macOS in `~/Library/Applicati
 {
   "mcpServers": {
     "egon": {
-      "command": "node",
-      "args": ["/path/to/egon-mcp/egon_mcp/dist/index.js", "--root", "/path/to/your/stories"]
+      "command": "npx",
+      "args": ["-y", "egon-mcp", "--root", "/path/to/your/stories"]
     }
   }
 }
 ```
 
+If Claude Desktop cannot find `npx` or `egon-mcp`, give the full path that `which npx` or `which egon-mcp` prints.
+
 ### The skill
 
-The skill in [skills/egon-mcp-skill](skills/egon-mcp-skill/SKILL.md) tells an agent which tool to use when and how to write good domain stories. Claude Code loads it automatically inside this repository. For other projects, link it into your personal skills:
+The skill tells an agent which tool to use when and how to write good domain stories. It comes with the package. Link it into your personal Claude Code skills after an npm install:
 
 ```bash
-ln -s /path/to/egon-mcp/skills/egon-mcp-skill ~/.claude/skills/egon-mcp-skill
+ln -s "$(npm root -g)/egon-mcp/skill" ~/.claude/skills/egon-mcp-skill
 ```
+
+Or after a Homebrew install:
+
+```bash
+ln -s "$(brew --prefix egon-mcp)/share/egon-mcp/skill" ~/.claude/skills/egon-mcp-skill
+```
+
+Both links keep working after upgrades. Inside this repository Claude Code loads the skill from [skills/egon-mcp-skill](skills/egon-mcp-skill/SKILL.md) by itself.
+
+### From source
+
+To work on the server, clone the repository with its submodule and build it:
+
+```bash
+git clone --recurse-submodules https://github.com/dervism/egon-mcp.git
+```
+
+```bash
+cd egon-mcp/egon_mcp && npm ci && npm run build
+```
+
+Then use `node /path/to/egon-mcp/egon_mcp/dist/index.js` in place of `egon-mcp`, and link `skills/egon-mcp-skill` into `~/.claude/skills`.
 
 ## What the server offers
 
@@ -81,7 +109,7 @@ Server options:
 
 ## Development
 
-See [egon_mcp/README.md](egon_mcp/README.md). Decisions are recorded in [docs/adr](docs/adr/README.md). The project agent [independent-reviewer](.claude/agents/independent-reviewer.md) reviews changes without any context from the conversation that produced them.
+See [egon_mcp/DEVELOPMENT.md](egon_mcp/DEVELOPMENT.md). Decisions are recorded in [docs/adr](docs/adr/README.md). The project agent [independent-reviewer](.claude/agents/independent-reviewer.md) reviews changes without any context from the conversation that produced them.
 
 ## Working with the egon.io submodule
 

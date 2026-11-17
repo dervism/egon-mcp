@@ -11,6 +11,7 @@ The egon-mcp server: Node, TypeScript, the official MCP SDK over stdio, tested w
 | `npm run build` | Builds `dist/`; `node dist/index.js --help` lists the options. |
 | `npm run docs` | Builds, then regenerates the skill's [tool reference](../skills/egon-mcp-skill/references/tools.md) from the server. A test fails when the reference is out of date. |
 | `npm run generate:icons` | Writes `src/icons/generated/builtin-icons.json` (gitignored) from `modules/egon.io`. |
+| `npm pack`, `npm publish` | Build first, then copy the repository README (links pointed at GitHub), `LICENSE` and the skill into this folder, gitignored, so the package carries them. |
 
 Three tests run the built code in `dist/` in a separate process, which `npm test` builds first: the stdio end-to-end test in `test/stdio.e2e.test.ts`, the named pipe test in `src/server/workspace.test.ts`, so a blocked read cannot hang the run, and the icon data test under Node's permission model in `src/icons/catalog.test.ts`. Without a complete build they fail with a hint, and they are skipped when `dist/` was not built from the current sources, for example in `npm run test:watch` after an edit. For that check the build records a hash of its inputs (sources, generated icons, `package.json`, both tsconfig files and the installed TypeScript compiler's package file) in `dist/build-info.json`, written only once tsc and the asset copy have succeeded.
 
@@ -35,3 +36,10 @@ Tests sit next to the code (`*.test.ts`), plus `test/` for end-to-end and skill 
 - Check format questions against the Egon source in `modules/egon.io`, and against the released version (`git -C ../modules/egon.io show v3.2.1:<path>`) when the public app is involved.
 - Changing a tool means running `npm run docs` and updating the skill in the same commit.
 - Ask the `independent-reviewer` agent to review a change range before pushing.
+
+## Releasing
+
+1. Set the version in `package.json` (`npm version <x.y.z> --no-git-tag-version`) and `SERVER_VERSION` in `src/server/server.ts`; a test checks that they match.
+2. Run `npm test`, commit, push and tag `v<x.y.z>`.
+3. Run `npm pack`, check the file list, then `npm publish egon-mcp-<x.y.z>.tgz`.
+4. Point the formula in [dervism/homebrew-tap](https://github.com/dervism/homebrew-tap) at the new tarball on the npm registry, with its SHA-256.

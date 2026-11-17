@@ -1,15 +1,32 @@
 {
   "name": "egon-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server for creating, editing, validating and rendering Egon.io domain stories",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "egon",
+    "domain-storytelling",
+    "domain-driven-design",
+    "ddd"
+  ],
+  "homepage": "https://github.com/dervism/egon-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dervism/egon-mcp.git",
+    "directory": "egon_mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/dervism/egon-mcp/issues"
+  },
   "type": "module",
-  "private": true,
   "bin": {
     "egon-mcp": "dist/index.js"
   },
   "main": "dist/index.js",
   "files": [
-    "dist"
+    "dist",
+    "skill"
   ],
   "engines": {
     "node": ">=22.18"
@@ -23,7 +40,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/index.js",
-    "docs": "npm run build && node scripts/generate-docs.mjs"
+    "docs": "npm run build && node scripts/generate-docs.mjs",
+    "prepack": "npm run build && node scripts/pack-extras.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
