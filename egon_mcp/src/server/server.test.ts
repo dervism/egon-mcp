@@ -324,7 +324,7 @@ describe('egon-mcp server', () => {
   it('tells agents how shapes get into a group', async () => {
     const { tools } = await client.listTools();
     const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';
-    expect(describe('add_group')).toMatch(/fits around them and holds only them/);
+    expect(describe('add_group')).toMatch(/fits around them and holds them and nothing else/);
     expect(describe('add_group')).toMatch(/open_story would put those in no group into the smallest group box/);
     expect(describe('save_story')).toMatch(/groupChangesOnOpen/);
     expect(describe('add_group')).toMatch(/takes in every shape whose top-left corner lies inside/);

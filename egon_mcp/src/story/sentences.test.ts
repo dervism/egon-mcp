@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { boundsOf } from './geometry.js';
 import type { ShapeElement } from '../egon/types.js';
 import { parseStoryFile } from '../egon/parse.js';
 import { toEgnJson } from '../egon/serialize.js';
@@ -249,6 +250,24 @@ describe('buildStory', () => {
     expect(() => membersOfSteps(story, [1, 2])).not.toThrow();
   });
 
+  it('leaves a shared work object in the group it was given, once that is decided', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [
+        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'notes', workObject: 'Part request', to: [{ activity: 'for', actor: 'Clerk' }] },
+        { actor: 'Clerk', activity: 'reads', workObject: 'Part request', reuseWorkObject: true },
+        { actor: 'Clerk', activity: 'orders', workObject: 'Part' },
+      ],
+    });
+    expect(() => membersOfSteps(story, [3, 4])).toThrow(/is used by step 2 too/);
+    const intake = story.addGroup({ name: 'Intake', members: ['Bike', 'Part request'] });
+    const purchasing = story.addGroup({ name: 'Purchasing', members: membersOfSteps(story, [3, 4]) });
+    const find = (name: string) => story.elements().find((element) => element.name === name)!;
+    expect([find('Part request')['parent'], find('Part')['parent']]).toEqual([intake.id, purchasing.id]);
+    expect(() => membersOfSteps(story, [3])).toThrow(/nothing left to group/);
+  });
+
   it('refuses to group by steps when some of their work objects sit in a group the steps only partly cover', () => {
     const story = buildStory({
       title: 'T',
@@ -315,7 +334,7 @@ describe('buildStory', () => {
     expect(area(workshop)).toBeGreaterThan(area(odd));
   });
 
-  it('takes a group in whole when all its work objects are among the members, so no group is emptied', () => {
+  it('takes a group in whole when all of it is among the members, so no group is emptied', () => {
     const story = buildStory({
       title: 'T',
       sentences: [
@@ -325,11 +344,57 @@ describe('buildStory', () => {
       groups: [{ name: 'Pricing', members: ['Estimate'] }],
     });
     const intake = story.addGroup({ name: 'Intake', members: ['Bike', 'Estimate'] });
-    const pricing = story.elements().find((element) => element.name === 'Pricing')!;
-    expect(pricing['parent']).toBe(intake.id);
-    expect(story.elements().find((element) => element.name === 'Estimate')?.['parent']).toBe(pricing.id);
-    const again = story.addGroup({ name: 'Again', members: ['Estimate'] });
-    expect(story.elements().find((element) => element.name === 'Pricing')?.['parent']).toBe(again.id);
+    const find = (name: string) => story.elements().find((element) => element.name === name)!;
+    expect(find('Pricing')['parent']).toBe(intake.id);
+    expect(find('Estimate')['parent']).toBe(find('Pricing').id);
+    // Naming the same element again would only wrap the group in a copy of itself.
+    expect(() => story.addGroup({ name: 'Again', members: ['Estimate'] })).toThrow(/already the group "Pricing"/);
+    // Naming the group itself wraps it on purpose.
+    const around = story.addGroup({ name: 'Around', members: ['Pricing'] });
+    expect(find('Pricing')['parent']).toBe(around.id);
+  });
+
+  it('moves members one by one out of a group that also holds something else', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [{ actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] }],
+      groups: [{ name: 'Workshop', members: ['Mechanic', 'Estimate'] }],
+    });
+    const paperwork = story.addGroup({ name: 'Paperwork', members: ['Estimate'], x: 2000, y: 2000, width: 300, height: 200 });
+    const find = (name: string) => story.elements().find((element) => element.name === name)!;
+    expect(find('Estimate')['parent']).toBe(paperwork.id);
+    expect(find('Mechanic')['parent']).toBe(find('Workshop').id);
+  });
+
+  it('grows every group around a nested one, so each stays larger, and reroutes their arrows', () => {
+    const story = Story.create({ title: 'T' });
+    const a = story.addWorkObject({ name: 'A', x: 0, y: 0 });
+    const b = story.addWorkObject({ name: 'B', x: 400, y: 0 });
+    const c = story.addWorkObject({ name: 'C', x: 800, y: 0 });
+    const middle = story.addGroup({ name: 'Middle', members: [a.id, b.id, c.id] });
+    const outer = story.addGroup({ name: 'Outer', members: [middle.id] });
+    const { connection } = story.addAnnotation({ text: 'about Outer', attachTo: outer.id, x: 2000, y: 0 });
+    story.addGroup({ name: 'Ends', members: [a.id, c.id] });
+    const area = (id: string) => {
+      const box = boundsOf(story.get(id) as ShapeElement);
+      return box.width * box.height;
+    };
+    const ends = story.elements().find((element) => element.name === 'Ends')!;
+    expect(area(middle.id)).toBeGreaterThan(area(ends.id));
+    expect(area(outer.id)).toBeGreaterThan(area(middle.id));
+    const link = story.get(connection!.id) as { waypoints: { x: number; y: number }[] };
+    const box = boundsOf(story.get(outer.id) as ShapeElement);
+    expect(link.waypoints[0]!.x).toBeGreaterThanOrEqual(box.x + box.width - 1);
+  });
+
+  it('refuses to grow a group past a billion pixels', () => {
+    // The new box fits within the limit, but the group around it would have to grow past it.
+    const story = Story.create({ title: 'T' });
+    const a = story.addWorkObject({ name: 'A', x: -999_999_950, y: 0 });
+    const b = story.addWorkObject({ name: 'B', x: -999_999_500, y: 0 });
+    const third = story.addWorkObject({ name: 'C', x: -999_999_000, y: 0 });
+    story.addGroup({ name: 'Edge', members: [a.id, b.id, third.id], x: -999_999_960, y: -100, width: 2000, height: 400 });
+    expect(() => story.addGroup({ name: 'Both', members: [a.id, b.id] })).toThrow(/billion/);
   });
 
   it('nests a group made from some of the steps of another group inside it', () => {

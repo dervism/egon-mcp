@@ -5,6 +5,7 @@ import { toEgnJson } from '../egon/serialize.js';
 import type { ShapeElement, StoryElement } from '../egon/types.js';
 import { describeStory } from '../server/describe.js';
 import type { StoryEntry } from '../server/workspace.js';
+import { takeWholeGroups } from './membership.js';
 import { addSentence, buildStory } from './sentences.js';
 import { Story } from './story.js';
 import { validateStory } from './validate.js';
@@ -316,5 +317,45 @@ describe('group checks', () => {
     story.addGroup({ name: 'G', members: [annotation.id] });
     const view = describeStory({ story } as unknown as StoryEntry);
     expect(view.groups[0]?.members).toEqual(['every month']);
+  });
+});
+
+describe('taking groups in whole', () => {
+  const doc = (elements: object[]) => opened(elements).elements();
+
+  it('takes the outermost group whose contents are all chosen', () => {
+    const elements = doc([
+      group('outer', 0, 0, 2000, 2000),
+      group('middle', 50, 50, 1500, 1500, 'outer'),
+      group('inner', 100, 100, 500, 500, 'middle'),
+      { type: 'domainStory:workObjectDocument', id: 'a', name: 'A', x: 150, y: 150, parent: 'inner' },
+      { type: 'domainStory:workObjectDocument', id: 'b', name: 'B', x: 900, y: 900, parent: 'middle' },
+    ]);
+    expect(takeWholeGroups(['a', 'b'], elements)).toEqual(['outer']);
+    expect(takeWholeGroups(['a'], elements)).toEqual(['inner']);
+  });
+
+  it('leaves a group with an actor that was not chosen, and takes an actor-only group that was', () => {
+    const elements = doc([
+      group('workshop', 0, 0, 1000, 1000),
+      actor('mechanic', 100, 100, 'workshop'),
+      { type: 'domainStory:workObjectDocument', id: 'estimate', name: 'Estimate', x: 300, y: 100, parent: 'workshop' },
+      group('customers', 2000, 0, 300, 300),
+      actor('customer', 2100, 100, 'customers'),
+    ]);
+    expect(takeWholeGroups(['estimate'], elements)).toEqual(['estimate']);
+    expect(takeWholeGroups(['customer', 'estimate'], elements)).toEqual(['customers', 'estimate']);
+  });
+
+  it('counts a chosen group and notes on chosen elements as chosen', () => {
+    const elements = doc([
+      group('outer', 0, 0, 2000, 2000),
+      group('inner', 100, 100, 500, 500, 'outer'),
+      { type: 'domainStory:workObjectDocument', id: 'a', name: 'A', x: 150, y: 150, parent: 'inner' },
+      { type: 'domainStory:workObjectDocument', id: 'b', name: 'B', x: 900, y: 900, parent: 'outer' },
+      { type: 'domainStory:textAnnotation', id: 'n', text: 'about B', x: 1000, y: 900, width: 100, height: 30, parent: 'outer' },
+      { type: 'domainStory:connection', id: 'c', source: 'b', target: 'n', waypoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }] },
+    ]);
+    expect(takeWholeGroups(['inner', 'b'], elements)).toEqual(['outer']);
   });
 });

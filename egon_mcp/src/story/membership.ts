@@ -1,4 +1,4 @@
-import { groupAncestors, isEdge, isGroup, isWorkObject, type GroupElement, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { groupAncestors, isConnection, isEdge, isGroup, isTextAnnotation, type GroupElement, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { boundsOf } from './geometry.js';
 
 /**
@@ -89,23 +89,31 @@ export function settleMembership(elements: StoryElement[]): void {
 }
 
 /**
- * The members for a new group, with every existing group whose work objects
- * are all among them taken in whole instead of one by one, so no group is
- * left empty and inner groups may be drawn before outer ones.
+ * The members for a new group, with every existing group whose contents are
+ * all chosen taken in whole instead of one by one, outermost first, so no
+ * group is left empty and inner groups may be drawn before outer ones. A
+ * chosen group counts with all it holds, and a note counts as chosen when the
+ * element it is attached to is. A group that holds anything else, such as an
+ * actor of a subdomain, is not taken; its chosen members move one by one.
  */
 export function takeWholeGroups(ids: string[], elements: StoryElement[]): string[] {
   const byId = new Map(elements.map((element) => [element.id, element]));
-  const chosen = new Set(ids);
-  const workObjectsIn = (groupId: string): string[] =>
+  const contents = (groupId: string): string[] =>
     elements.flatMap((element) =>
-      element['parent'] !== groupId ? [] : isGroup(element) ? workObjectsIn(element.id) : isWorkObject(element) ? [element.id] : [],
+      element['parent'] !== groupId || isEdge(element) ? [] : isGroup(element) ? [element.id, ...contents(element.id)] : [element.id],
     );
+  const chosen = new Set(ids.flatMap((id) => (isGroup(byId.get(id) as StoryElement) ? [id, ...contents(id)] : [id])));
+  for (const link of elements.filter(isConnection)) {
+    if (chosen.has(link.source) && isTextAnnotation(byId.get(link.target) as StoryElement)) {
+      chosen.add(link.target);
+    }
+  }
   const members: string[] = [];
   for (const id of ids) {
     const whole = groupAncestors(byId.get(id), byId)
       .filter((groupId) => {
-        const inside = workObjectsIn(groupId);
-        return inside.length > 0 && inside.every((workObject) => chosen.has(workObject));
+        const inside = contents(groupId).filter((content) => !isGroup(byId.get(content) as StoryElement));
+        return inside.length > 0 && inside.every((content) => chosen.has(content));
       })
       .at(-1);
     const member = whole ?? id;

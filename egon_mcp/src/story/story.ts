@@ -248,13 +248,23 @@ export class Story {
   private applyAddGroup(input: GroupInput): GroupElement {
     let bounds: Bounds;
     // A name shared by several elements (work objects repeat per sentence) groups all of them.
-    // A group whose work objects are all among the members goes in whole, so none is left empty.
     const resolved = (input.members ?? []).flatMap((ref) => this.resolveShapes(ref));
-    const members = takeWholeGroups(
-      resolved.map((member) => member.id),
-      this.doc.elements,
-    ).map((id) => this.find(id) as ShapeElement);
     const given = this.givenPosition(input);
+    // A box fitted around members takes in whole every group that is all among them, so none is
+    // left empty; a box drawn with x and y takes exactly the members named.
+    const ids = given
+      ? resolved.map((member) => member.id)
+      : takeWholeGroups(
+          resolved.map((member) => member.id),
+          this.doc.elements,
+        );
+    const members = ids.map((id) => this.find(id) as ShapeElement);
+    const only = members.length === 1 ? members[0] : undefined;
+    if (only && isGroup(only) && !resolved.some((member) => member.id === only.id)) {
+      throw new StoryError(
+        `${resolved.map((member) => `"${member.name || member['text'] || member.id}"`).join(', ')} ${resolved.length > 1 ? 'are' : 'is'} already the group "${only.name || only.id}". Pass the group itself to draw a box around it.`,
+      );
+    }
     const fitted = members.length > 0 && !given;
     if (fitted) {
       bounds = enclose(members.map((member) => boundsOf(member)), GROUP_PADDING);
@@ -308,8 +318,7 @@ export class Story {
           width: inner.width + 2 * GROUP_PADDING,
           height: inner.height + 2 * GROUP_PADDING,
         });
-        checkCoordinates(box);
-        Object.assign(outer, box);
+        this.setGeometry(outer, box);
         inner = box;
       }
     } else if (!fitted) {

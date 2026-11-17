@@ -245,14 +245,23 @@ export function membersOfSteps(story: Story, steps: number[]): string[] {
       }
     }
   }
-  // A work object shared with a sentence outside these steps cannot be in two groups.
-  for (const id of ids) {
+  // A work object shared with a sentence outside these steps cannot be in two groups. Once it sits
+  // in a group, that is decided and it stays there; otherwise the caller has to decide.
+  for (const id of [...ids]) {
     const others = (stepsOf.get(id) ?? []).filter((number) => !steps.includes(number));
-    if (others.length > 0) {
-      throw new StoryError(
-        `"${nameOf(id)}" in step ${stepOf.get(id)} is used by ${others.length > 1 ? 'steps' : 'step'} ${others.join(', ')} too, so it cannot go into a group of these steps alone. Decide which group it belongs to, then group by members instead (after build_story, with add_group and ids from get_story).`,
-      );
+    if (others.length === 0) {
+      continue;
     }
+    if (groupAncestors(byId.get(id), byId).length > 0) {
+      ids.splice(ids.indexOf(id), 1);
+      continue;
+    }
+    throw new StoryError(
+      `"${nameOf(id)}" in step ${stepOf.get(id)} is used by ${others.length > 1 ? 'steps' : 'step'} ${others.join(', ')} too, so it cannot go into a group of these steps alone. Decide which group it belongs to and put it there by members (its id is in get_story); grouping by steps then leaves it where it is.`,
+    );
+  }
+  if (ids.length === 0) {
+    throw new StoryError(`Every work object of ${steps.length > 1 ? 'steps' : 'step'} ${steps.join(', ')} is already in another group, so there is nothing left to group.`);
   }
   // An existing group whose work objects all belong to these steps goes in whole, outermost first.
   const members = takeWholeGroups(ids, doc.elements);
