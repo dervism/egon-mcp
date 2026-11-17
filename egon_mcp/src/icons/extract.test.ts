@@ -148,6 +148,7 @@ describe('generateIconFile', () => {
         // Egon passing one object instead of value, key and keywords.
         "const icons = new Dictionary();\nicons.putEntry(new Entry({ svg: '<svg/>', name: 'A', keywords: [] }));\n",
         "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 7, []));\n",
+        "const icons = new Dictionary();\nicons.putEntry(new Entry(5, 'A', []));\n",
         "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', 'a, b'));\n",
         "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', [1]));\n",
       ];

@@ -28,11 +28,15 @@ export class IconCatalog {
    * loaded once through fromFile. Tests may point it at another file.
    */
   static builtIn(file: URL = GENERATED_FILE): IconCatalog {
-    if (file !== GENERATED_FILE) {
-      return IconCatalog.fromFile(file);
+    const cached = file === GENERATED_FILE ? builtInCatalog : undefined;
+    if (cached) {
+      return cached;
     }
-    builtInCatalog ??= IconCatalog.fromFile(GENERATED_FILE);
-    return builtInCatalog;
+    const catalog = IconCatalog.fromFile(file);
+    if (file === GENERATED_FILE) {
+      builtInCatalog = catalog;
+    }
+    return catalog;
   }
 
   /** Reads an icon list as the icon generator writes it, after the same check the build makes. */
@@ -45,8 +49,9 @@ export class IconCatalog {
     let content: string;
     try {
       content = readFileSync(file, 'utf8');
-    } catch {
-      content = '';
+    } catch (error) {
+      // Regenerating cannot help here (a folder in the way, missing rights), so say why.
+      throw new Error(`Built-in icon data ${path} cannot be read (${(error as NodeJS.ErrnoException).code ?? 'unknown error'}).`);
     }
     if (!isIconList(content)) {
       throw new Error(`Built-in icon data ${path} is not usable; ${fix}`);

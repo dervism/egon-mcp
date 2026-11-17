@@ -39,11 +39,19 @@ describe('scripts/generate-icons.mjs', () => {
     expect(JSON.parse(readFileSync(result.out, 'utf8'))).toEqual([{ svg: '<svg/>', name: 'Person', keywords: ['human'] }]);
   });
 
-  it('fails with one line, and writes nothing, when the icons are not what the build accepts', () => {
+  it('fails with one line, and writes nothing, when Egon\'s source does not have the expected shape', () => {
     const result = generate("const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', '', ['x']));\n");
     expect(result.status).toBe(1);
     expect(result.stderr.trim().split('\n')).toHaveLength(1);
     expect(result.stderr).toMatch(/its format may have changed/);
+    expect(existsSync(result.out)).toBe(false);
+  });
+
+  it('runs the build\'s own check before writing, for what extraction lets through', () => {
+    // A keyword list with a hole passes extraction but not the build's check.
+    const result = generate("const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'Person', ['a', , 'b']));\n");
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/do not have the shape the server reads/);
     expect(existsSync(result.out)).toBe(false);
   });
 

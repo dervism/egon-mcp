@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_ICON_NAMES, IconCatalog } from './catalog.js';
 
 describe('IconCatalog', () => {
@@ -60,15 +60,31 @@ describe('IconCatalog.fromFile', () => {
     );
   });
 
-  it('refuses a file that is cut off, not in the shape the server reads, or not a file', () => {
+  it('refuses a file that is cut off or not in the shape the server reads', () => {
     const file = join(dir, 'builtin-icons.json');
     for (const content of ['[{ "name": "Per', '[{ "name": "Person", "svg": "<svg/>" }]']) {
       writeFileSync(file, content);
       expect(() => IconCatalog.fromFile(pathToFileURL(file)), content).toThrow(`${file} is not usable; ${fix}`);
     }
-    rmSync(file);
+  });
+
+  it('says why a path it cannot read failed, instead of a hint that cannot help', () => {
+    const file = join(dir, 'builtin-icons.json');
     mkdirSync(file);
-    expect(() => IconCatalog.fromFile(pathToFileURL(file))).toThrow(`${file} is not usable; ${fix}`);
+    expect(() => IconCatalog.fromFile(pathToFileURL(file))).toThrow(`${file} cannot be read (EISDIR)`);
+  });
+
+  it('is the only way the built-in icons are loaded, the default file included', async () => {
+    vi.resetModules();
+    const { IconCatalog: Fresh } = await import('./catalog.js');
+    const fromFile = vi.spyOn(Fresh, 'fromFile');
+    try {
+      Fresh.builtIn();
+      Fresh.builtIn();
+      expect(fromFile).toHaveBeenCalledTimes(1);
+    } finally {
+      fromFile.mockRestore();
+    }
   });
 
   it('applies to the built-in icons the server loads', () => {

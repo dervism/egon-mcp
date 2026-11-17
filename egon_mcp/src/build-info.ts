@@ -10,14 +10,15 @@ import { dirname, join } from 'node:path';
 export const BUILD_INFO_FILE = 'build-info.json';
 /** The record while tsc runs; finishBuildRecord renames it to BUILD_INFO_FILE. */
 export const PENDING_BUILD_INFO_FILE = 'build-info.pending.json';
+
+/** How to make the icon data again; npm skips the prebuild step that runs generate:icons when scripts are ignored. */
+export const ICON_FIX = 'run "npm run generate:icons", then "npm run build"';
+
 /**
  * Folders below src/ that the build copies into dist/ as they are, the files
  * the server cannot run without with a check that one is usable, and how to
  * make them again.
  */
-/** How to make the icon data again; npm skips the prebuild step that runs generate:icons when scripts are ignored. */
-export const ICON_FIX = 'run "npm run generate:icons", then "npm run build"';
-
 export const ASSETS: { dir: string; required: { file: string; usable: (content: string) => boolean }[]; hint: string }[] = [
   {
     dir: 'icons/generated',
