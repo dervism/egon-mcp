@@ -88,11 +88,11 @@ Choose by granularity:
 
 ## Scope
 
-Domain Storytelling is not one size fits all. The purpose decides the scope of a story, and scope has three factors.
+No single scope suits every purpose. The purpose decides the scope of a story, and scope has three factors.
 
 | Factor | Values | What changes |
 |---|---|---|
-| Granularity | coarse-grained, medium-grained, fine-grained | Coarse stories cover a whole case in a few sentences and say what happens; fine stories show one part step by step and say how, often with concrete quantities. |
+| Granularity | coarse-grained, medium-grained, fine-grained | Coarse stories cover a whole case in about ten sentences and say what happens; fine stories show one part step by step and say how, often with concrete quantities. |
 | Point in time | as-is, to-be | As-is stories describe today's work, to-be stories the work as it should be with a new process or software. |
 | Domain purity | pure, digitalized | Pure stories show only people and organizations; digitalized stories also show software systems as actors that do things. |
 
@@ -108,13 +108,13 @@ Keep a story at one level. A coarse story that suddenly lists form fields mixes 
 
 Good habits:
 
-1. Give every sentence its own work objects.
-2. Make work objects explicit. Novices tend to hide a second object inside the verb ("assesses risk" instead of "fetches credit rating for contract"). If a sentence involves two things, draw both.
-3. Provide a label for every building block.
-4. Use different icons for actors and work objects.
-5. Use the storytellers' words, not your own, and do not push your opinion on them. Ask "Is this the right term?".
-6. If something seems noteworthy, make it explicit as an annotation. People can then see it, point at it and object to it.
-7. Retell the story from beginning to end when it seems finished, to check that everyone agrees.
+1. Draw fresh work objects in each sentence instead of routing many arrows through one.
+2. When a sentence involves two things, draw both. Novices tend to hide the second object inside the verb ("assesses risk" instead of "fetches credit rating for contract").
+3. Label every actor, work object, activity and group.
+4. Keep the icons for actors and for work objects apart.
+5. Use the storytellers' terms, not your own, and do not push your opinion on them. Ask "Is this the right term?".
+6. Write anything noteworthy down as an annotation, so people can see it, point at it and object to it.
+7. When the story seems finished, retell it from beginning to end and check that everyone agrees.
 
 Traps:
 
@@ -163,15 +163,15 @@ Questions that keep the story going:
 
 Ask why when an activity seems to have no purpose. Answers such as "that is the way we have always done it", "I don't know why we do that", "we assume the other department needs it" or "the software forces us" often reveal real problems. You may have to ask why more than once.
 
-Record the story sentence by sentence, at the pace of the telling, and retell each sentence as you add it. With egon-mcp: `add_sentence` per answer, then read the sentence back from the tool result.
+Record the story sentence by sentence, at the pace of the telling, and retell each sentence as you add it. With egon-mcp: `add_sentence` per answer, then `narrate_story` to read the new sentence back.
 
 ### Finishing
 
 When the story seems complete, tell it again from the beginning and seek agreement: did we miss something, is something wrong, do all the experts agree? Then go through the annotations for possible alternative stories. The participants decide which are minor variations and which deserve a story of their own. Questions that help:
 
-- "Are we talking about the same task, sometimes done differently, or about a different task?"
-- "What would be different if ...?"
-- "Am I right that the only difference would be ...?"
+- Is this one task done in another way, or another task?
+- What would change in the story if ...?
+- So the one difference would be ..., is that right?
 
 You will rarely bring everyone to one view. Do not hide conflicts behind abstractions; record unresolved differences as annotations so everyone sees them. If needed, plan a follow-up to look at parts in more detail or at important variations.
 
@@ -209,6 +209,6 @@ Check, in this order:
 
 This guide summarizes, in our own words:
 
-- [domainstorytelling.org](https://domainstorytelling.org) by Stefan Hofer and Henning Schwentner, published under CC BY 4.0: the quick-start guide and the pages and articles on Domain-Driven Design, requirements, tools, loops and message flows.
+- [domainstorytelling.org](https://domainstorytelling.org) by Stefan Hofer and Henning Schwentner, published under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): the quick-start guide and the pages and articles on Domain-Driven Design, requirements, tools, loops and message flows.
 - The book "Domain Storytelling: A Collaborative, Visual, and Agile Way to Build Domain-Driven Software" by Stefan Hofer and Henning Schwentner (Addison-Wesley, 2022), and their chapter on Domain Storytelling in the book "Visual Collaboration Tools".
 - The example stories in [WPS/egon.io-examples](https://github.com/WPS/egon.io-examples), which you can open with `open_story` after downloading them.

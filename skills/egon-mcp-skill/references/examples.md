@@ -4,6 +4,8 @@ Complete, tested tool calls, from a first simple story to a family of stories ab
 
 Most examples share one domain, a bicycle repair shop, and show how a business is told as several stories at different scopes. The patterns behind them are explained in `modeling-patterns.md`.
 
+The call sequences write the story id out for readability. In your own calls, use the `storyId` that `create_story`, `build_story` or `open_story` returns: it comes from the title, but is cut to 40 characters and gets a suffix if the id is taken.
+
 ## 1. A first story from a description
 
 User: "When a customer calls to order a pizza, the clerk writes the order on a slip and hands it to the baker. The baker bakes it, and the clerk gives it to the customer, who pays."
@@ -11,7 +13,7 @@ User: "When a customer calls to order a pizza, the clerk writes the order on a s
 ```json
 {
   "title": "Order pizza by phone",
-  "description": "Assumptions: happy path; the pizza is picked up, not delivered.",
+  "description": "Coarse-grained, pure, as-is. Assumptions: happy path; the pizza is picked up, not delivered.",
   "scope": { "granularity": "coarse-grained", "pointInTime": "as-is", "domainPurity": "pure" },
   "sentences": [
     { "actor": "Customer", "activity": "orders", "workObject": "Pizza order", "workObjectIcon": "Call", "to": [{ "activity": "from", "actor": "Clerk" }] },
@@ -64,7 +66,7 @@ The first story about a new domain is usually coarse-grained: the whole case fro
     { "name": "Purchasing", "members": ["Spare part", "Supplier"] },
     { "name": "Billing", "members": ["Repair report", "Repair price"] }
   ],
-  "annotations": [{ "text": "Usually arrives the next working day", "attachTo": "Spare part" }]
+  "annotations": [{ "text": "Ordered parts usually arrive the next working day", "attachTo": "Spare part" }]
 }
 ```
 
@@ -201,7 +203,28 @@ Two things that happen at the same time share a step number (`number` on the sec
 
 Use parallel numbers sparingly: they make a story harder to retell. If the order does not matter, agree on one order instead.
 
-## 7. Something that repeats
+## 7. Several recipients and a second verb
+
+A sentence can end at two recipients: label the first arrow with its preposition and the second "and". A continuation arrow can also carry a second verb, when both actions are one step.
+
+```json
+{
+  "title": "Close a repair order",
+  "description": "Fine-grained, pure, as-is.",
+  "scope": { "granularity": "fine-grained", "pointInTime": "as-is", "domainPurity": "pure" },
+  "sentences": [
+    { "actor": "Cashier", "activity": "checks", "workObject": "Payment", "workObjectIcon": "Euro", "to": [{ "activity": "and confirms it to", "actor": "Mechanic" }] },
+    { "actor": "Cashier", "activity": "sends", "workObject": "Invoice", "workObjectIcon": "Receipt", "to": [{ "activity": "to", "actor": "Customer" }, { "activity": "and", "actor": "Accountant" }] }
+  ]
+}
+```
+
+```text
+1. Cashier checks Payment and confirms it to Mechanic.
+2. Cashier sends Invoice to Customer and Accountant.
+```
+
+## 8. Something that repeats
 
 There are no loops in a domain story. In a coarse story an annotation on the repeated sentence is enough ("for every bike"). In a medium-grained story like this one, a labeled group says which sentences repeat. In a fine-grained story you can spell out a concrete case, one sentence per round, which shows whether the rounds really are the same.
 
@@ -229,7 +252,7 @@ There are no loops in a domain story. In a coarse story an annotation on the rep
 4. Mechanic returns Service list to Rental manager.
 ```
 
-## 8. Finding shadow IT
+## 9. Finding shadow IT
 
 A digitalized as-is story makes every tool visible that people really use, including the spreadsheet nobody in IT knows about. Model it as an actor with a fitting icon and say where it lives.
 
@@ -256,9 +279,9 @@ A digitalized as-is story makes every tool visible that people really use, inclu
 4. Supplier confirms Delivery date to Purchasing clerk.
 ```
 
-## 9. Make or buy: a candidate product as its own to-be story
+## 10. Make or buy: a candidate product as its own to-be story
 
-To compare off-the-shelf products, tell the same to-be story once per candidate and color the differences. Here the candidate cannot send text messages, so the phone call from the as-is story stays.
+To compare off-the-shelf products, tell the same to-be story once per candidate and color the differences. Here the candidate has no price list, so the mechanic still looks up part prices by hand; only that work object is red. Compare it with example 4.
 
 ```json
 {
@@ -266,36 +289,38 @@ To compare off-the-shelf products, tell the same to-be story once per candidate 
   "description": "Fine-grained, digitalized, to-be, candidate product RepairDesk. Red marks what it cannot do.",
   "scope": { "granularity": "fine-grained", "pointInTime": "to-be", "domainPurity": "digitalized" },
   "actors": [{ "name": "RepairDesk", "icon": "Desktop" }],
-  "workObjects": [{ "name": "Approval", "icon": "Call", "color": "#C62828" }],
+  "workObjects": [{ "name": "Part prices", "icon": "Euro", "color": "#C62828" }],
   "sentences": [
     { "actor": "Mechanic", "activity": "test rides", "workObject": "Bike", "workObjectIcon": "Bike" },
     { "actor": "Mechanic", "activity": "enters", "workObject": "Defects", "workObjectIcon": "Problem", "to": [{ "activity": "into", "actor": "RepairDesk" }] },
-    { "actor": "RepairDesk", "activity": "calculates", "workObject": "Repair estimate", "workObjectIcon": "Receipt" },
-    { "actor": "Mechanic", "activity": "explains", "workObject": "Repair estimate", "workObjectIcon": "Call", "to": [{ "activity": "to", "actor": "Customer" }] },
-    { "actor": "Customer", "activity": "gives", "workObject": "Approval", "to": [{ "activity": "to", "actor": "Mechanic" }] },
-    { "actor": "Mechanic", "activity": "records", "workObject": "Approval", "workObjectIcon": "Check-Circle", "to": [{ "activity": "in", "actor": "RepairDesk" }] }
+    { "actor": "Mechanic", "activity": "looks up", "workObject": "Part prices" },
+    { "actor": "Mechanic", "activity": "enters", "workObject": "Repair estimate", "workObjectIcon": "Receipt", "to": [{ "activity": "into", "actor": "RepairDesk" }] },
+    { "actor": "RepairDesk", "activity": "sends", "workObject": "Text message", "workObjectIcon": "Cellphone", "to": [{ "activity": "to", "actor": "Customer" }] },
+    { "actor": "Customer", "activity": "approves", "workObject": "Repair estimate", "workObjectIcon": "Thumb-up", "to": [{ "activity": "in", "actor": "RepairDesk" }] }
   ],
-  "annotations": [{ "text": "No text messages; customers must be called", "attachTo": "RepairDesk" }]
+  "annotations": [{ "text": "No price list; prices come from the supplier catalog", "attachTo": "RepairDesk" }]
 }
 ```
 
 ```text
 1. Mechanic test rides Bike.
 2. Mechanic enters Defects into RepairDesk.
-3. RepairDesk calculates Repair estimate.
-4. Mechanic explains Repair estimate to Customer.
-5. Customer gives Approval to Mechanic.
-6. Mechanic records Approval in RepairDesk.
+3. Mechanic looks up Part prices.
+4. Mechanic enters Repair estimate into RepairDesk.
+5. RepairDesk sends Text message to Customer.
+6. Customer approves Repair estimate in RepairDesk.
 ```
 
-## 10. Messages between bounded contexts
+A new copy of a work object takes the color of the previous one with the same name. To color one sentence only, give its work object a name of its own, as here, or color that copy afterwards with `update_element` and its id.
+
+## 11. Messages between bounded contexts
 
 The message-flow variant (after Nick Tune's Domain Message Flow Modeling) shows how bounded contexts talk to each other. Users, bounded contexts and external systems are actors; commands, events and queries are work objects; the arrows stay unlabeled, because the message already says what is meant; message contents go into annotations. `validate_story` warns about each unlabeled arrow and `narrate_story` shows a placeholder, both expected in this variant.
 
 ```json
 {
   "title": "Place an order - message flow",
-  "description": "Messages between bounded contexts, all items in stock. Cloud: bounded context; gear: external system; envelope: command; flag: event.",
+  "description": "Fine-grained, digitalized, to-be. Messages between bounded contexts, all items in stock. Cloud: bounded context; gear: system that is not a bounded context; envelope: command; flag: event.",
   "scope": { "granularity": "fine-grained", "pointInTime": "to-be", "domainPurity": "digitalized" },
   "actors": [
     { "name": "Shopper", "icon": "Person" },
@@ -310,7 +335,7 @@ The message-flow variant (after Nick Tune's Domain Message Flow Modeling) shows 
     { "actor": "Web shop", "activity": "", "workObject": "Place order", "workObjectIcon": "Email", "to": [{ "actor": "Sales" }] },
     { "actor": "Sales", "activity": "", "workObject": "Order placed", "workObjectIcon": "Flag", "to": [{ "actor": "Billing" }] },
     { "actor": "Billing", "activity": "", "workObject": "Charge card", "workObjectIcon": "Email", "to": [{ "actor": "Payment provider" }] },
-    { "actor": "Billing", "activity": "", "workObject": "Payment collected", "workObjectIcon": "Flag", "to": [{ "actor": "Sales" }, { "activity": "and", "actor": "Notifications" }] }
+    { "actor": "Billing", "activity": "", "workObject": "Payment collected", "workObjectIcon": "Flag", "to": [{ "actor": "Sales" }, { "actor": "Notifications" }] }
   ],
   "annotations": [
     { "text": "Order id, items, payment method, address", "attachTo": "Order placed" },
@@ -324,17 +349,17 @@ The message-flow variant (after Nick Tune's Domain Message Flow Modeling) shows 
 2. Web shop [unlabeled activity] Place order [unlabeled activity] Sales.
 3. Sales [unlabeled activity] Order placed [unlabeled activity] Billing.
 4. Billing [unlabeled activity] Charge card [unlabeled activity] Payment provider.
-5. Billing [unlabeled activity] Payment collected [unlabeled activity] Sales and Notifications.
+5. Billing [unlabeled activity] Payment collected [unlabeled activity] Sales and [unlabeled activity] Notifications.
 ```
 
 Modeling bounded contexts as actors, not as systems, keeps the decision open whether they become separate services.
 
-## 11. Interview step by step
+## 12. Interview step by step
 
 When the user tells the story as you go, add one sentence per answer and read it back.
 
 ```json
-{ "tool": "create_story", "arguments": { "title": "Rent a car", "scope": { "pointInTime": "as-is" } } }
+{ "tool": "create_story", "arguments": { "title": "Rent a car", "description": "Coarse-grained, pure, as-is. Happy path.", "scope": { "granularity": "coarse-grained", "pointInTime": "as-is", "domainPurity": "pure" } } }
 { "tool": "add_sentence", "arguments": { "storyId": "rent-a-car", "actor": "Customer", "activity": "shows", "workObject": "Driving licence", "to": [{ "activity": "to", "actor": "Agent" }] } }
 { "tool": "add_sentence", "arguments": { "storyId": "rent-a-car", "actor": "Agent", "activity": "checks", "workObject": "Driving licence" } }
 { "tool": "add_sentence", "arguments": { "storyId": "rent-a-car", "actor": "Agent", "activity": "hands over", "workObject": "Car key", "workObjectIcon": "Key", "to": [{ "activity": "to", "actor": "Customer" }] } }
@@ -347,7 +372,7 @@ When the user tells the story as you go, add one sentence per answer and read it
 3. Agent hands over Car key to Customer.
 ```
 
-## 12. Improve a story someone else made
+## 13. Improve a story someone else made
 
 Open the file, check it, and fix what the review finds. Here the customer only says the order out loud, so its icon becomes a speech bubble, and "Money" becomes the word the shop uses.
 
@@ -370,10 +395,10 @@ Open the file, check it, and fix what the review finds. Here the customer only s
 
 `save_story` without a path writes back to `Order pizza.egn`, the file it came from.
 
-## 13. Show it
+## 14. Show it
 
 ```json
-{ "tool": "create_story", "arguments": { "title": "Return a parcel", "scope": { "pointInTime": "as-is" } } }
+{ "tool": "create_story", "arguments": { "title": "Return a parcel", "description": "Coarse-grained, pure, as-is.", "scope": { "granularity": "coarse-grained", "pointInTime": "as-is", "domainPurity": "pure" } } }
 { "tool": "add_sentence", "arguments": { "storyId": "return-a-parcel", "actor": "Customer", "activity": "brings", "workObject": "Parcel", "to": [{ "activity": "to", "actor": "Post office clerk" }] } }
 { "tool": "open_in_egon", "arguments": { "storyId": "return-a-parcel", "startReplay": true } }
 { "tool": "save_story", "arguments": { "storyId": "return-a-parcel", "path": "Return a parcel.egn.svg" } }

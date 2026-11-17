@@ -85,8 +85,25 @@ function continueFrom(
   if (parts.length === 0) {
     return displayName(element);
   }
-  // Join onward arrows with "and", unless an arrow is already labeled "and" (the book labels a second recipient so).
-  const joined = parts.map((part, index) => (index === 0 ? part : /^and\b/i.test(part) ? ` ${part}` : ` and ${part}`)).join('');
+  // Join onward arrows with "and". An arrow already labeled "and" (as the book labels a second
+  // recipient) continues the arrow drawn before it and gets no extra "and"; one drawn before
+  // any other arrow is read after the first of them.
+  const startsWithAnd = (part: string) => /^and\b/i.test(part);
+  const ordered: string[] = [];
+  let leading: string[] = [];
+  for (const part of parts) {
+    if (startsWithAnd(part) && ordered.length === 0) {
+      leading.push(part);
+      continue;
+    }
+    ordered.push(part);
+    if (!startsWithAnd(part) && leading.length > 0) {
+      ordered.push(...leading);
+      leading = [];
+    }
+  }
+  ordered.push(...leading);
+  const joined = ordered.map((part, index) => (index === 0 ? part : startsWithAnd(part) ? ` ${part}` : ` and ${part}`)).join('');
   return `${displayName(element)} ${joined}`;
 }
 

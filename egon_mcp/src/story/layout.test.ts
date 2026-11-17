@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { isActor, isWorkObject, type ActivityElement, type ShapeElement } from '../egon/types.js';
 import { boundsOf } from './geometry.js';
 import { autoLayout } from './layout.js';
+import { buildStory } from './sentences.js';
 import { Story } from './story.js';
 import { validateStory } from './validate.js';
 
@@ -91,5 +92,45 @@ describe('autoLayout', () => {
     const note = story.get(annotation.id) as ShapeElement;
     expect(Math.abs(note.x - pizza.x)).toBeLessThan(250);
     expect(Math.abs(note.y - pizza.y)).toBeLessThan(150);
+  });
+
+  it('keeps the members of each group together, so no group box encloses anything else', () => {
+    const story = buildStory({
+      title: 'Repair a bicycle',
+      sentences: [
+        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'inspects', workObject: 'Bike' },
+        { actor: 'Mechanic', activity: 'offers', workObject: 'Repair estimate', to: [{ activity: 'to', actor: 'Customer' }] },
+        { actor: 'Customer', activity: 'gives', workObject: 'Approval', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'orders', workObject: 'Spare part', to: [{ activity: 'from', actor: 'Supplier' }] },
+        { actor: 'Supplier', activity: 'delivers', workObject: 'Spare part', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'repairs', workObject: 'Bike' },
+        { actor: 'Mechanic', activity: 'passes on', workObject: 'Repair report', to: [{ activity: 'to', actor: 'Cashier' }] },
+        { actor: 'Customer', activity: 'pays', workObject: 'Repair price', to: [{ activity: 'to', actor: 'Cashier' }] },
+        { actor: 'Cashier', activity: 'hands over', workObject: 'Bike', to: [{ activity: 'to', actor: 'Customer' }] },
+      ],
+      groups: [
+        { name: 'Repair', members: ['Repair estimate', 'Approval'] },
+        { name: 'Purchasing', members: ['Spare part', 'Supplier'] },
+        { name: 'Billing', members: ['Repair report', 'Repair price'] },
+      ],
+    });
+    const groups = story.elements().filter((e) => e.type === 'domainStory:group') as (ShapeElement & { width: number; height: number })[];
+    expect(groups).toHaveLength(3);
+    for (const group of groups) {
+      for (const shape of shapes(story)) {
+        const box = boundsOf(shape);
+        const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        const inside = center.x > group.x && center.x < group.x + group.width && center.y > group.y && center.y < group.y + group.height;
+        expect(inside, `${shape.name} inside ${group.name}`).toBe(shape['parent'] === group.id);
+      }
+    }
+    for (const [i, a] of groups.entries()) {
+      for (const b of groups.slice(i + 1)) {
+        const apart = a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
+        expect(apart, `${a.name} and ${b.name} overlap`).toBe(true);
+      }
+    }
+    expect(validateStory(story.toDocument())).toEqual([]);
   });
 });

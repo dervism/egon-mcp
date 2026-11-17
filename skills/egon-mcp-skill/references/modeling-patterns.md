@@ -1,6 +1,6 @@
 # Modeling patterns
 
-Each pattern says when to use it and how to build it with the egon-mcp tools. Sentences are written in the form `build_story` and `add_sentence` take. The numbers in brackets point to complete, tested examples in `examples.md`.
+Each pattern says when to use it and how to build it with the egon-mcp tools. Sentences are written in the form `build_story` and `add_sentence` take, followed by what `narrate_story` reads back; a test builds every snippet. The numbers in brackets point to complete, tested examples in `examples.md`.
 
 ## Sentences
 
@@ -12,7 +12,11 @@ The simplest sentence: an actor does something with a work object.
 { "actor": "Mechanic", "activity": "inspects", "workObject": "Bike", "workObjectIcon": "Bike" }
 ```
 
-"Mechanic inspects Bike." (2)
+```text
+1. Mechanic inspects Bike.
+```
+
+(2)
 
 ### Hands over to someone
 
@@ -22,7 +26,11 @@ The work object goes to another actor, or the actor exchanges information about 
 { "actor": "Clerk", "activity": "hands", "workObject": "Order slip", "to": [{ "activity": "to", "actor": "Pizza baker" }] }
 ```
 
-"Clerk hands Order slip to Pizza baker." (1)
+```text
+1. Clerk hands Order slip to Pizza baker.
+```
+
+(1)
 
 ### Several recipients
 
@@ -32,7 +40,11 @@ List each recipient. Label the first arrow with its preposition and the others "
 { "actor": "Clerk", "activity": "sends", "workObject": "Invoice", "to": [{ "activity": "to", "actor": "Customer" }, { "activity": "and", "actor": "Accountant" }] }
 ```
 
-"Clerk sends Invoice to Customer and Accountant." (10)
+```text
+1. Clerk sends Invoice to Customer and Accountant.
+```
+
+(7)
 
 ### A second work object: works on w using v
 
@@ -46,13 +58,17 @@ When a sentence involves two things ("writes the defects on the repair slip", "f
 
 ### A second verb
 
-A continuation arrow can carry a second verb phrase: "Usher checks Ticket and grants entrance to Moviegoer."
+A continuation arrow can carry a second verb phrase.
 
 ```json
 { "actor": "Usher", "activity": "checks", "workObject": "Ticket", "workObjectIcon": "Receipt", "to": [{ "activity": "and grants entrance to", "actor": "Moviegoer" }] }
 ```
 
-Use it when the two actions are really one step. Otherwise tell two sentences.
+```text
+1. Usher checks Ticket and grants entrance to Moviegoer.
+```
+
+Use it when the two actions are really one step. Otherwise tell two sentences. (7)
 
 ### Two actors on one work object
 
@@ -60,10 +76,14 @@ When two actors act on the same thing together (both sign, both agree), give bot
 
 ```json
 { "actor": "Customer", "activity": "signs", "workObject": "Handover form", "workObjectIcon": "Pencil" }
-{ "actor": "Mechanic", "activity": "signs", "workObject": "Handover form", "reuseWorkObject": true, "number": 3 }
+{ "actor": "Mechanic", "activity": "signs", "workObject": "Handover form", "reuseWorkObject": true, "number": 1 }
 ```
 
-Here the first sentence is step 3 of its story. (6)
+```text
+1. Customer signs Handover form. Mechanic signs Handover form.
+```
+
+In a longer story, `number` is the number of the first sentence's step. (6)
 
 ### Parallel steps
 
@@ -97,6 +117,10 @@ In a digitalized story, the system is the recipient of the person's action: "int
 { "actor": "Mechanic", "activity": "enters", "workObject": "Defects", "to": [{ "activity": "into", "actor": "Workshop app" }] }
 ```
 
+```text
+1. Mechanic enters Defects into Workshop app.
+```
+
 (4)
 
 ### A system acts
@@ -105,7 +129,7 @@ Systems can also be the actor of a sentence: "Workshop app sends Text message to
 
 ### Shadow IT
 
-Model every tool people really use, including spreadsheets, shared folders and private apps, as actors with a fitting icon (`Table` for a spreadsheet). Say in an annotation where it lives and who knows about it. (8)
+Model every tool people really use, including spreadsheets, shared folders and private apps, as actors with a fitting icon (`Table` for a spreadsheet). Say in an annotation where it lives and who knows about it. (9)
 
 ## Assumptions, variations and repetition
 
@@ -124,7 +148,7 @@ Tell them as stories of their own, named after what differs ("Repair a bicycle -
 ### Repetition
 
 - Coarse story: an annotation on the repeated sentence ("for every bike on the list").
-- Medium-grained story: a group labeled "repeated for each ..." around the work objects of the repeated sentences. (7)
+- Medium-grained story: a group labeled "repeated for each ..." around the work objects of the repeated sentences. (8)
 - Fine-grained story: spell out one concrete case, one sentence per round.
 
 ## Structure and change
@@ -137,9 +161,11 @@ Draw labeled groups (`add_group`) around the work objects, and if useful the act
 
 Color what is new or different (`color` on actors and work objects, or `update_element`), and add a group "new" or "will change". In the matching as-is story, a group "will change" marks the parts that the to-be story replaces. Explain the change in an annotation. (4)
 
+A new copy of a work object takes the icon and color of the previous one with the same name. To color one sentence only, give its work object a name of its own, or color that copy afterwards with `update_element` and its id. (10)
+
 ### Make or buy
 
-Tell one to-be story per candidate product, each with the product as an actor, and color what the candidate cannot do or does differently. Compare the stories with the user. (9)
+Tell one to-be story per candidate product, each with the product as an actor, and color what the candidate cannot do or does differently. Compare the stories with the user. (10)
 
 ### A family of stories
 
@@ -148,13 +174,13 @@ A domain is told as several stories. A good set for one business:
 1. One coarse, pure, as-is story of the standard case, grouped into areas. (2)
 2. Fine-grained stories for the parts that matter. (3)
 3. Variants and error cases as their own stories. (5)
-4. To-be stories, pure and then digitalized, with the changes in color. (4, 9)
+4. To-be stories, pure and then digitalized, with the changes in color. (4, 10)
 
 Name each story after its case and put the scope into its description. Egon 3 takes the title from the file name, so keep the file name equal to the title.
 
 ### Messages between bounded contexts
 
-To show how bounded contexts communicate, use the message-flow variant: users, bounded contexts and external systems as actors, commands, events and queries as work objects, arrows without labels, message contents in annotations. (10) See `ddd.md`.
+To show how bounded contexts communicate, use the message-flow variant: users, bounded contexts and systems as actors, commands, events and queries as work objects, arrows without labels, message contents in annotations. (11) See `ddd.md`.
 
 ## Annotations worth adding
 

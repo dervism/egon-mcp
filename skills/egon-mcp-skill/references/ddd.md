@@ -36,14 +36,14 @@ Domain Message Flow Modeling, introduced by Nick Tune and inspired partly by Dom
 |---|---|---|
 | User (persona, role) | Actor | `Person` |
 | Bounded context | Actor | `Cloud` |
-| External system | Actor | `Settings` |
+| System that is not a bounded context | Actor | `Settings` |
 | Command | Work object | `Email` |
 | Event | Work object | `Flag` |
 | Query or view | Work object | `Search` |
 
-The arrows carry no verbs, because the intention is already in the message; message contents go into annotations on the messages. Like any domain story, one picture shows one scenario, so a variant (one item out of stock) gets its own picture. Keep bounded contexts and external systems apart: the organization controls a bounded context, but not an external system. Modeling contexts as actors also avoids deciding too early whether each becomes its own service.
+The arrows carry no verbs, because the intention is already in the message; message contents go into annotations on the messages. Like any domain story, one picture shows one scenario, so a variant (one item out of stock) gets its own picture. Keep bounded contexts and other systems apart: the organization decides the name and borders of a bounded context, but not of an external or legacy system. Modeling contexts as actors also avoids deciding too early whether each becomes its own service.
 
-Example 10 in `examples.md` builds such a model. `validate_story` warns about the unlabeled arrows and `narrate_story` shows placeholders; both are expected here.
+Example 11 in `examples.md` builds such a model. `validate_story` warns about the unlabeled arrows and `narrate_story` shows placeholders; both are expected here.
 
 ## From stories to code
 
@@ -59,9 +59,9 @@ Use the experts' terms for the names in the code.
 
 ## From stories to requirements
 
-Sometimes the shared understanding from stories is enough to start building, but usually requirements bridge the gap between scenarios and code. Derive them from to-be stories, so the team can discuss priorities and viable products:
+Sometimes the shared understanding from stories is enough to start building, but usually requirements bridge the gap between scenarios and code. Derive them from to-be stories, so the team can discuss priorities and viable products. A heuristic that works well:
 
-- One sentence of a to-be story becomes one user story. The actor is the role, the activity with its work object is what the role wants, and the step that this sentence enables is the benefit. Sentence "Cashier searches Available seats in Seating plan" becomes: as a cashier, I want to search for available seats of a show, so that I can offer them to a moviegoer.
+- Take a digitalized to-be story and pick the sentences in which the software takes part; steps people do without software ("Customer brings Bike to Mechanic") need no user story. Each picked sentence can become a user story: the actor is the role, the activity with its work object is what the role wants, and the step that this sentence enables is the benefit. Sentence "Cashier searches Available seats in Seating plan app" becomes: as a cashier, I want to search for available seats of a show, so that I can offer them to a moviegoer.
 - The sentences of a story, in order, form the backbone of a user story map; slices across it give releases.
 - Annotations with variations, rules and assumptions give acceptance criteria and examples, and Example Mapping can take them further.
 - Each requirement keeps a link to its story, so the team knows the context it belongs to.
@@ -74,4 +74,4 @@ Domain stories combine well with other methods: EventStorming to explore a domai
 
 ## Sources
 
-Summarized in our own words from [domainstorytelling.org](https://domainstorytelling.org) by Stefan Hofer and Henning Schwentner (CC BY 4.0), in particular its pages on Domain-Driven Design and requirements and its article on Domain Message Flow Modeling, and from their book "Domain Storytelling" (Addison-Wesley, 2022). The heuristics marked as such are general DDD practice.
+Summarized in our own words from [domainstorytelling.org](https://domainstorytelling.org) by Stefan Hofer and Henning Schwentner ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)), in particular its pages on Domain-Driven Design and requirements and its article on Domain Message Flow Modeling, and from their book "Domain Storytelling" (Addison-Wesley, 2022). The heuristics marked as such are general DDD practice.

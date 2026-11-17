@@ -109,4 +109,25 @@ describe('validateStory', () => {
     const doc = parseStoryFile(readEgonFixture('egn_export_version_4_0_0.json'), 'a.egn');
     expect(validateStory(doc).filter((issue) => issue.severity === 'error')).toEqual([]);
   });
+
+  it('warns when a group box encloses an element that is not in the group, or overlaps another group', () => {
+    const story = Story.create({ title: 'T' });
+    const inside = story.addActor({ name: 'Inside', x: 100, y: 100 });
+    story.addActor({ name: 'Stranger', x: 250, y: 100 });
+    story.addWorkObject({ name: 'Elsewhere', x: 700, y: 100 });
+    story.addGroup({ name: 'Area', members: [inside.id], x: 50, y: 50, width: 350, height: 200 });
+    story.addGroup({ name: 'Other', members: ['Elsewhere'], x: 300, y: 60, width: 500, height: 200 });
+    const found = codes(story.toDocument());
+    expect(found).toContain('group-encloses-non-member');
+    expect(found).toContain('overlapping-groups');
+  });
+
+  it('accepts groups nested in each other', () => {
+    const story = Story.create({ title: 'T' });
+    const a = story.addActor({ name: 'A', x: 100, y: 100 });
+    const inner = story.addGroup({ name: 'Inner', members: [a.id], x: 60, y: 60, width: 160, height: 160 });
+    story.addGroup({ name: 'Outer', members: [inner.id], x: 20, y: 20, width: 260, height: 260 });
+    expect(codes(story.toDocument())).not.toContain('overlapping-groups');
+    expect(codes(story.toDocument())).not.toContain('group-encloses-non-member');
+  });
 });

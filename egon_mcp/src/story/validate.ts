@@ -13,6 +13,7 @@ import {
   type StoryElement,
 } from '../egon/types.js';
 import { boundsOf, type Bounds } from './geometry.js';
+import { groupAncestors } from './layout.js';
 
 export type Severity = 'error' | 'warning' | 'info';
 
@@ -65,7 +66,49 @@ export function validateStory(doc: StoryDocument, catalog: IconCatalog = IconCat
   checkNumbering(doc, byId, add);
   checkConnectedness(doc, add);
   checkOverlaps(doc, add);
+  checkGroups(doc, byId, add);
   return issues;
+}
+
+/**
+ * Group boxes should hold their members and nothing else, because readers take
+ * whatever is inside a box as part of the group. Nested groups are fine.
+ */
+function checkGroups(doc: StoryDocument, byId: Map<string, StoryElement>, add: AddIssue): void {
+  const groups = doc.elements.filter(isGroup) as (ShapeElement & { width?: number; height?: number })[];
+  const isInside = (id: string, group: string) => groupAncestors(byId.get(id), byId).includes(group);
+  for (const group of groups) {
+    const box = boundsOf(group);
+    for (const shape of doc.elements.filter((element) => isNode(element)) as ShapeElement[]) {
+      const bounds = boundsOf(shape);
+      const centerX = bounds.x + bounds.width / 2;
+      const centerY = bounds.y + bounds.height / 2;
+      const enclosed = centerX > box.x && centerX < box.x + box.width && centerY > box.y && centerY < box.y + box.height;
+      if (enclosed && !isInside(shape.id, group.id)) {
+        add(
+          'warning',
+          'group-encloses-non-member',
+          `The group "${group.name || group.id}" encloses "${shape.name || shape.id}", which is not in it. Run auto_layout or move one of them.`,
+          group.id,
+          shape.id,
+        );
+      }
+    }
+  }
+  for (const [index, a] of groups.entries()) {
+    for (const b of groups.slice(index + 1)) {
+      const nested = isInside(a.id, b.id) || isInside(b.id, a.id);
+      if (!nested && overlap(boundsOf(a), boundsOf(b)) > 0) {
+        add(
+          'warning',
+          'overlapping-groups',
+          `The groups "${a.name || a.id}" and "${b.name || b.id}" overlap. Run auto_layout or move one of them.`,
+          a.id,
+          b.id,
+        );
+      }
+    }
+  }
 }
 
 type AddIssue = (severity: Severity, code: string, message: string, ...elementIds: string[]) => void;

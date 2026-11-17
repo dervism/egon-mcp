@@ -38,6 +38,21 @@ describe('narrate', () => {
     expect(narrate(story.toDocument())[0]?.sentence).toBe('Clerk sends Invoice to Customer and Accountant and to Archive.');
   });
 
+  it('reads an arrow labeled "and" after the arrow it continues, whatever its case, and leaves other words alone', () => {
+    const story = Story.create({ title: 'Send an invoice' });
+    const clerk = story.addActor({ name: 'Clerk' });
+    const invoice = story.addWorkObject({ name: 'Invoice' });
+    const accountant = story.addActor({ name: 'Accountant' });
+    const customer = story.addActor({ name: 'Customer' });
+    const phone = story.addActor({ name: 'Phone' });
+    story.addActivity({ from: clerk.id, to: invoice.id, label: 'sends' });
+    // Drawn first, but read after the arrow it continues.
+    story.addActivity({ from: invoice.id, to: accountant.id, label: 'And' });
+    story.addActivity({ from: invoice.id, to: customer.id, label: 'to' });
+    story.addActivity({ from: invoice.id, to: phone.id, label: 'android' });
+    expect(narrate(story.toDocument())[0]?.sentence).toBe('Clerk sends Invoice to Customer And Accountant and android Phone.');
+  });
+
   it('lists the elements that take part in each step', () => {
     const { story, customer, order, clerk } = pizza();
     const [first] = narrate(story.toDocument());

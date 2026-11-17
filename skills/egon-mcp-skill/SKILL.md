@@ -26,14 +26,14 @@ Tool names below are the server's own. Your client may prefix them, for example 
 | To understand a whole new domain | Start with one coarse-grained, pure, as-is story of the most common case. Then zoom into its parts with fine-grained stories, and tell important variants as stories of their own. |
 | To design new software or a new process | Agree on the as-is stories first, then tell to-be stories, pure or digitalized, and color what changes. |
 | Subdomains, bounded contexts, a ubiquitous language | Group a coarse story into areas of the business and read `references/ddd.md`. |
-| Requirements or user stories | Derive one user story per sentence of a to-be story; see `references/ddd.md`. |
+| Requirements or user stories | Tell digitalized to-be stories and derive user stories from the sentences in which the software takes part; see `references/ddd.md`. |
 | To compare candidate products, or find shadow IT | Tell digitalized stories: one to-be story per candidate, or an as-is story with every tool people really use. |
 | To change an existing file | `list_story_files`, `open_story`, `get_story`, then the edit tools, `validate_story`, `save_story`. |
 | A review of a story | The `review_domain_story` prompt, or `validate_story` plus `narrate_story` and the checks below. |
 | To see the story | `open_in_egon` for the live app, `export_story` with `svg` for an image, or `save_story` to an `.egn.svg` file. |
 | A story pasted as text | `import_story` with the content and the original file name. |
 
-`references/examples.md` has a complete, tested call sequence for each of these.
+`references/examples.md` has complete, tested call sequences for most of these.
 
 ## Decide scope and scenario first
 
@@ -80,7 +80,7 @@ Rules for good sentences:
 2. Two actors never connect directly. Egon refuses it. Name what they exchange: a call, a message, a form, the spoken information.
 3. Every sentence starts with an actor. When the user says "then you check it" or "it gets approved", ask who does it.
 4. Use the domain's own words, in the present tense, and the same name for the same thing in every sentence. Never translate them into technical terms.
-5. Each actor appears once; each sentence gets its own work objects. Actors with the same name are one element. Work objects are drawn again in each sentence, as Domain Storytelling recommends, so a recipient in step 3 does not leak into step 1. Set `reuseWorkObject: true`, or pass the work object's id, when a sentence should continue with the very same object.
+5. Each actor appears once; each sentence gets its own work objects. Actors with the same name are one element. Work objects are drawn again in each sentence, as Domain Storytelling recommends, so a recipient in step 3 does not leak into step 1. Set `reuseWorkObject: true`, or pass the work object's id, when a sentence should continue with the very same object. A new copy takes the icon and color of the previous one with the same name, so give a copy its own name, or recolor it by id with `update_element`, when only that copy should look different.
 6. When a work object changes its state, give the new copy a new name ("Contract" becomes "Signed contract"). When it changes its medium, give it a new icon (an email becomes a printout). Information that is only spoken gets the `Conversation` icon; a phone call gets `Call`.
 7. Label everything: every actor, work object and activity. Leave an arrow unlabeled only when the sentence reads naturally without a word.
 8. Do not branch. Tell one case. Important alternatives become stories of their own; small variations and optional steps become annotations.
@@ -115,7 +115,7 @@ Run `validate_story` after building or editing. Fix every error; the file would 
 - `unnamed-element`, `unlabeled-activity`: add the missing name or word with `update_element`, unless the sentence reads naturally without it.
 - `unconnected-element`: connect it or remove it. Parts of a story that do not connect are often a gap in the story; ask the user why.
 - `numbering-gap`: call `renumber_steps`.
-- `overlapping-shapes`: call `auto_layout`.
+- `overlapping-shapes`, `group-encloses-non-member`, `overlapping-groups`: call `auto_layout`, which keeps the members of each group together in a block of their own.
 
 Then read `narrate_story` and compare it with what the user said. Each line must read as a correct sentence. Show the user the numbered sentences and retell the whole story from the start: is anything missing, is anything wrong, do all the experts agree? Retelling is where forgotten details come up; put them on the sentence they belong to.
 
@@ -124,7 +124,7 @@ Then read `narrate_story` and compare it with what the user said. Each line must
 When the user knows the domain but has no description yet, you are the moderator and the modeler. The `domain_story_interview` prompt sets this up.
 
 - Ask for one concrete case and its storyteller, then let them tell it in order. Keep it going with "What happens next?", "Where does this information come from?", "How do you decide what to do next?" and "How exactly do you do that?"
-- Add each sentence as it is told and read it back in your own words, asking "Is this the right term?". Do not impose your own words or opinion.
+- Add each sentence as it is told, then retell it with their terms and ask "Is this the right term?". Do not push your own words or opinion.
 - Ask why when a step seems to lack a purpose. Answers like "we have always done it that way" or "the software forces us" often point at real problems.
 - At the end, retell the story and go through the annotations: let the user decide which variations deserve a story of their own.
 
@@ -133,7 +133,7 @@ When the user knows the domain but has no description yet, you are the moderator
 ## Beyond one story
 
 - Domain-Driven Design: the labels of a story are the start of the ubiquitous language; groups in a coarse story mark subdomains, which are candidates for bounded contexts; message flows between bounded contexts can be modeled as a story variant. See `references/ddd.md`.
-- Requirements: each sentence of a to-be story can become a user story (actor as role, activity and work object as want, the step it enables as benefit). See `references/ddd.md`.
+- Requirements: a sentence of a digitalized to-be story in which the software takes part can become a user story (actor as role, activity and work object as want, the step it enables as benefit). This is a heuristic; see `references/ddd.md`.
 - Change: as-is and to-be stories with the changes in color show people how their work will change; one to-be story per candidate product compares off-the-shelf systems.
 
 ## Edit precisely

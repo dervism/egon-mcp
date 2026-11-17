@@ -68,12 +68,27 @@ function exampleBlocks(markdown: string): ExampleBlock[] {
   return blocks;
 }
 
+/** The sentences of a snippet: one JSON object, or one object per line. */
+function snippetSentences(json: string): unknown[] {
+  try {
+    return [JSON.parse(json)];
+  } catch {
+    return json
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+  }
+}
+
+type Call = (tool: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>;
+
 /**
  * Runs one example against a fresh server whose workspace holds the stories in
  * the repository's examples folder, then checks the narrative it shows and that
- * the story has no validation errors.
+ * the story has no validation errors and no warnings other than unlabeled
+ * arrows, which the message-flow variant uses on purpose.
  */
-async function runExample(block: ExampleBlock): Promise<void> {
+async function runExample(block: ExampleBlock, check?: (call: Call, storyId: string) => Promise<void>): Promise<void> {
   const workspace = mkdtempSync(join(tmpdir(), 'egon-skill-'));
   cpSync(fileURLToPath(new URL('../../examples/', import.meta.url)), workspace, { recursive: true });
   const server = createEgonServer({ root: workspace });
@@ -81,14 +96,14 @@ async function runExample(block: ExampleBlock): Promise<void> {
   try {
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.server.connect(serverTransport), exampleClient.connect(clientTransport)]);
-    const call = async (tool: string, args: Record<string, unknown>) => {
+    const call: Call = async (tool, args) => {
       const result = (await exampleClient.callTool({ name: tool, arguments: args })) as {
         isError?: boolean;
         content: { text: string }[];
         structuredContent?: Record<string, unknown>;
       };
       expect(result.isError, `${block.heading}: ${tool} failed: ${result.content[0]?.text}`).toBeFalsy();
-      return result.structuredContent ?? {};
+      return { ...result.structuredContent, text: result.content[0]?.text };
     };
     let storyId: string | undefined;
     if (block.kind === 'build_story') {
@@ -101,12 +116,13 @@ async function runExample(block: ExampleBlock): Promise<void> {
       }
     }
     expect(storyId, `${block.heading}: no story`).toBeTruthy();
-    const issues = (await call('validate_story', { storyId })).issues as { severity: string; message: string }[];
-    expect(issues.filter((issue) => issue.severity === 'error'), block.heading).toEqual([]);
+    const issues = (await call('validate_story', { storyId })).issues as { severity: string; code: string; message: string }[];
+    expect(issues.filter((issue) => issue.code !== 'unlabeled-activity'), block.heading).toEqual([]);
     if (block.expected) {
       const steps = (await call('narrate_story', { storyId })).steps as { number: number; sentence: string }[];
       expect(steps.map((step) => `${step.number}. ${step.sentence}`), block.heading).toEqual(block.expected);
     }
+    await check?.(call, storyId as string);
   } finally {
     await closeAll(exampleClient, server);
     rmSync(workspace, { recursive: true, force: true });
@@ -135,6 +151,32 @@ describe('egon-mcp-skill', () => {
     expect(blocks.filter((block) => block.expected).length, 'examples that show their narrative').toBeGreaterThanOrEqual(8);
     for (const block of blocks) {
       await runExample(block);
+    }
+  }, 60_000);
+
+  it('colors exactly what the examples say they color', async () => {
+    const colored = async (heading: string, color: string) => {
+      const block = exampleBlocks(examples).find((candidate) => candidate.heading.startsWith(heading));
+      expect(block, heading).toBeDefined();
+      let names: string[] = [];
+      await runExample(block!, async (call, storyId) => {
+        const story = (await call('export_story', { storyId, format: 'egn' })).text as string;
+        const elements = (JSON.parse(story).dst as { name?: string; pickedColor?: string }[]).filter((element) => element.pickedColor === color);
+        names = elements.map((element) => element.name ?? '').sort();
+      });
+      return names;
+    };
+    expect(await colored('## 4.', '#2E7D32')).toEqual(['Text message', 'Workshop app', 'new']);
+    expect(await colored('## 10.', '#C62828')).toEqual(['Part prices']);
+  });
+
+  it('builds the sentence snippets in SKILL.md and references/modeling-patterns.md as written', async () => {
+    const patterns = readFileSync(new URL('references/modeling-patterns.md', skillDir), 'utf8');
+    const snippets = [...exampleBlocks(skill), ...exampleBlocks(patterns)];
+    expect(snippets.length).toBeGreaterThanOrEqual(7);
+    for (const snippet of snippets) {
+      const sentences = snippetSentences(snippet.json);
+      await runExample({ ...snippet, kind: 'build_story', json: JSON.stringify({ title: 'Pattern', sentences }) });
     }
   }, 60_000);
 
