@@ -247,6 +247,13 @@ describe('egon-mcp server', () => {
     expect(file.domainStory.title).toBe('Order pizza');
   });
 
+  it('tells agents what auto_layout does with groups and what validate_story checks', async () => {
+    const { tools } = await client.listTools();
+    const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';
+    expect(describe('auto_layout')).toMatch(/keeps the members of each group together/);
+    expect(describe('validate_story')).toMatch(/group boxes that enclose shapes outside the group/);
+  });
+
   it('tells agents how sentences pick their work object', async () => {
     const { tools } = await client.listTools();
     const fieldDescription = (tool: string, field: string) =>

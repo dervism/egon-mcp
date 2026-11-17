@@ -316,7 +316,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Validate story',
       description:
-        'Checks a story for problems: errors that break the import into Egon (dangling references, actor-to-actor activities, unknown icons) and warnings that hurt readability (unnamed elements, unlabeled activities, gaps in step numbers, unconnected or overlapping elements).',
+        'Checks a story for problems: errors that break the import into Egon (dangling references, actor-to-actor activities, unknown icons) and warnings that hurt readability (unnamed elements, unlabeled activities, gaps in step numbers, unconnected or overlapping elements, group boxes that enclose shapes outside the group or overlap another group).',
       inputSchema: { storyId },
       annotations: { readOnlyHint: true },
     },
@@ -534,13 +534,14 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     'auto_layout',
     {
       title: 'Auto layout',
-      description: 'Arranges actors and work objects on a grid in reading order, refits groups, moves annotations next to their element and reroutes every arrow. Run it after adding many elements without positions.',
+      description: 'Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, refits the group boxes, moves other annotations next to their element and moves groups without members to the end. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.',
       inputSchema: { storyId },
       annotations: { idempotentHint: true },
     },
     run(({ storyId: id }) => {
       edit(id, (entry) => autoLayout(entry.story));
-      const overlaps = validateStory(workspace.get(id).story.toDocument()).filter((issue) => issue.code === 'overlapping-shapes');
+      const layoutCodes = new Set(['overlapping-shapes', 'group-encloses-non-member', 'overlapping-groups']);
+      const overlaps = validateStory(workspace.get(id).story.toDocument()).filter((issue) => layoutCodes.has(issue.code));
       return json({ laidOut: true, remainingOverlaps: overlaps.length });
     }),
   );

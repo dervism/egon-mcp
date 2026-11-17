@@ -99,7 +99,7 @@ Reads the story back as numbered sentences in Markdown, the way Egon's replay wa
 
 ## validate_story
 
-Checks a story for problems: errors that break the import into Egon (dangling references, actor-to-actor activities, unknown icons) and warnings that hurt readability (unnamed elements, unlabeled activities, gaps in step numbers, unconnected or overlapping elements).
+Checks a story for problems: errors that break the import into Egon (dangling references, actor-to-actor activities, unknown icons) and warnings that hurt readability (unnamed elements, unlabeled activities, gaps in step numbers, unconnected or overlapping elements, group boxes that enclose shapes outside the group or overlap another group).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -235,7 +235,7 @@ Closes gaps in the step numbers (1, 2, 3 ...) while keeping their order and para
 
 ## auto_layout
 
-Arranges actors and work objects on a grid in reading order, refits groups, moves annotations next to their element and reroutes every arrow. Run it after adding many elements without positions.
+Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, refits the group boxes, moves other annotations next to their element and moves groups without members to the end. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

@@ -315,7 +315,7 @@ A new copy of a work object takes the color of the previous one with the same na
 
 ## 11. Messages between bounded contexts
 
-The message-flow variant (after Nick Tune's Domain Message Flow Modeling) shows how bounded contexts talk to each other. Users, bounded contexts and external systems are actors; commands, events and queries are work objects; the arrows stay unlabeled, because the message already says what is meant; message contents go into annotations. `validate_story` warns about each unlabeled arrow and `narrate_story` shows a placeholder, both expected in this variant.
+The message-flow variant (after Nick Tune's Domain Message Flow Modeling) shows how bounded contexts talk to each other. Users, bounded contexts and other systems are actors; commands, events and queries are work objects; the arrows stay unlabeled, because the message already says what is meant; message contents go into annotations. `validate_story` warns about each unlabeled arrow and `narrate_story` shows a placeholder, both expected in this variant.
 
 ```json
 {

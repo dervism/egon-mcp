@@ -1,4 +1,4 @@
-import { isActor, isConnection, isGroup, isTextAnnotation, isWorkObject, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { groupAncestors, isActor, isConnection, isGroup, isTextAnnotation, isWorkObject, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { boundsOf, type Bounds } from './geometry.js';
 import { narrate } from './narrate.js';
 import type { Story } from './story.js';
@@ -18,23 +18,19 @@ interface Cell {
  * Arranges actors and work objects on a grid in reading order: each step
  * continues to the right of the element it starts from, and a new row starts
  * when a step introduces an actor that is not on the canvas yet. Members of a
- * group are kept together in a block of their own below, one block per group,
- * so no group box encloses anything else. Groups are refitted around their
- * members, annotations move next to the element they describe, and every edge
- * is rerouted.
+ * group, annotations included, are kept together in a block of their own below
+ * the story, one block per outermost group; a group nested in it gets rows of
+ * its own inside that block. So no group box encloses anything else. Groups
+ * without members move below everything. Annotations outside groups move next
+ * to the element they describe, groups are refitted around their members, and
+ * every edge is rerouted. Running it twice changes nothing.
  */
 export function autoLayout(story: Story): void {
   const doc = story.toDocument();
-  const nodes = doc.elements.filter((element) => isActor(element) || isWorkObject(element)) as ShapeElement[];
   const byId = new Map(doc.elements.map((element) => [element.id, element]));
-  const topGroup = new Map<string, string>();
-  for (const node of nodes) {
-    const group = outermostGroup(node, byId);
-    if (group) {
-      topGroup.set(node.id, group);
-    }
-  }
-  const nodeIds = new Set(nodes.filter((node) => !topGroup.has(node.id)).map((node) => node.id));
+  const nodes = doc.elements.filter((element) => isActor(element) || isWorkObject(element)) as ShapeElement[];
+  const inGroup = (element: StoryElement) => groupAncestors(element, byId).length > 0;
+  const nodeIds = new Set(nodes.filter((node) => !inGroup(node)).map((node) => node.id));
 
   const placed = new Map<string, Cell>();
   const occupied = new Set<string>();
@@ -44,7 +40,8 @@ export function autoLayout(story: Story): void {
   };
   const nextRow = () => Math.max(-1, ...[...placed.values()].map((cell) => cell.row)) + 1;
 
-  for (const step of narrate(doc)) {
+  const steps = narrate(doc);
+  for (const step of steps) {
     let previous: Cell | undefined;
     for (const id of step.elementIds.filter((candidate) => nodeIds.has(candidate))) {
       const existing = placed.get(id);
@@ -62,7 +59,7 @@ export function autoLayout(story: Story): void {
   let leftoverRow = nextRow();
   let leftoverCol = 0;
   for (const node of nodes) {
-    if (placed.has(node.id) || topGroup.has(node.id)) {
+    if (placed.has(node.id) || inGroup(node)) {
       continue;
     }
     take(node.id, { col: leftoverCol, row: leftoverRow });
@@ -73,37 +70,77 @@ export function autoLayout(story: Story): void {
     }
   }
 
-  // Each group gets a block of rows of its own, members in reading order.
+  // Reading order decides the order inside group blocks; an annotation follows its element.
   const readingOrder = new Map<string, number>();
-  for (const step of narrate(doc)) {
+  for (const step of steps) {
     for (const id of step.elementIds) {
       if (!readingOrder.has(id)) {
         readingOrder.set(id, readingOrder.size);
       }
     }
   }
-  const rank = (id: string) => readingOrder.get(id) ?? Number.MAX_SAFE_INTEGER;
-  const blocks = new Map<string, string[]>();
-  for (const node of [...nodes].sort((a, b) => rank(a.id) - rank(b.id))) {
-    const group = topGroup.get(node.id);
-    if (group) {
-      blocks.set(group, [...(blocks.get(group) ?? []), node.id]);
+  for (const link of doc.elements.filter(isConnection)) {
+    if (!readingOrder.has(link.target) && readingOrder.has(link.source)) {
+      readingOrder.set(link.target, (readingOrder.get(link.source) as number) + 0.5);
     }
   }
+  const rank = (id: string) => readingOrder.get(id) ?? Number.MAX_SAFE_INTEGER;
+  const children = (groupId: string) => doc.elements.filter((element) => element['parent'] === groupId);
+  const firstRank = (groupId: string): number =>
+    Math.min(Number.MAX_SAFE_INTEGER, ...children(groupId).map((child) => (isGroup(child) ? firstRank(child.id) : rank(child.id))));
+
+  // The rows of a group's block: its own members first, then each nested group on rows of its
+  // own followed by an empty row, so the nested box and the padding around it fit.
+  const blockRows = (groupId: string, seen: Set<string>): string[][] => {
+    if (seen.has(groupId)) {
+      return [];
+    }
+    seen.add(groupId);
+    const own = children(groupId)
+      .filter((child) => isActor(child) || isWorkObject(child) || isTextAnnotation(child))
+      .sort((a, b) => Number(isTextAnnotation(a)) - Number(isTextAnnotation(b)) || rank(a.id) - rank(b.id) || a.id.localeCompare(b.id))
+      .map((child) => child.id);
+    const rows: string[][] = [];
+    for (let index = 0; index < own.length; index += MAX_COLUMNS) {
+      rows.push(own.slice(index, index + MAX_COLUMNS));
+    }
+    const nested = children(groupId)
+      .filter(isGroup)
+      .sort((a, b) => firstRank(a.id) - firstRank(b.id) || a.id.localeCompare(b.id));
+    for (const group of nested) {
+      const inner = blockRows(group.id, seen);
+      rows.push(...(inner.length > 0 ? inner : [[group.id]]), []);
+    }
+    return rows;
+  };
+
+  const groups = doc.elements.filter(isGroup);
+  const outermost = groups
+    .filter((group) => groupAncestors(group, byId).length === 0)
+    .sort((a, b) => firstRank(a.id) - firstRank(b.id) || a.id.localeCompare(b.id));
   let blockRow = nextRow();
-  for (const members of blocks.values()) {
-    // Members of a group nested inside this one stay next to each other.
-    const ordered = [...members].sort((a, b) => String(byId.get(a)?.['parent']).localeCompare(String(byId.get(b)?.['parent'])) || rank(a) - rank(b));
-    ordered.forEach((id, index) => take(id, { col: index % MAX_COLUMNS, row: blockRow + Math.floor(index / MAX_COLUMNS) }));
-    blockRow += Math.ceil(ordered.length / MAX_COLUMNS);
+  const emptyGroups: string[] = [];
+  for (const group of outermost) {
+    const rows = blockRows(group.id, new Set());
+    if (rows.every((row) => row.length === 0)) {
+      emptyGroups.push(group.id);
+      continue;
+    }
+    rows.forEach((row, offset) => row.forEach((id, col) => take(id, { col, row: blockRow + offset })));
+    blockRow += rows.length + (rows.at(-1)?.length === 0 ? 0 : 1);
+  }
+  // Groups without members get rows of their own at the very end.
+  for (const id of emptyGroups) {
+    take(id, { col: 0, row: blockRow });
+    blockRow += Math.ceil(boundsOf(byId.get(id) as ShapeElement).height / CELL_HEIGHT) + 1;
   }
 
   for (const [id, cell] of placed) {
     story.updateElement(id, { x: ORIGIN.x + cell.col * CELL_WIDTH, y: ORIGIN.y + cell.row * CELL_HEIGHT });
   }
 
-  refitGroups(story);
   placeAnnotations(story);
+  refitGroups(story);
   story.rerouteAllEdges();
 }
 
@@ -121,25 +158,6 @@ function refitGroups(story: Story): void {
   }
 }
 
-/** The ids of the groups around `element`, innermost first. */
-export function groupAncestors(element: StoryElement | undefined, byId: Map<string, StoryElement>): string[] {
-  const found: string[] = [];
-  let parent = element?.['parent'];
-  while (typeof parent === 'string' && !found.includes(parent)) {
-    const group = byId.get(parent);
-    if (!group || !isGroup(group)) {
-      break;
-    }
-    found.push(parent);
-    parent = group['parent'];
-  }
-  return found;
-}
-
-function outermostGroup(element: StoryElement, byId: Map<string, StoryElement>): string | undefined {
-  return groupAncestors(element, byId).at(-1);
-}
-
 function placeAnnotations(story: Story): void {
   const elements = story.elements();
   const byId = new Map(elements.map((element) => [element.id, element]));
@@ -147,6 +165,10 @@ function placeAnnotations(story: Story): void {
     const annotation = byId.get(link.target);
     const anchor = byId.get(link.source);
     if (!annotation || !anchor || !isTextAnnotation(annotation) || !(isActor(anchor) || isWorkObject(anchor))) {
+      continue;
+    }
+    // Annotations in a group are laid out in the group's block.
+    if (groupAncestors(annotation, byId).length > 0) {
       continue;
     }
     const bounds = boundsOf(anchor as ShapeElement);

@@ -1,5 +1,6 @@
 import { IconCatalog } from '../icons/catalog.js';
 import {
+  groupAncestors,
   iconNameOf,
   isActivity,
   isActor,
@@ -13,7 +14,6 @@ import {
   type StoryElement,
 } from '../egon/types.js';
 import { boundsOf, type Bounds } from './geometry.js';
-import { groupAncestors } from './layout.js';
 
 export type Severity = 'error' | 'warning' | 'info';
 

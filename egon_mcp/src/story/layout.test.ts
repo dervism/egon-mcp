@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { isActor, isWorkObject, type ActivityElement, type ShapeElement } from '../egon/types.js';
 import { boundsOf } from './geometry.js';
+import { readEgonFixture } from '../../test/egon-fixtures.js';
+import { parseStoryFile } from '../egon/parse.js';
 import { autoLayout } from './layout.js';
 import { buildStory } from './sentences.js';
 import { Story } from './story.js';
@@ -133,4 +135,61 @@ describe('autoLayout', () => {
     }
     expect(validateStory(story.toDocument())).toEqual([]);
   });
+
+  it('keeps an Egon story\'s group around the shapes drawn inside it', () => {
+    const story = Story.fromDocument(parseStoryFile(readEgonFixture('egn_export_version_4_0_0.json'), 'story.egn'));
+    expect(groupIssues(story)).toEqual([]);
+    autoLayout(story);
+    expect(groupIssues(story)).toEqual([]);
+    const group = story.get('shape_1683') as ShapeElement & { width: number; height: number };
+    for (const id of ['shape_0469', 'shape_2543', 'shape_8939']) {
+      const shape = story.get(id) as ShapeElement;
+      expect(shape.x > group.x && shape.x < group.x + group.width && shape.y > group.y && shape.y < group.y + group.height, id).toBe(true);
+    }
+  });
+
+  it('lays out nested groups so each box holds exactly its own members, every time', () => {
+    for (let run = 0; run < 25; run += 1) {
+      const story = Story.create({ title: 'Nested' });
+      const ids: Record<string, string> = {};
+      for (const name of ['A', 'B', 'C', 'D', 'E', 'F', 'G']) {
+        ids[name] = story.addActor({ name }).id;
+      }
+      const deepest = story.addGroup({ name: 'Deepest', members: [ids['G'] as string] });
+      const inner = story.addGroup({ name: 'Inner', members: [ids['D'] as string, ids['E'] as string, ids['F'] as string, deepest.id] });
+      story.addGroup({ name: 'Outer', members: [ids['A'] as string, ids['B'] as string, ids['C'] as string, inner.id] });
+      autoLayout(story);
+      expect(groupIssues(story), `run ${run}`).toEqual([]);
+    }
+  });
+
+  it('keeps an annotation inside the group it belongs to, in one run', () => {
+    const story = buildStory({
+      title: 'Letters',
+      sentences: [
+        { actor: 'Clerk', activity: 'fills', workObject: 'Form' },
+        { actor: 'Clerk', activity: 'sends', workObject: 'Letter', to: [{ activity: 'to', actor: 'Customer' }] },
+      ],
+      annotations: [{ text: 'every month', attachTo: 'Letter' }],
+    });
+    story.addGroup({ name: 'Repeated', members: ['Letter', 'every month'] });
+    autoLayout(story);
+    expect(groupIssues(story)).toEqual([]);
+    const before = JSON.stringify(story.toDocument());
+    autoLayout(story);
+    expect(JSON.stringify(story.toDocument())).toBe(before);
+  });
+
+  it('moves a group without members out of the way', () => {
+    const story = buildStory({ title: 'T', sentences: [{ actor: 'Clerk', activity: 'fills', workObject: 'Form' }] });
+    story.addGroup({ name: 'To discuss' });
+    autoLayout(story);
+    expect(groupIssues(story)).toEqual([]);
+  });
 });
+
+function groupIssues(story: Story): string[] {
+  return validateStory(story.toDocument())
+    .filter((issue) => issue.code === 'group-encloses-non-member' || issue.code === 'overlapping-groups')
+    .map((issue) => issue.message);
+}

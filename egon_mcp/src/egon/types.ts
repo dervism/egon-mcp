@@ -130,3 +130,18 @@ export function iconNameOf(type: string): string {
   }
   return '';
 }
+
+/** The ids of the groups around `element`, innermost first, following `parent`. */
+export function groupAncestors(element: StoryElement | undefined, byId: Map<string, StoryElement>): string[] {
+  const found: string[] = [];
+  let parent = element?.['parent'];
+  while (typeof parent === 'string' && !found.includes(parent)) {
+    const group = byId.get(parent);
+    if (!group || !isGroup(group)) {
+      break;
+    }
+    found.push(parent);
+    parent = group['parent'];
+  }
+  return found;
+}

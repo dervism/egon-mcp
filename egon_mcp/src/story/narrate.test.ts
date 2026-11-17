@@ -38,6 +38,24 @@ describe('narrate', () => {
     expect(narrate(story.toDocument())[0]?.sentence).toBe('Clerk sends Invoice to Customer and Accountant and to Archive.');
   });
 
+  it('reads a lone "and" arrow as written, and several leading ones after the first other arrow', () => {
+    const lone = Story.create({ title: 'T' });
+    const clerk = lone.addActor({ name: 'Clerk' });
+    const invoice = lone.addWorkObject({ name: 'Invoice' });
+    lone.addActivity({ from: clerk.id, to: invoice.id, label: 'sends' });
+    lone.addActivity({ from: invoice.id, to: lone.addActor({ name: 'Accountant' }).id, label: 'and' });
+    expect(narrate(lone.toDocument())[0]?.sentence).toBe('Clerk sends Invoice and Accountant.');
+
+    const several = Story.create({ title: 'T' });
+    const sender = several.addActor({ name: 'Clerk' });
+    const letter = several.addWorkObject({ name: 'Invoice' });
+    several.addActivity({ from: sender.id, to: letter.id, label: 'sends' });
+    several.addActivity({ from: letter.id, to: several.addActor({ name: 'A' }).id, label: 'and' });
+    several.addActivity({ from: letter.id, to: several.addActor({ name: 'B' }).id, label: 'and' });
+    several.addActivity({ from: letter.id, to: several.addActor({ name: 'C' }).id, label: 'to' });
+    expect(narrate(several.toDocument())[0]?.sentence).toBe('Clerk sends Invoice to C and A and B.');
+  });
+
   it('reads an arrow labeled "and" after the arrow it continues, whatever its case, and leaves other words alone', () => {
     const story = Story.create({ title: 'Send an invoice' });
     const clerk = story.addActor({ name: 'Clerk' });

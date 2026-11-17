@@ -66,7 +66,7 @@ A group clusters parts of a story that belong together and is drawn as an outlin
 
 ### Icons
 
-Icons should make the story tangible. A good icon set is small, simple and distinct, and fits the domain: too many icons water the picture language down. Never use the same icon for actors and work objects in one story. In a workshop, explain an icon when it first appears ("I use this phone to show that the gate agent calls the dispatcher"), which invites the experts to suggest a better one.
+Icons should make the story tangible. A good icon set is small, simple and distinct, and fits the domain: too many icons water the picture language down. Never use the same icon for actors and work objects in one story. In a workshop, say what an icon stands for when you first use it (for example, that a phone means the mechanic calls the customer), which invites the experts to suggest a better one.
 
 ## Scenario-based modeling
 
@@ -109,7 +109,7 @@ Keep a story at one level. A coarse story that suddenly lists form fields mixes 
 Good habits:
 
 1. Draw fresh work objects in each sentence instead of routing many arrows through one.
-2. When a sentence involves two things, draw both. Novices tend to hide the second object inside the verb ("assesses risk" instead of "fetches credit rating for contract").
+2. When a sentence involves two things, draw both. Novices tend to hide the second object inside the verb ("writes up the defects" instead of "writes Defects on Repair slip").
 3. Label every actor, work object, activity and group.
 4. Keep the icons for actors and for work objects apart.
 5. Use the storytellers' terms, not your own, and do not push your opinion on them. Ask "Is this the right term?".
@@ -130,15 +130,15 @@ Traps:
 
 ### Preparing
 
-The workshop brings together people who want to exchange knowledge for a specific purpose. The purpose decides the granularity of the stories and who should attend. Usually one person, the host, organizes it and invites the participants. Questions that help the host and the moderator prepare:
+The workshop brings together people who want to exchange knowledge for a specific purpose. The purpose decides the granularity of the stories and who should attend. Usually one person, the host, organizes it and invites the participants. Before inviting anyone, the host and the moderator should agree on:
 
-- What questions need to be answered?
-- What are the biggest problems?
-- Who is currently involved in trying to solve them?
-- Whose perspectives need to be heard?
-- Which key activities are at the core of the organization?
+- what the workshop should find out,
+- which problems hurt most today,
+- who already works on those problems,
+- whose view of the work must not be missing,
+- which activities matter most to the organization.
 
-Then agree on the processes or cases to cover and on the scope of each story. Invite real experts who do the work, not proxies who know it from hearsay, and do not stop at organizational boundaries: in organizations split into silos, invite people from each silo, because no single person knows a whole process.
+Then agree on the processes or cases to cover and on the scope of each story. Invite the people who actually do the work rather than someone who knows it secondhand, and look past organizational boundaries: where knowledge is split between departments, invite someone from each, because nobody knows the whole process alone.
 
 ### Roles
 
@@ -161,7 +161,7 @@ Questions that keep the story going:
 - "Who does this?" (when the storyteller says "you" or uses the passive)
 - "Which case is the most common?" (to choose the scenario)
 
-Ask why when an activity seems to have no purpose. Answers such as "that is the way we have always done it", "I don't know why we do that", "we assume the other department needs it" or "the software forces us" often reveal real problems. You may have to ask why more than once.
+Ask why when an activity seems to have no purpose. If the answer is habit, nobody knows, a guess about what another department needs, or a limit of the current software, you have often found a real problem in the process or in its software. Asking why more than once can be necessary.
 
 Record the story sentence by sentence, at the pace of the telling, and retell each sentence as you add it. With egon-mcp: `add_sentence` per answer, then `narrate_story` to read the new sentence back.
 

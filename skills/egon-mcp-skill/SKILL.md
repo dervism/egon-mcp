@@ -63,7 +63,11 @@ A domain story is a numbered list of sentences: who (actor) does what (activity)
   "to": [{ "activity": "to", "actor": "Clerk" }] }
 ```
 
-reads "Customer tells Order to Clerk." The activity from the actor carries the step number; the arrows after the work object carry the small words (to, for, in, from, with) and no number.
+```text
+1. Customer tells Order to Clerk.
+```
+
+The activity from the actor carries the step number; the arrows after the work object carry the small words (to, for, in, from, with) and no number.
 
 | Sentence | Example | How to build it |
 |---|---|---|
@@ -123,9 +127,9 @@ Then read `narrate_story` and compare it with what the user said. Each line must
 
 When the user knows the domain but has no description yet, you are the moderator and the modeler. The `domain_story_interview` prompt sets this up.
 
-- Ask for one concrete case and its storyteller, then let them tell it in order. Keep it going with "What happens next?", "Where does this information come from?", "How do you decide what to do next?" and "How exactly do you do that?"
+- Ask for one concrete case and its storyteller, then let them tell it in order. Keep it going with "What happens next?", "Where do you get this information?", "How do you decide what to do next?" and "How do you do that?"
 - Add each sentence as it is told, then retell it with their terms and ask "Is this the right term?". Do not push your own words or opinion.
-- Ask why when a step seems to lack a purpose. Answers like "we have always done it that way" or "the software forces us" often point at real problems.
+- Ask why when a step seems to lack a purpose. When the answer is habit, a guess about what another department needs, or a limit of the current software, you have often found a real problem.
 - At the end, retell the story and go through the annotations: let the user decide which variations deserve a story of their own.
 
 `references/domain-storytelling.md` covers preparing a workshop, the roles in it, and more questions.
