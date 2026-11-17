@@ -16,7 +16,7 @@ Creates a new, empty domain story with Egon's default icon set and returns its s
 
 ## build_story
 
-Creates a complete domain story in one call from numbered sentences ("Customer tells Order to Clerk"), then lays it out. Each sentence becomes one step. Actors with the same name are one element. Each sentence draws its own work object, except that the first sentence naming a declared work object uses it and reuseWorkObject continues the previous one. Returns the storyId, the narrative and any validation issues.
+Creates a complete domain story in one call from numbered sentences ("Customer tells Order to Clerk"), then lays it out. Each sentence becomes one step, except that sentences given the number of an earlier step share it. Actors with the same name are one element. Each sentence draws its own work object, except that the first sentence naming a declared work object uses it and reuseWorkObject continues the previous one. Returns the storyId, the narrative and any validation issues.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -173,14 +173,14 @@ Adds one domain story sentence as a new step: actor, verb, work object and optio
 
 ## add_group
 
-Draws a box around elements that belong together, such as a department or subdomain. To mark a subdomain on a coarse story, pass the step numbers of its sentences as steps: their work objects go in and their actors stay outside, since an actor often takes part in several subdomains. With members or steps and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put those in no group into the smallest group box over their top-left corner when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.
+Draws a box around elements that belong together, such as a department or subdomain. To mark a subdomain on a coarse story, pass the step numbers of its sentences as steps: their work objects go in and their actors stay outside, since an actor often takes part in several subdomains. With members or steps and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put those in no group into the smallest group box over their top-left corner when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn with x and y inside another group goes into that group, and a box fitted around members goes into the innermost group that already holds all of them.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `storyId` | string | yes | Id of an open story, as returned by create_story, build_story, open_story or list_stories. |
 | `name` | string | yes | Label in the top-left corner of the box. |
 | `members` | array of string | no | Elements to put in the group, even outside the box. Without x and y the box fits around them. |
-| `steps` | array of integer | no | Step numbers of whole sentences: their work objects go into the group and their actors stay outside, the usual way to mark a subdomain. |
+| `steps` | array of integer | no | Step numbers as narrate_story shows them (parallel sentences share one): the work objects of those sentences go into the group and their actors stay outside, the usual way to mark a subdomain. A work object that also serves a sentence outside these steps is refused. |
 | `color` | string | no | Color as hex, for example #1E88E5. |
 | `x` | number | no | Left edge of the box, at most a billion pixels either way. Give x and y together; without them the box fits around the members, or goes below the story when there are none. |
 | `y` | number | no | Top edge of the box, at most a billion pixels either way. Give x and y together. |

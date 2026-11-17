@@ -110,6 +110,16 @@ describe('validateStory', () => {
     expect(validateStory(doc).filter((issue) => issue.severity === 'error')).toEqual([]);
   });
 
+  it('warns about a smaller group whose corner touches the edge of a larger group it is not in', () => {
+    const story = Story.create({ title: 'T' });
+    const a = story.addActor({ name: 'A', x: 0, y: 0 });
+    const b = story.addActor({ name: 'B', x: 0, y: 400 });
+    const c = story.addActor({ name: 'C', x: 155, y: 100 });
+    story.addGroup({ name: 'Big', members: [a.id, b.id] });
+    story.addGroup({ name: 'Small', members: [c.id] });
+    expect(codes(story.toDocument())).toContain('group-encloses-non-member');
+  });
+
   it('warns when a group box encloses an element that is not in the group, or overlaps another group', () => {
     // Boxes fitted around their members take in nothing else, unlike boxes drawn with coordinates.
     const story = Story.create({ title: 'T' });

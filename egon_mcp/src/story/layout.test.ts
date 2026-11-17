@@ -455,6 +455,36 @@ describe('autoLayout', () => {
     expectStableAfterReopening(story);
   });
 
+  it('keeps a note on an actor beside a group out of the group box, and lines up the boxes', () => {
+    const story = buildStory({
+      title: 'Subdomains',
+      sentences: [
+        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'notes', workObject: 'Part request', to: [{ activity: 'for', actor: 'Storekeeper' }] },
+        { actor: 'Storekeeper', activity: 'orders', workObject: 'Parts order' },
+        { actor: 'Customer', activity: 'pays', workObject: 'Repair price' },
+        { actor: 'Clerk', activity: 'files', workObject: 'Receipt' },
+      ],
+      groups: [
+        { name: 'Intake', steps: [1] },
+        { name: 'Purchasing', steps: [2, 3] },
+        { name: 'Archive', members: ['Receipt', 'Clerk'] },
+      ],
+      annotations: [{ text: 'Works part time, mornings only, in the back room', attachTo: 'Storekeeper' }],
+    });
+    const elements = story.elements();
+    const note = boundsOf(elements.find((element) => element['text']?.toString().startsWith('Works part time')) as ShapeElement);
+    const boxes = elements.filter((element) => element.type === 'domainStory:group').map((group) => boundsOf(group as ShapeElement));
+    for (const box of boxes) {
+      expect(overlaps(note, box)).toBe(false);
+    }
+    expect(new Set(boxes.map((box) => box.x)).size).toBe(1);
+    const before = JSON.stringify(story.toDocument());
+    autoLayout(story);
+    expect(JSON.stringify(story.toDocument())).toBe(before);
+    expectStableAfterReopening(story);
+  });
+
   it('lays out a file whose groups named each other as parent', () => {
     const text = JSON.stringify({
       domain: { name: 'default', actors: {}, workObjects: {} },

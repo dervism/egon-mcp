@@ -1,5 +1,6 @@
 import { compareIds, groupAncestors, isActivity, isActor, isConnection, isGroup, isTextAnnotation, isWorkObject, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { boundsOf, type Bounds } from './geometry.js';
+import { wrap } from '../render/svg.js';
 import { narrate } from './narrate.js';
 import { StoryError, type Story } from './story.js';
 
@@ -26,7 +27,9 @@ interface BlockRow {
  * when a step introduces an actor that is not on the canvas yet. Members of a
  * group, annotations included, are kept together in a block of their own below
  * the story, one block per outermost group; a group nested in it gets rows of
- * its own inside that block. A note goes with what it is attached to: into the
+ * its own inside that block. An actor outside every group whose arrows all
+ * lead into groups stands beside the group it works in most, outside the box,
+ * with its notes below it. A note goes with what it is attached to: into the
  * group of its element, or into the group it describes. So no group box
  * encloses anything else, and the story reopens with the same groups. Shapes
  * in no sentence and notes on nothing go on rows after the story, groups
@@ -234,15 +237,17 @@ function layOut(story: Story): void {
   let blockRow = nextRow();
   const emptyGroups: string[] = [];
   for (const group of outermost) {
-    // Actors placed beside this group take the first column, outside the box.
+    // Actors placed beside a group take the first column, outside the box; when any group has
+    // such actors, every group block starts one column in, so the boxes line up.
     const actors = [...beside].filter(([, home]) => home === group.id).map(([id]) => id).sort((a, b) => rank(a) - rank(b) || compareIds(a, b));
-    const rows = blockRows(group.id, new Set(), actors.length > 0 ? MAX_COLUMNS - 1 : MAX_COLUMNS);
+    const firstCol = beside.size > 0 ? 1 : 0;
+    const rows = blockRows(group.id, new Set(), MAX_COLUMNS - firstCol);
     if (rows.every((row) => row.ids.length === 0)) {
       emptyGroups.push(group.id);
       continue;
     }
     actors.forEach((id, index) => take(id, { col: 0, row: blockRow + index }));
-    const end = placeRows(rows, blockRow, actors.length > 0 ? 1 : 0);
+    const end = placeRows(rows, blockRow, firstCol);
     const bottom = Math.max(end, blockRow + actors.length);
     blockRow = bottom + (bottom === end && rows.at(-1)?.ids.length === 0 ? 0 : 1);
   }
@@ -268,7 +273,7 @@ function layOut(story: Story): void {
     }
   }
 
-  placeAnnotations(story);
+  placeAnnotations(story, new Set(beside.keys()));
   refitGroups(story);
   story.rerouteAllEdges();
 }
@@ -287,7 +292,12 @@ function refitGroups(story: Story): void {
   }
 }
 
-function placeAnnotations(story: Story): void {
+/**
+ * Puts notes next to the actor or work object they are attached to. Next to an
+ * actor that stands beside a group there is no room before the box, so its
+ * notes go below the actor, narrowed to the column, and their text wraps.
+ */
+function placeAnnotations(story: Story, besideGroup: Set<string>): void {
   const elements = story.elements();
   const byId = new Map(elements.map((element) => [element.id, element]));
   for (const [noteId, anchor] of noteAnchors(elements)) {
@@ -300,6 +310,12 @@ function placeAnnotations(story: Story): void {
       continue;
     }
     const bounds = boundsOf(anchor as unknown as ShapeElement);
+    if (besideGroup.has(anchor.id)) {
+      const width = Math.min(boundsOf(annotation as ShapeElement).width, CELL_WIDTH - 60);
+      const lines = wrap(String(annotation['text'] ?? ''), Math.max(10, Math.floor(width / 6.5))).length;
+      story.setBounds(annotation.id, { x: bounds.x - 10, y: bounds.y + bounds.height + 30, width, height: Math.max(30, 14 + lines * 17) });
+      continue;
+    }
     story.setBounds(annotation.id, { x: bounds.x + bounds.width + 20, y: Math.max(0, bounds.y - 45) });
   }
 }

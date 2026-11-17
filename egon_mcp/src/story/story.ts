@@ -810,9 +810,9 @@ export class Story {
    */
   private newId(kind: 'shape' | 'connection'): string {
     const pattern = new RegExp(`^${kind}_(\\d+)$`);
-    // Ids that elements carry, and ids that dangling arrows or parents still name.
+    // Ids that elements carry, and ids that dangling arrows still name.
     const taken = new Set(
-      this.doc.elements.flatMap((element) => [element.id, element['source'], element['target'], element['parent']].filter((id): id is string => typeof id === 'string')),
+      this.doc.elements.flatMap((element) => [element.id, element['source'], element['target']].filter((id): id is string => typeof id === 'string')),
     );
     let highest = this.highestIds[kind];
     for (const id of taken) {

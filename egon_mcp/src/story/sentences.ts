@@ -1,4 +1,4 @@
-import { compareIds, iconNameOf, isActivity, isActor, isWorkObject, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { compareIds, groupAncestors, iconNameOf, isActivity, isActor, isWorkObject, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { IconCatalog } from '../icons/catalog.js';
 import { autoLayout } from './layout.js';
 import { narrate } from './narrate.js';
@@ -102,10 +102,13 @@ export function buildStory(input: BuildStoryInput): Story {
       withContext(`sentence ${index + 1}`, () => addSentence(story, sentence));
     });
     for (const group of input.groups ?? []) {
+      if (!group.members?.length && !group.steps?.length) {
+        throw new StoryError(`The group "${group.name}" needs members or steps.`);
+      }
       withContext(`group "${group.name}"`, () =>
         story.addGroup({
           name: group.name,
-          members: [...(group.members ?? []), ...workObjectsOfSteps(story, group.steps ?? [])],
+          members: [...(group.members ?? []), ...(group.steps ? workObjectsOfSteps(story, group.steps) : [])],
           ...(group.color ? { color: group.color } : {}),
         }),
       );
@@ -212,19 +215,51 @@ function shapeInput(spec: ShapeSpec) {
  * part in several of them.
  */
 export function workObjectsOfSteps(story: Story, steps: number[]): string[] {
-  const narrative = narrate(story.toDocument());
+  const doc = story.toDocument();
+  const byId = new Map(doc.elements.map((element) => [element.id, element]));
+  const narrative = narrate(doc);
+  // The steps each work object takes part in, onward arrows included.
+  const stepsOf = new Map<string, number[]>();
+  for (const step of narrative) {
+    for (const id of step.elementIds) {
+      const element = byId.get(id);
+      if (element && isWorkObject(element) && !stepsOf.get(id)?.includes(step.number)) {
+        stepsOf.set(id, [...(stepsOf.get(id) ?? []), step.number]);
+      }
+    }
+  }
   const ids: string[] = [];
+  const stepOf = new Map<string, number>();
   for (const number of steps) {
     const step = narrative.find((candidate) => candidate.number === number);
     if (!step) {
       throw new StoryError(`There is no step ${number}; the story has steps ${narrative.map((candidate) => candidate.number).join(', ') || 'none'}.`);
     }
     for (const id of step.elementIds) {
-      const element = story.get(id);
-      if (element && isWorkObject(element) && !ids.includes(id)) {
+      if (isWorkObject(byId.get(id) as StoryElement) && !ids.includes(id)) {
         ids.push(id);
+        stepOf.set(id, number);
       }
     }
+  }
+  const nameOf = (id: string) => (byId.get(id) as StoryElement).name;
+  // A work object shared with a sentence outside these steps cannot be in two groups.
+  for (const id of ids) {
+    const others = (stepsOf.get(id) ?? []).filter((number) => !steps.includes(number));
+    if (others.length > 0) {
+      throw new StoryError(
+        `"${nameOf(id)}" in step ${stepOf.get(id)} also belongs to step ${others.join(', ')}, so it cannot go into a group of these steps alone. Give each sentence a work object of its own (add the sentence without reuseWorkObject), or use members.`,
+      );
+    }
+  }
+  // Work objects already in a group: fine when all of them are in the same one, which then holds the new group.
+  const homes = ids.map((id) => groupAncestors(byId.get(id), byId)[0]);
+  if (new Set(homes).size > 1) {
+    const index = homes.findIndex((home) => home !== undefined);
+    const id = ids[index] as string;
+    throw new StoryError(
+      `"${nameOf(id)}" in step ${stepOf.get(id)} is already in the group "${nameOf(homes[index] as string)}". Group by members instead, or remove that group first.`,
+    );
   }
   return ids;
 }

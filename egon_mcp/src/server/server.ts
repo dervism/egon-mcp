@@ -83,7 +83,10 @@ const descriptionField = z.string().describe('Text Egon shows under the title.')
 const nameField = z.string().describe('Name shown below the element, in the words of the domain.');
 const steps = z
   .array(z.number().int().positive())
-  .describe('Step numbers of whole sentences: their work objects go into the group and their actors stay outside, the usual way to mark a subdomain.');
+  .min(1)
+  .describe(
+    'Step numbers as narrate_story shows them (parallel sentences share one): the work objects of those sentences go into the group and their actors stay outside, the usual way to mark a subdomain. A work object that also serves a sentence outside these steps is refused.',
+  );
 const groupSpec = z.object({
   name: z.string(),
   members: z.array(z.string()).optional().describe('Names or ids of the actors and work objects inside the group.'),
@@ -162,7 +165,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Build domain story from sentences',
       description:
-        'Creates a complete domain story in one call from numbered sentences ("Customer tells Order to Clerk"), then lays it out. Each sentence becomes one step. Actors with the same name are one element. Each sentence draws its own work object, except that the first sentence naming a declared work object uses it and reuseWorkObject continues the previous one. Returns the storyId, the narrative and any validation issues.',
+        'Creates a complete domain story in one call from numbered sentences ("Customer tells Order to Clerk"), then lays it out. Each sentence becomes one step, except that sentences given the number of an earlier step share it. Actors with the same name are one element. Each sentence draws its own work object, except that the first sentence naming a declared work object uses it and reuseWorkObject continues the previous one. Returns the storyId, the narrative and any validation issues.',
       inputSchema: {
         title: titleField,
         description: descriptionField.optional(),
@@ -422,7 +425,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Add group',
       description:
-        'Draws a box around elements that belong together, such as a department or subdomain. To mark a subdomain on a coarse story, pass the step numbers of its sentences as steps: their work objects go in and their actors stay outside, since an actor often takes part in several subdomains. With members or steps and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put those in no group into the smallest group box over their top-left corner when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.',
+        'Draws a box around elements that belong together, such as a department or subdomain. To mark a subdomain on a coarse story, pass the step numbers of its sentences as steps: their work objects go in and their actors stay outside, since an actor often takes part in several subdomains. With members or steps and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put those in no group into the smallest group box over their top-left corner when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn with x and y inside another group goes into that group, and a box fitted around members goes into the innermost group that already holds all of them.',
       inputSchema: {
         storyId,
         name: z.string().describe('Label in the top-left corner of the box.'),

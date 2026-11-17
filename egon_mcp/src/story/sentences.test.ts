@@ -3,7 +3,7 @@ import { parseStoryFile } from '../egon/parse.js';
 import { toEgnJson } from '../egon/serialize.js';
 import { isActor, isWorkObject } from '../egon/types.js';
 import { narrate } from './narrate.js';
-import { addSentence, buildStory } from './sentences.js';
+import { workObjectsOfSteps, addSentence, buildStory } from './sentences.js';
 import { Story } from './story.js';
 import { validateStory } from './validate.js';
 
@@ -226,6 +226,65 @@ describe('buildStory', () => {
     expect(() => buildStory({ title: 'T', sentences: [{ actor: 'A', activity: 'does', workObject: 'W' }], groups: [{ name: 'G', steps: [7] }] })).toThrow(/no step 7/);
   });
 
+  it('refuses to group by steps a work object that also serves a sentence outside them', () => {
+    const shared = () =>
+      buildStory({
+        title: 'T',
+        sentences: [
+          { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+          { actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] },
+          { actor: 'Mechanic', activity: 'repairs', workObject: 'Bike', reuseWorkObject: true },
+        ],
+        groups: [{ name: 'Intake', steps: [1, 2] }],
+      });
+    expect(shared).toThrow(/"Bike" in step 1 also belongs to step 3/);
+    const story = buildStory({
+      title: 'T',
+      sentences: [
+        { actor: 'Clerk', activity: 'receives', workObject: 'Letter' },
+        { actor: 'Manager', activity: 'files', workObject: 'Letter', reuseWorkObject: true },
+      ],
+    });
+    const letter = story.elements().find((element) => element.name === 'Letter')!;
+    const file = story.addWorkObject({ name: 'File' });
+    story.addActivity({ from: letter.id, to: file.id, label: 'in' });
+    expect(() => workObjectsOfSteps(story, [1])).toThrow(/also belongs to step 2/);
+  });
+
+  it('refuses to group by steps when some of their work objects already sit in another group', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [
+        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] },
+      ],
+      groups: [{ name: 'Pricing', members: ['Estimate'] }],
+    });
+    expect(() => workObjectsOfSteps(story, [1, 2])).toThrow(/"Estimate" in step 2 is already in the group "Pricing"/);
+  });
+
+  it('nests a group made from some of the steps of another group inside it', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [
+        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] },
+        { actor: 'Mechanic', activity: 'repairs', workObject: 'Bike' },
+      ],
+      groups: [
+        { name: 'Workshop', steps: [1, 2, 3] },
+        { name: 'Intake', steps: [1, 2] },
+      ],
+    });
+    const groups = story.elements().filter((element) => element.type === 'domainStory:group');
+    const workshop = groups.find((group) => group.name === 'Workshop')!;
+    expect(groups.find((group) => group.name === 'Intake')?.['parent']).toBe(workshop.id);
+  });
+
+  it('wants members or steps for a group in build_story', () => {
+    expect(() => buildStory({ title: 'T', sentences: [{ actor: 'A', activity: 'does', workObject: 'W' }], groups: [{ name: 'Empty' }] })).toThrow(/members or steps/);
+  });
+
   it('puts every instance of a name into a group and attaches annotations to the first one', () => {
     const story = buildStory({
       title: 'T',
@@ -254,3 +313,4 @@ describe('buildStory', () => {
     ).toThrow(/sentence 2/i);
   });
 });
+

@@ -90,7 +90,7 @@ The first story about a new domain is usually coarse-grained: the whole case fro
 12. Cashier hands over Bike to Customer.
 ```
 
-Why these groups: the purchasing clerk finishes the parts order alone, and on a schedule (every Friday) while the rest starts when a customer walks in; the clerk also speaks of article numbers where the mechanic speaks of parts for a bike. The bike appears in three groups, which marks where those subdomains touch. Each group is named after the work done in it. A grouped coarse story shows subdomains, not yet bounded contexts; `bounded-contexts.md` goes on from here. `auto_layout` puts each actor beside the group it works in most, outside the box.
+Why these groups: the purchasing clerk finishes the parts order alone, and on a schedule (every Friday) while the rest starts when a customer walks in; the clerk also speaks of article numbers where the mechanic speaks of parts for a bike. The bike appears in three groups, which marks where those subdomains touch. Each group is named after the work done in it. A grouped coarse story shows subdomains, not yet bounded contexts; `bounded-contexts.md` goes on from here. `auto_layout` puts each actor whose arrows all lead into groups beside the group it works in most, outside the box.
 
 ## 3. Zooming in: a fine-grained story with two work objects per sentence
 

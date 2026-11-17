@@ -45,11 +45,11 @@ Questions that bring the indicators out in a workshop:
 
 ## Step 3: draw the subdomains in Egon
 
-- Mark each subdomain with `add_group` and `steps`: the step numbers of its sentences. Their work objects go into the group and their actors stay outside, because an actor usually takes part in several subdomains (the mechanic in intake, purchasing and repairing). `build_story` takes `steps` in `groups` too.
+- Mark each subdomain with `add_group` and `steps`: the step numbers of its sentences, as `narrate_story` shows them. Their work objects go into the group and their actors stay outside, because an actor usually takes part in several subdomains (the mechanic in intake, purchasing and repairing). `build_story` takes `steps` in `groups` too. Every sentence needs a work object of its own for this, which `add_sentence` and `build_story` draw anyway; a work object that also serves a sentence outside the steps is refused, so tell that sentence again without `reuseWorkObject`.
 - Name a group after the work done in it, with a noun made from a verb: "Repair intake", "Parts purchasing", "Repairing", "Checkout", "Risk assessment". Do not name it after a work object or an actor ("Bike", "Mechanic").
 - Write the indicators you relied on as annotations on the work objects where they show ("Every Friday, for all open part requests" on the parts order shows a different trigger).
-- Run `auto_layout`. It draws one block per group and puts each actor beside the group it works in most, outside the box.
-- Look at work objects that appear in more than one group, such as the bike in intake, repairing and checkout. They mark where subdomains touch, and they are where the meaning of a word is likely to differ.
+- Run `auto_layout`. It draws one block per group. An actor outside every group whose arrows all lead into groups stands beside the group it works in most, outside the box; other actors stay in the rows above. It is a first arrangement: when long arrows cross other shapes, tidy the picture in Egon.
+- Look at work object names that appear in more than one group, such as the bike in intake, repairing and checkout (each sentence has its own copy). They mark where subdomains touch, and they are where the meaning of a word is likely to differ.
 - Keep colors for a second message, such as what will change or what is legally required, and explain them in an annotation. Do not draw one group per actor or per existing IT system to show subdomains.
 
 ## Step 4: zoom into each subdomain
@@ -58,7 +58,7 @@ Tell fine-grained stories for the subdomains that matter, one story and one file
 
 ## Step 5: from subdomains to bounded contexts
 
-1. Classify each subdomain. Core: it sets the business apart, so build it and put the best people on it. Supporting: the business needs it and it is specific, but simple. Generic: it works the same everywhere, so consider buying it (example 10 compares two products).
+1. Classify each subdomain. Core: it sets the business apart, so build it and put the best people on it. Supporting: the business needs it and it is specific, but simple. Generic: it works the same everywhere, so consider buying it. Example 10 shows how to compare a candidate product with a to-be story.
 2. Collect the terms of each subdomain from `get_story`: actors, work objects and activities inside each group, and the definitions in annotations. Where a term means different things in two subdomains, those need separate models. Where two subdomains use the same terms the same way, one context can serve both.
 3. Decide the contexts and write them down: name, the subdomains it serves, its purpose in one or two sentences, its key terms, and the team that owns it.
 4. Write one glossary per context. The same word gets one entry in each context where it occurs, with that context's meaning.
@@ -97,7 +97,7 @@ The Bounded Context Canvas by the DDD Crew collects the design of one context on
 
 Contact points between contexts are where a work object passes from one group to the next, or where a hand-off leads into another group: the part request goes from the workshop to purchasing, the repair report from the workshop to checkout. With actors outside the groups, almost every arrow crosses a group edge, so look at the work objects and hand-offs, not at single arrows.
 
-For each pair of contexts that touch, decide which one depends on the other. The one whose decisions affect the other is upstream; the one that has to live with them is downstream. A one-way flow between two groups usually means upstream and downstream. A flow both ways, or a work object whose meaning both sides must agree on, needs a closer look at the boundary.
+For each pair of contexts that touch, decide which one depends on the other. The one whose decisions affect the other is upstream; the one that has to live with them is downstream. This is about influence, not about the direction of the arrows: in the bicycle shop the workshop sends part requests to purchasing, yet purchasing is upstream, because it decides which articles, suppliers and delivery dates the workshop gets. A one-way flow between two groups usually means upstream and downstream. A flow both ways, or a work object whose meaning both sides must agree on, needs a closer look at the boundary and at who decides.
 
 Relationship patterns, in short (from Eric Evans' DDD Reference and the DDD Crew's context mapping):
 
@@ -116,9 +116,12 @@ The map for the bicycle shop, as text next to the stories:
 
 | Upstream | Downstream | Relationship | Why |
 |---|---|---|---|
-| Purchasing | Workshop | Customer/supplier | The workshop depends on parts; both teams agree on what a part request contains. |
-| Supplier portal (external) | Purchasing | Anticorruption layer | The supplier's catalogue and article numbers stay outside the purchasing model. |
-| Workshop | Checkout | Customer/supplier now; anticorruption layer once checkout is bought | Checkout bills what the repair report says; a bought product's terms must not leak into the workshop. |
+| Purchasing | Workshop | Customer/supplier | The workshop depends on what purchasing decides. As the supplier, purchasing takes part requests in the workshop's terms and translates them into articles itself (example 11). |
+| Supplier portal (external) | Purchasing | Anticorruption layer | Purchasing cannot change the portal; it translates the supplier's catalogue so its own model stays clean. |
+| Workshop | Checkout | Customer/supplier | Checkout bills what the repair report says, and the workshop keeps checkout's needs in mind. |
+| Purchasing | Checkout | Conformist | Checkout takes the purchase price of a part as purchasing reports it (example 11). |
+
+That is the map today, with checkout built in-house. In the target map checkout is a bought product: the shop cannot change it, so it becomes upstream of the workshop and purchasing, and both put an anticorruption layer in front of it, so the product's terms stay out of their models.
 
 Draw the map as it is today first, then the map you aim for, and compare them. Keep each map small and focused on one question.
 

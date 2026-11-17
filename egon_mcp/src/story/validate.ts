@@ -94,6 +94,27 @@ function checkGroups(doc: StoryDocument, byId: Map<string, StoryElement>, add: A
       }
     }
   }
+  // A smaller group whose corner lies in a larger group's box goes into it when the file is opened.
+  const area = (group: ShapeElement) => boundsOf(group).width * boundsOf(group).height;
+  for (const group of groups) {
+    for (const other of groups) {
+      if (
+        other.id !== group.id &&
+        area(group) > area(other) &&
+        cornerInside(other, group) &&
+        !isInside(other.id, group.id) &&
+        !isInside(group.id, other.id)
+      ) {
+        add(
+          'warning',
+          'group-encloses-non-member',
+          `The group "${group.name || group.id}" encloses the corner of the group "${other.name || other.id}", which is not in it. Run auto_layout, or move one of them.`,
+          group.id,
+          other.id,
+        );
+      }
+    }
+  }
   for (const [index, a] of groups.entries()) {
     for (const b of groups.slice(index + 1)) {
       const nested = isInside(a.id, b.id) || isInside(b.id, a.id);
