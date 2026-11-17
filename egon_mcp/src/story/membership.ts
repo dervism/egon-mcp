@@ -1,4 +1,4 @@
-import { groupAncestors, isActor, isEdge, isGroup, isWorkObject, type GroupElement, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { compareIds, groupAncestors, isActor, isConnection, isEdge, isGroup, isTextAnnotation, isWorkObject, type GroupElement, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { boundsOf } from './geometry.js';
 
 /**
@@ -96,29 +96,67 @@ function peopleAndThings(groupId: string, elements: StoryElement[]): string[] {
 }
 
 /**
- * Where a new group around these elements goes and what it holds (ADR 18).
- * The host is the innermost group that holds every one of them. Inside it, a
- * named group goes in with everything it holds, and so does any group whose
- * actors and work objects are all named or inside a named group; every other
- * element goes in by itself, leaving its old group.
+ * The element each note belongs to: the source of its link of lowest id, so
+ * every tool reads a note linked from several elements the same way.
  */
-export function membersFor(ids: string[], elements: StoryElement[]): { host: string | undefined; members: string[] } {
+export function noteAnchors(elements: StoryElement[]): Map<string, StoryElement> {
   const byId = new Map(elements.map((element) => [element.id, element]));
-  const chains = ids.map((id) => groupAncestors(byId.get(id), byId));
-  const host = chains[0]?.find((group) => chains.every((chain) => chain.includes(group)));
-  const named = new Set(ids.flatMap((id) => (isGroup(byId.get(id) as StoryElement) ? [id, ...peopleAndThings(id, elements)] : [id])));
-  const whole = (groupId: string) => {
-    const inside = peopleAndThings(groupId, elements);
-    return inside.length > 0 && inside.every((id) => named.has(id));
-  };
-  const picked: string[] = [];
-  for (const [index, id] of ids.entries()) {
-    const below = (chains[index] as string[]).slice(0, host === undefined ? undefined : (chains[index] as string[]).indexOf(host));
-    const member = below.filter(whole).at(-1) ?? id;
-    if (!picked.includes(member)) {
-      picked.push(member);
+  const anchors = new Map<string, StoryElement>();
+  const links = elements.filter(isConnection).sort((a, b) => compareIds(a.id, b.id));
+  for (const link of links) {
+    const note = byId.get(link.target);
+    const anchor = byId.get(link.source);
+    if (note && anchor && isTextAnnotation(note) && !anchors.has(note.id)) {
+      anchors.set(note.id, anchor);
     }
   }
+  return anchors;
+}
+
+/** Work objects that steps pick for a group: those that first appear in them, and those used by these steps alone. */
+export interface StepPicks {
+  picked: string[];
+  only: string[];
+}
+
+/**
+ * Where a new group goes and what it holds (ADR 18). An existing group goes in
+ * whole when all its actors and work objects are chosen: named, inside a named
+ * group, or used by the steps alone. Named elements always move in. Elements
+ * the steps picked move in only from the group the new one goes into; one in
+ * any other group stays there (`left`). The new group goes into the innermost
+ * group around what the steps picked, or without steps around the named ones.
+ */
+export function membersFor(
+  named: string[],
+  elements: StoryElement[],
+  steps: StepPicks = { picked: [], only: [] },
+): { host: string | undefined; members: string[]; left: string[] } {
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  const chosen = new Set([...named.flatMap((id) => (isGroup(byId.get(id) as StoryElement) ? [id, ...peopleAndThings(id, elements)] : [id])), ...steps.only]);
+  const whole = (groupId: string) => {
+    const inside = peopleAndThings(groupId, elements);
+    return inside.length > 0 && inside.every((id) => chosen.has(id));
+  };
+  const promote = (ids: string[]) => [...new Set(ids.map((id) => groupAncestors(byId.get(id), byId).filter(whole).at(-1) ?? id))];
+  const around = (ids: string[]) => {
+    const chains = ids.map((id) => groupAncestors(byId.get(id), byId));
+    return chains[0]?.find((group) => chains.every((chain) => chain.includes(group)));
+  };
+  const fromNames = promote(named);
+  const fromSteps = promote(steps.picked);
+  let host = steps.picked.length > 0 ? around(fromSteps) : around(fromNames);
+  const kept = fromSteps.filter((id) => byId.get(id)?.['parent'] === host);
+  if (steps.picked.length > 0 && kept.length === 0) {
+    host = undefined;
+  }
   // Whatever lies inside another member goes along with it.
-  return { host, members: picked.filter((id) => !groupAncestors(byId.get(id), byId).some((ancestor) => picked.includes(ancestor))) };
+  const picked = [...new Set([...kept, ...fromNames])];
+  const members = picked.filter((id) => !groupAncestors(byId.get(id), byId).some((ancestor) => picked.includes(ancestor)));
+  const left = steps.picked.filter((id) => !members.some((member) => member === id || groupAncestors(byId.get(id), byId).includes(member)));
+  // The new group cannot go into one of its own members.
+  while (host !== undefined && members.some((id) => id === host || groupAncestors(byId.get(host as string), byId).includes(id))) {
+    host = byId.get(host)?.['parent'] as string | undefined;
+  }
+  return { host, members, left };
 }

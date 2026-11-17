@@ -13,7 +13,6 @@ import {
   iconNameOf,
   isActivity,
   isActor,
-  isConnection,
   isEdge,
   isGroup,
   isTextAnnotation,
@@ -31,7 +30,7 @@ import {
   type WorkObjectElement,
 } from '../egon/types.js';
 import { boundsOf, DEFAULT_ANNOTATION_SIZE, edgeWaypoints, routeEdge, type Bounds } from './geometry.js';
-import { cornerInside, joinGroupAt, membersFor, settleMembership, takeIn } from './membership.js';
+import { cornerInside, joinGroupAt, membersFor, noteAnchors, settleMembership, takeIn, type StepPicks } from './membership.js';
 
 export class StoryError extends Error {
   override name = 'StoryError';
@@ -61,6 +60,8 @@ export interface ActivityInput {
 export interface GroupInput {
   name: string;
   members?: string[];
+  /** Work objects picked by step numbers (groupBySteps); unlike members, they stay in another group. */
+  fromSteps?: StepPicks;
   x?: number;
   y?: number;
   width?: number;
@@ -248,14 +249,14 @@ export class Story {
 
   private applyAddGroup(input: GroupInput): GroupElement {
     const given = this.givenPosition(input);
-    if (given && input.members !== undefined) {
+    if (given && (input.members?.length || input.fromSteps)) {
       throw new StoryError(
         'Give members to fit the box around them, or x and y to draw it where it should go and take in what it covers, as in Egon; not both.',
       );
     }
     // A name shared by several elements (work objects repeat per sentence) groups all of them.
     const resolved = (input.members ?? []).flatMap((ref) => this.resolveShapes(ref));
-    if (resolved.length > 0) {
+    if (resolved.length > 0 || input.fromSteps) {
       return this.fitGroup(input, resolved.map((member) => member.id));
     }
     // A box without members or position goes below the story, so it takes in nothing.
@@ -278,13 +279,21 @@ export class Story {
    * group and the ones around it grow to fit.
    */
   private fitGroup(input: GroupInput, ids: string[]): GroupElement {
-    const { host, members: memberIds } = membersFor(ids, this.doc.elements);
+    const { host, members: memberIds, left } = membersFor(ids, this.doc.elements, input.fromSteps);
+    if (memberIds.length === 0) {
+      const nameOf = (id: string | undefined) => {
+        const element = id === undefined ? undefined : this.find(id);
+        return element?.name || id;
+      };
+      throw new StoryError(
+        `Every work object of these steps already sits in another group (${left.map((id) => `"${nameOf(id)}" in "${nameOf(this.find(id)?.['parent'] as string)}"`).join(', ')}), so there is nothing to group. Name the ones that belong here in members to move them.`,
+      );
+    }
     const members = memberIds.map((id) => this.find(id) as ShapeElement);
-    const notes = this.doc.elements.filter(isConnection).flatMap((link) => {
-      const note = this.find(link.target);
-      const from = members.find((member) => member.id === link.source && !isGroup(member));
-      return from && note && isTextAnnotation(note) && !members.includes(note as ShapeElement) ? [note as ShapeElement] : [];
-    });
+    // A note goes with the element of its link of lowest id.
+    const notes = [...noteAnchors(this.doc.elements)].flatMap(([noteId, anchor]) =>
+      members.some((member) => member.id === anchor.id && !isGroup(member)) && !memberIds.includes(noteId) ? [this.find(noteId) as ShapeElement] : [],
+    );
     const bounds = enclose([...members, ...notes].map((member) => boundsOf(member)), GROUP_PADDING);
     checkCoordinates(bounds);
     const group = this.newGroup(input, bounds);

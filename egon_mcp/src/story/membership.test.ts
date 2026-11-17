@@ -320,7 +320,7 @@ describe('what goes into a new group', () => {
   const doc = (elements: object[]) => opened(elements).elements();
   const workObject = (id: string, x: number, y: number, parent?: string) => ({ type: 'domainStory:workObjectDocument', id, name: id.toUpperCase(), x, y, ...(parent ? { parent } : {}) });
 
-  it('nests the new group in the innermost group that holds every member, and takes the groups inside it whole', () => {
+  it('takes the outermost group whose actors and work objects are all members whole, and nests the new group in the group around its members', () => {
     const elements = doc([
       group('outer', 0, 0, 2000, 2000),
       group('middle', 50, 50, 1500, 1500, 'outer'),
@@ -328,8 +328,9 @@ describe('what goes into a new group', () => {
       workObject('a', 150, 150, 'inner'),
       workObject('b', 900, 900, 'middle'),
     ]);
-    expect(membersFor(['a', 'b'], elements)).toEqual({ host: 'middle', members: ['inner', 'b'] });
-    expect(membersFor(['a'], elements)).toEqual({ host: 'inner', members: ['a'] });
+    expect(membersFor(['a', 'b'], elements)).toEqual({ host: undefined, members: ['outer'], left: [] });
+    expect(membersFor(['a'], elements)).toEqual({ host: 'middle', members: ['inner'], left: [] });
+    expect(membersFor(['b'], elements)).toEqual({ host: 'middle', members: ['b'], left: [] });
   });
 
   it('moves members out of a group that holds something else, and takes in a group whose actors and work objects are all named', () => {
@@ -340,7 +341,7 @@ describe('what goes into a new group', () => {
       group('customers', 2000, 0, 300, 300),
       actor('customer', 2100, 100, 'customers'),
     ]);
-    expect(membersFor(['customer', 'estimate'], elements)).toEqual({ host: undefined, members: ['customers', 'estimate'] });
+    expect(membersFor(['customer', 'estimate'], elements)).toEqual({ host: undefined, members: ['customers', 'estimate'], left: [] });
   });
 
   it('leaves notes out when it decides whether a group goes in whole', () => {
@@ -353,13 +354,29 @@ describe('what goes into a new group', () => {
       { type: 'domainStory:textAnnotation', id: 'm', text: 'loose', x: 2100, y: 100, width: 100, height: 30, parent: 'notes only' },
       workObject('x', 3000, 0),
     ]);
-    expect(membersFor(['a', 'x'], elements)).toEqual({ host: undefined, members: ['intake', 'x'] });
-    expect(membersFor(['m', 'x'], elements)).toEqual({ host: undefined, members: ['m', 'x'] });
+    expect(membersFor(['a', 'x'], elements)).toEqual({ host: undefined, members: ['intake', 'x'], left: [] });
+    expect(membersFor(['m', 'x'], elements)).toEqual({ host: undefined, members: ['m', 'x'], left: [] });
   });
 
-  it('takes a named group with everything in it, and what lies inside it along with it', () => {
+  it('leaves a work object of the steps in a group that does not go in whole, unless the new group goes into that group', () => {
+    const elements = doc([
+      group('purchasing', 1000, 0, 600, 400),
+      workObject('request', 1100, 100, 'purchasing'),
+      workObject('part', 1300, 100, 'purchasing'),
+      workObject('bike', 100, 100),
+    ]);
+    // Steps pick bike and request; only bike takes part in these steps alone.
+    expect(membersFor([], elements, { picked: ['bike', 'request'], only: ['bike'] })).toEqual({ host: undefined, members: ['bike'], left: ['request'] });
+    // All picked work objects in one group: the new group goes inside it.
+    expect(membersFor([], elements, { picked: ['request'], only: [] })).toEqual({ host: 'purchasing', members: ['request'], left: [] });
+    // Named next to steps, a work object always moves, and does not decide where the group goes.
+    expect(membersFor(['request'], elements, { picked: ['bike'], only: ['bike'] })).toEqual({ host: undefined, members: ['bike', 'request'], left: [] });
+  });
+
+  it('takes a named group with everything in it, and the group around it when that holds nothing else', () => {
     const elements = doc([group('g2', 0, 0, 2000, 2000), group('g1', 100, 100, 500, 500, 'g2'), workObject('a', 150, 150, 'g1'), actor('b', 300, 300, 'g1')]);
-    expect(membersFor(['g1'], elements)).toEqual({ host: 'g2', members: ['g1'] });
-    expect(membersFor(['g1', 'a'], elements)).toEqual({ host: 'g2', members: ['g1'] });
+    expect(membersFor(['g1', 'a'], elements)).toEqual({ host: undefined, members: ['g2'], left: [] });
+    const withMore = doc([group('g2', 0, 0, 2000, 2000), group('g1', 100, 100, 500, 500, 'g2'), workObject('a', 150, 150, 'g1'), workObject('c', 900, 900, 'g2')]);
+    expect(membersFor(['g1'], withMore)).toEqual({ host: 'g2', members: ['g1'], left: [] });
   });
 });
