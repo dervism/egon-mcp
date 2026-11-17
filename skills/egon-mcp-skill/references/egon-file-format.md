@@ -53,7 +53,7 @@ In `.egn.svg` files the JSON sits in a comment after `</svg>`: `<!-- <DST> {...}
 
 Other details:
 
-- Ids look like `shape_1234` and `connection_1234` and must be valid CSS identifiers.
+- Ids look like `shape_1234` and `connection_1234` and must be valid CSS identifiers. Egon draws them at random below 10000. egon-mcp numbers its own from `shape_10000` and `connection_10000` up, so the order elements were added in survives Egon's sort by id; sentences that share a step number are read in that order.
 - `pickedColor` holds an optional color such as `#E53935`.
 - `multipleNumberAllowed: true` marks activities that share a step number.
 - The `<Icon>` part must be a built-in Egon icon or a key in the file's icon set. Spaces in icon names become dashes.

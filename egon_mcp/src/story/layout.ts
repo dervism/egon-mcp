@@ -99,9 +99,10 @@ export function autoLayout(story: Story): void {
       }
     }
   }
-  for (const link of doc.elements.filter(isConnection)) {
-    if (!readingOrder.has(link.target) && readingOrder.has(link.source)) {
-      readingOrder.set(link.target, (readingOrder.get(link.source) as number) + 0.5);
+  // A note follows the element its chosen link comes from.
+  for (const [noteId, anchor] of anchors) {
+    if (!readingOrder.has(noteId) && readingOrder.has(anchor.id)) {
+      readingOrder.set(noteId, (readingOrder.get(anchor.id) as number) + 0.5);
     }
   }
   const rank = (id: string) => readingOrder.get(id) ?? Number.MAX_SAFE_INTEGER;

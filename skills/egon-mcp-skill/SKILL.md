@@ -102,7 +102,7 @@ Rules for good sentences:
 ## Annotations, groups and color
 
 - Annotations hold what the sentences cannot: variations, optional steps, rules, definitions of domain terms, frequencies ("every Thursday"), where something lives, open questions and disagreements. Attach each one to the element it is about with `add_annotation`.
-- Groups (`add_group`) draw a labeled box around elements that belong together: subdomains, organizational boundaries, locations, optional parts, repeated parts, or what a to-be story changes. Always give a group a name that says what it means. A group fitted around `members` holds only them. A box drawn with `x`, `y`, `width` and `height` takes in every shape whose top-left corner lies inside it, as a box drawn in Egon does; a shape added or moved into a box joins the group, and moving a group moves what is in it. A group without members or position goes below the story. A note goes with the element it is attached to. A file only records who is in a group, so `open_story` puts any shape that lies in a group's box but has no group into that group; Egon itself only reads who is in a group and leaves such a shape outside.
+- Groups (`add_group`) draw a labeled box around elements that belong together: subdomains, organizational boundaries, locations, optional parts, repeated parts, or what a to-be story changes. Always give a group a name that says what it means. A group fitted around `members` holds only them. A box drawn with `x`, `y`, `width` and `height` takes in every shape whose top-left corner lies inside it, as a box drawn in Egon does; a shape added or moved into a box joins the group, and moving a group moves what is in it. A group without members or position goes below the story. A note goes with the element it is attached to; with several links, with the one of lowest id. A file only records who is in a group, so `open_story` puts any shape that lies in a group's box but has no group into that group; Egon itself only reads who is in a group and leaves such a shape outside.
 - Color (`color` on actors, work objects and groups, or `update_element`) marks differences, typically what is new or changes in a to-be story.
 
 ## Choose icons
@@ -120,7 +120,7 @@ Run `validate_story` after building or editing. Fix every error; the file would 
 - `unconnected-element`: connect it or remove it. Parts of a story that do not connect are often a gap in the story; ask the user why.
 - `numbering-gap`: call `renumber_steps`.
 - `overlapping-shapes`, `overlapping-groups`: call `auto_layout`, which keeps the members of each group together in a block of their own.
-- `group-encloses-non-member`: decide whether the element belongs in the group. If it does, set its `x` and `y` with `update_element` (its current position will do): a shape placed in a box joins the group. If not, call `auto_layout`, which moves it out of the box. Left as it is, it joins the group when `open_story` opens the saved file; `save_story` lists such changes in `groupChangesOnOpen`.
+- `group-encloses-non-member`: decide whether the element belongs in the group. If it does, set its `x` and `y` with `update_element` (its current position will do): a shape placed somewhere joins the smallest box that covers its top-left corner, so this works unless a smaller group's box covers it too. If not, call `auto_layout`, which moves it out of the box. Left as it is, a shape in no group joins the group when `open_story` opens the saved file; `save_story` lists such changes in `groupChangesOnOpen`.
 
 Then read `narrate_story` and compare it with what the user said. Each line must read as a correct sentence. Show the user the numbered sentences and retell the whole story from the start: is anything missing, is anything wrong, do all the experts agree? Retelling is where forgotten details come up; put them on the sentence they belong to.
 
@@ -174,6 +174,8 @@ Tool errors explain the problem and usually the fix:
 | `cannot be read` | A file this story opened or wrote is now unreadable or too large to check. Ask the user, then save elsewhere or pass `overwrite: true`. |
 | `changed on disk` | The file was edited or replaced outside the server, or by a story that is closed now. Tell the user, then reopen it with `open_story`, save elsewhere, or pass `overwrite: true` if they agree to lose those changes. |
 | `No open story` | Use `list_stories`; stories are lost when the server restarts unless saved. |
+| `within a billion pixels`, `no free spot` | Give smaller coordinates, or pass `x` and `y` instead of letting the server pick a spot. When `open_story` says it, the file has coordinates no drawing needs; ask the user to fix it in Egon. |
+| `too long an id` | The file was not written by Egon. Ask the user where it came from. |
 
 ## References
 

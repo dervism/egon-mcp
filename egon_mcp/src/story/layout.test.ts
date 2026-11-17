@@ -330,7 +330,7 @@ describe('autoLayout', () => {
     expectStableAfterReopening(story);
   });
 
-  it('keeps a note linked from two elements with the first link, whatever the element order', () => {
+  it('keeps a note linked from two elements with its lowest-id link, whatever the element order', () => {
     const story = buildStory({
       title: 'T',
       sentences: [
@@ -351,6 +351,32 @@ describe('autoLayout', () => {
       expect(opened.get(note.id)?.['parent']).toBeUndefined();
       expectStableAfterReopening(opened);
     }
+  });
+
+  it('orders notes in a group by the element their chosen link comes from, whatever the element order', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [
+        { actor: 'Boss', activity: 'reads', workObject: 'R' },
+        ...['W0', 'W1', 'W2'].map((workObject) => ({ actor: 'Clerk', activity: 'files', workObject })),
+      ],
+      annotations: [
+        { text: 'on W1', attachTo: 'W1' },
+        { text: 'on W2', attachTo: 'W2' },
+      ],
+    });
+    story.addGroup({ name: 'Works', members: ['W0', 'W1', 'W2', 'on W1', 'on W2'] });
+    const doc = story.toDocument();
+    const r = doc.elements.find((element) => element.name === 'R') as ShapeElement;
+    const onW2 = doc.elements.find((element) => element['text'] === 'on W2') as ShapeElement;
+    doc.elements.push({ type: 'domainStory:connection', id: 'connection_99999', name: '', source: r.id, target: onW2.id, waypoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }] });
+    const positions = (of: Story) => Object.fromEntries(of.elements().filter((e) => typeof e['x'] === 'number').map((e) => [e.id, [e['x'], e['y']]]));
+    const forward = Story.fromDocument(doc);
+    const reversed = Story.fromDocument({ ...doc, elements: [...doc.elements].reverse() });
+    autoLayout(forward);
+    autoLayout(reversed);
+    expect(positions(reversed)).toEqual(positions(forward));
+    expectStableAfterReopening(forward);
   });
 
   it('lays out shapes in no sentence left to right when their row was drawn a little crooked', () => {

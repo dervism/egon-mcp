@@ -152,6 +152,11 @@ describe('parseStoryFile', () => {
     expect(doc.elements[0]?.['height']).toBeUndefined();
   });
 
+  it('rejects ids longer than 256 characters', () => {
+    const file = JSON.stringify({ domain: { name: 'default', actors: {}, workObjects: {} }, dst: [{ type: 'domainStory:actorPerson', id: `shape_${'1'.repeat(300)}`, name: 'A', x: 0, y: 0 }, { info: '' }, { version: '3.2.1' }] });
+    expect(() => parseStoryFile(file, 'a.egn')).toThrow(/too long an id/);
+  });
+
   it('rejects text that is not a domain story', () => {
     expect(() => parseStoryFile('not json', 'a.egn')).toThrow(StoryParseError);
     expect(() => parseStoryFile('{"hello": 1}', 'a.egn')).toThrow(StoryParseError);

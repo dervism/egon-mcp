@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { readEgonFixture } from '../../test/egon-fixtures.js';
 import { Story } from '../story/story.js';
 import { parseStoryFile } from './parse.js';
+import { compareIds } from './types.js';
 import { embedStoryInSvg, fileNameFor, toEgnJson } from './serialize.js';
 
 function sampleStory() {
@@ -67,12 +68,12 @@ describe('toEgnJson', () => {
     expect(ids).toEqual(['shape_9999', 'shape_10000']);
   });
 
-  it('sorts business objects by id like Egon does on export', () => {
+  it('sorts business objects by id, as Egon does on export', () => {
     for (const format of ['egon3', 'egon4'] as const) {
       const json = JSON.parse(toEgnJson(sampleStory().toDocument(), { format }));
       const elements = format === 'egon3' ? json.dst.slice(0, -2) : json.domainStory.businessObjects;
       const ids = elements.map((element: { id: string }) => element.id);
-      expect(ids).toEqual([...ids].sort((a: string, b: string) => a.localeCompare(b)));
+      expect(ids).toEqual([...ids].sort(compareIds));
     }
   });
 

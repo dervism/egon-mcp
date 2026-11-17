@@ -126,8 +126,8 @@ Adds an actor: a person, group or system that does something. The default icon i
 | `name` | string | yes | Name shown below the element, in the words of the domain. |
 | `icon` | string | no | Name of a built-in Egon icon (see search_icons) or a custom icon added with add_custom_icon. |
 | `color` | string | no | Color as hex, for example #1E88E5. |
-| `x` | number | no | Left edge in Egon canvas pixels. Omit to place the element automatically. |
-| `y` | number | no | Top edge in Egon canvas pixels. Omit to place the element automatically. |
+| `x` | number | no | Left edge in Egon canvas pixels, at most a billion either way. Give x and y together, or omit both to place the element automatically. |
+| `y` | number | no | Top edge in Egon canvas pixels, at most a billion either way. Give x and y together, or omit both to place the element automatically. |
 
 ## add_work_object
 
@@ -139,8 +139,8 @@ Adds a work object: something actors work with, such as a document, call, email 
 | `name` | string | yes | Name shown below the element, in the words of the domain. |
 | `icon` | string | no | Name of a built-in Egon icon (see search_icons) or a custom icon added with add_custom_icon. |
 | `color` | string | no | Color as hex, for example #1E88E5. |
-| `x` | number | no | Left edge in Egon canvas pixels. Omit to place the element automatically. |
-| `y` | number | no | Top edge in Egon canvas pixels. Omit to place the element automatically. |
+| `x` | number | no | Left edge in Egon canvas pixels, at most a billion either way. Give x and y together, or omit both to place the element automatically. |
+| `y` | number | no | Top edge in Egon canvas pixels, at most a billion either way. Give x and y together, or omit both to place the element automatically. |
 
 ## add_activity
 
@@ -173,7 +173,7 @@ Adds one domain story sentence as a new step: actor, verb, work object and optio
 
 ## add_group
 
-Draws a box around elements that belong together, such as a department or subdomain. With members and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put them into the group when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.
+Draws a box around elements that belong together, such as a department or subdomain. With members and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put those in no group into this one when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -195,8 +195,8 @@ Adds a note, optionally attached to an element with a dashed line. Use it for va
 | `storyId` | string | yes | Id of an open story, as returned by create_story, build_story, open_story or list_stories. |
 | `text` | string | yes | The note. |
 | `attachTo` | string | no | Element the note belongs to; omit for a free-standing note. |
-| `x` | number | no | Left edge in Egon canvas pixels. Omit to place the element automatically. |
-| `y` | number | no | Top edge in Egon canvas pixels. Omit to place the element automatically. |
+| `x` | number | no | Left edge in Egon canvas pixels, at most a billion either way. Give x and y together, or omit both to place the element automatically. |
+| `y` | number | no | Top edge in Egon canvas pixels, at most a billion either way. Give x and y together, or omit both to place the element automatically. |
 
 ## update_element
 

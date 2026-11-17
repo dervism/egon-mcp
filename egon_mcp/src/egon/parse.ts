@@ -4,6 +4,9 @@ export class StoryParseError extends Error {
   override name = 'StoryParseError';
 }
 
+/** Egon's ids look like shape_1234; anything far longer is not from Egon. */
+const MAX_ID_LENGTH = 256;
+
 /** Properties that bpmn-io adds at runtime and Egon strips on import. */
 const BPMN_BOOKKEEPING = ['$type', 'di', '$descriptor'];
 
@@ -181,6 +184,9 @@ function cleanElement(raw: Record<string, unknown>): StoryElement {
   const id = element['id'];
   if (typeof id !== 'string' || !id.trim()) {
     throw new StoryParseError(`An element of type ${type} has no id.`);
+  }
+  if (id.length > MAX_ID_LENGTH) {
+    throw new StoryParseError(`An element of type ${type} has too long an id (${id.length} characters, at most ${MAX_ID_LENGTH}).`);
   }
   element['name'] = element['name'] === undefined || element['name'] === null ? '' : String(element['name']);
   if (element['text'] !== undefined && typeof element['text'] !== 'string') {

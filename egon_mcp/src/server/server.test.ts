@@ -280,13 +280,15 @@ describe('egon-mcp server', () => {
     const saved = await ok('save_story', { storyId: 'exact', path: 'exact.egn' });
     expect(saved['groupChangesOnOpen']).toEqual([expect.stringContaining('"Tag"')]);
     expect((await ok('save_story', { storyId: 'exact', path: 'exact.md' }))['groupChangesOnOpen']).toBeUndefined();
+    expect((await ok('save_story', { storyId: 'exact', path: 'exact.egn.svg' }))['groupChangesOnOpen']).toEqual([expect.stringContaining('"Tag"')]);
+    expect((await ok('save_story', { storyId: 'exact', path: 'exact.svg' }))['groupChangesOnOpen']).toBeUndefined();
   });
 
   it('tells agents how shapes get into a group', async () => {
     const { tools } = await client.listTools();
     const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';
     expect(describe('add_group')).toMatch(/fits around them and holds only them/);
-    expect(describe('add_group')).toMatch(/open_story would put them into the group/);
+    expect(describe('add_group')).toMatch(/open_story would put those in no group into this one/);
     expect(describe('save_story')).toMatch(/groupChangesOnOpen/);
     expect(describe('add_group')).toMatch(/takes in every shape whose top-left corner lies inside/);
     expect(describe('update_element')).toMatch(/joins the group whose box it is moved into/);

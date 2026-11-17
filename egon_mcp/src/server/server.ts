@@ -55,8 +55,8 @@ const storyId = z.string().describe('Id of an open story, as returned by create_
 const elementRef = z.string().describe('Id of an element, or the exact name of an actor, work object, group or annotation text.');
 const color = z.string().describe('Color as hex, for example #1E88E5.');
 const iconName = z.string().describe('Name of a built-in Egon icon (see search_icons) or a custom icon added with add_custom_icon.');
-const x = z.number().describe('Left edge in Egon canvas pixels. Omit to place the element automatically.');
-const y = z.number().describe('Top edge in Egon canvas pixels. Omit to place the element automatically.');
+const x = z.number().describe('Left edge in Egon canvas pixels, at most a billion either way. Give x and y together, or omit both to place the element automatically.');
+const y = z.number().describe('Top edge in Egon canvas pixels, at most a billion either way. Give x and y together, or omit both to place the element automatically.');
 
 const recipientSchema = z.object({
   actor: z.string().describe('Name of the actor who receives the work object.'),
@@ -267,7 +267,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     },
     run(({ storyId: id, path, overwrite, layout }) => {
       const saved = workspace.save(id, { ...(path ? { path } : {}), ...(overwrite ? { overwrite } : {}), ...(layout ? { layout } : {}) });
-      const changes = saved.format === 'egn' || saved.format === 'egn.svg' ? groupChangesOnOpen(workspace.get(id).story) : [];
+      const changes = saved.format === 'egn' || saved.format === 'egn.svg' ? groupChangesOnOpen(workspace.get(id).story, saved.layout) : [];
       return json({ ...saved, ...(changes.length > 0 ? { groupChangesOnOpen: changes } : {}), workspaceRoot: workspace.root });
     }),
   );
@@ -423,7 +423,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Add group',
       description:
-        'Draws a box around elements that belong together, such as a department or subdomain. With members and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put them into the group when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.',
+        'Draws a box around elements that belong together, such as a department or subdomain. With members and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put those in no group into this one when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.',
       inputSchema: {
         storyId,
         name: z.string().describe('Label in the top-left corner of the box.'),
@@ -726,9 +726,16 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
  * file only records who is in a group, so a shape that lies in a group's box
  * without a group of its own joins it. Egon itself only reads `parent`.
  */
-function groupChangesOnOpen(story: Story): string[] {
+function groupChangesOnOpen(story: Story, layout: EgonFormat | undefined): string[] {
   const before = story.elements();
-  const after = new Map(Story.fromDocument(parseStoryFile(toEgnJson(story.toDocument()), 'story.egn')).elements().map((element) => [element.id, element['parent']]));
+  let reopened: Story;
+  try {
+    reopened = Story.fromDocument(parseStoryFile(toEgnJson(story.toDocument(), layout ? { format: layout } : {}), 'story.egn'));
+  } catch {
+    // The file is written already; a check that cannot run must not turn the save into an error.
+    return [];
+  }
+  const after = new Map(reopened.elements().map((element) => [element.id, element['parent']]));
   const byId = new Map(before.map((element) => [element.id, element]));
   const nameOf = (id: unknown) => {
     const element = typeof id === 'string' ? byId.get(id) : undefined;
@@ -739,7 +746,7 @@ function groupChangesOnOpen(story: Story): string[] {
     .map((element) => {
       const now = after.get(element.id);
       return now === undefined
-        ? `"${nameOf(element.id)}" leaves "${nameOf(element['parent'])}" when open_story opens the file.`
+        ? `"${nameOf(element.id)}" is in no group after open_story opens the file.`
         : `"${nameOf(element.id)}" goes into "${nameOf(now)}" when open_story opens the file, because its top-left corner lies in that box.`;
     });
 }

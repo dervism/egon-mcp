@@ -16,9 +16,10 @@ export interface SerializeOptions {
 }
 
 /**
- * Serializes a story as an `.egn` file, matching Egon's own export: business
- * objects sorted by id (by number, so shape_10000 follows shape_9999) and the current version of the chosen layout (Egon
- * treats a missing or pre-0.5 version as a legacy file). Groups keep their
+ * Serializes a story as an `.egn` file like Egon's own export: business
+ * objects sorted by id and the current version of the chosen layout (Egon
+ * treats a missing or pre-0.5 version as a legacy file). Egon sorts ids as
+ * text; this sorts them by number, so shape_10000 follows shape_9999. Groups keep their
  * places but come outer first, because Egon's import puts a group into its
  * `parent` only when it has already read that group.
  */

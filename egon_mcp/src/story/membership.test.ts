@@ -163,11 +163,25 @@ describe('group membership while editing', () => {
 
   it('places a shape without a position quickly below a very tall group', () => {
     const story = Story.create({ title: 'T' });
-    story.addGroup({ name: 'Everything', x: 0, y: 0, width: 2000, height: 1e9 });
+    story.addGroup({ name: 'Everything', x: 0, y: 0, width: 2000, height: 1e8 });
     const started = Date.now();
     const actor = story.addActor({ name: 'A' });
     expect(Date.now() - started).toBeLessThan(500);
-    expect(actor.y).toBeGreaterThan(1e9);
+    expect(actor.y).toBeGreaterThan(1e8);
+  });
+
+  it('never places anything beyond a billion pixels, so every saved file opens again', () => {
+    const story = Story.create({ title: 'T' });
+    story.addGroup({ name: 'Everything', x: 0, y: 0, width: 2000, height: 1e9 });
+    expect(() => story.addActor({ name: 'A' })).toThrow(/give x and y/i);
+    const far = story.addActor({ name: 'Far', x: -1e9, y: 0 });
+    expect(() => story.addGroup({ name: 'Fitted', members: [far.id] })).toThrow(/billion/);
+    expect(() => story.addAnnotation({ text: 'note', attachTo: story.addActor({ name: 'Edge', x: 1e9 - 10, y: 5000 }).id })).toThrow(/billion/);
+    const member = story.addActor({ name: 'Member', x: 9e8, y: 5000 });
+    const box = story.addGroup({ name: 'G', x: 0, y: 4000, width: 300, height: 300, members: [member.id] });
+    expect(() => story.updateElement(box.id, { x: 5e8 })).toThrow(/billion/);
+    expect(story.get(member.id)?.['x']).toBe(9e8);
+    expect(story.get(box.id)?.['x']).toBe(0);
   });
 
   it('puts a shape added inside a group box into that group, as dropping it there in Egon does', () => {

@@ -230,6 +230,7 @@ export class Story {
     const fitted = members.length > 0 && !given;
     if (fitted) {
       bounds = enclose(members.map((member) => boundsOf(member)), GROUP_PADDING);
+      checkCoordinates(bounds);
     } else {
       // A box without members or position goes below the story, so it takes in nothing.
       const bottom = Math.max(
@@ -284,6 +285,7 @@ export class Story {
     } else if (anchor) {
       const bounds = boundsOf(anchor);
       position = { x: bounds.x + bounds.width + 40, y: Math.max(0, bounds.y - 50) };
+      checkCoordinates(position);
     } else {
       position = this.nextFreeCell();
     }
@@ -359,21 +361,21 @@ export class Story {
     const geometry = (['x', 'y', 'width', 'height'] as const).filter((key) => update[key] !== undefined);
     if (!isEdge(element) && geometry.length > 0) {
       const shape = element as ShapeElement;
-      const before = { x: shape.x, y: shape.y };
+      // Moving a group in Egon moves everything in it; check where that lands before changing anything.
+      const dx = update.x === undefined ? 0 : Math.round(update.x) - shape.x;
+      const dy = update.y === undefined ? 0 : Math.round(update.y) - shape.y;
+      const byId = new Map(this.doc.elements.map((candidate) => [candidate.id, candidate]));
+      const inside = isGroup(shape) && (dx !== 0 || dy !== 0)
+        ? (this.doc.elements.filter((candidate) => !isEdge(candidate) && groupAncestors(candidate, byId).includes(shape.id)) as ShapeElement[])
+        : [];
+      for (const moved of inside) {
+        checkCoordinates({ x: moved.x + dx, y: moved.y + dy });
+      }
       this.setGeometry(shape, update);
-      if (isGroup(shape)) {
-        // Moving a group in Egon moves everything in it.
-        const dx = shape.x - before.x;
-        const dy = shape.y - before.y;
-        if (dx !== 0 || dy !== 0) {
-          const byId = new Map(this.doc.elements.map((candidate) => [candidate.id, candidate]));
-          for (const inside of this.doc.elements.filter((candidate) => !isEdge(candidate) && groupAncestors(candidate, byId).includes(shape.id))) {
-            const moved = inside as ShapeElement;
-            moved.x += dx;
-            moved.y += dy;
-            this.rerouteEdgesOf(moved.id);
-          }
-        }
+      for (const moved of inside) {
+        moved.x += dx;
+        moved.y += dy;
+        this.rerouteEdgesOf(moved.id);
       }
       // As in Egon, a shape moved into a group's box joins that group, and one moved out leaves it.
       joinGroupAt(shape, this.doc.elements);
@@ -573,7 +575,7 @@ export class Story {
   }
 
   /**
-   * The shape with this id, or the shapes with this name in document order.
+   * The shape with this id, or the shapes with this name in id order.
    * Actors and work objects win over groups and annotations of the same name.
    * Several matches are only accepted when they are all work objects, which
    * repeat per sentence (ADR 13).
@@ -701,6 +703,9 @@ export class Story {
       .map((element) => boundsOf(element as ShapeElement));
     const groups = this.doc.elements.filter(isGroup);
     for (let row = 0; ; ) {
+      if (GRID.originY + row * GRID.cellHeight > MAX_COORDINATE) {
+        throw new StoryError('There is no free spot within a billion pixels. Give x and y.');
+      }
       // The first row where a column blocked only by group boxes can be free again.
       let nextRow = Number.POSITIVE_INFINITY;
       for (let column = 0; column < GRID.columns; column += 1) {

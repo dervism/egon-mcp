@@ -139,9 +139,20 @@ export const MAX_COORDINATE = 1e9;
  * comes after shape_9999, also for numbers too large for a plain number.
  */
 export function compareIds(a: string, b: string): number {
+  // A plain scan from the end; a regex here can take cubic time on long runs of zeros.
   const split = (id: string) => {
-    const match = /^(.*?)0*(\d+)$/.exec(id);
-    return match ? { prefix: match[1] as string, digits: match[2] as string } : { prefix: id, digits: '' };
+    let start = id.length;
+    while (start > 0 && id.charCodeAt(start - 1) >= 48 && id.charCodeAt(start - 1) <= 57) {
+      start -= 1;
+    }
+    if (start === id.length) {
+      return { prefix: id, digits: '' };
+    }
+    let first = start;
+    while (first < id.length - 1 && id.charCodeAt(first) === 48) {
+      first += 1;
+    }
+    return { prefix: id.slice(0, start), digits: id.slice(first) };
   };
   const left = split(a);
   const right = split(b);
