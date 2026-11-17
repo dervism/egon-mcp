@@ -43,12 +43,15 @@ export class IconCatalog {
     try {
       content = readFileSync(file, 'utf8');
     } catch (error) {
-      const { code, message } = error as NodeJS.ErrnoException;
+      const { code, syscall } = error as NodeJS.ErrnoException;
       if (code === 'ENOENT') {
         throw new Error(`Built-in icon data ${path} is missing; ${fix}`);
       }
-      // A folder in the way or missing rights: say why, since the fix may need a hand first.
-      throw new Error(`Built-in icon data ${path} cannot be read (${message}). Make it readable or remove it, then ${fix}`);
+      // Missing rights or something in the way, on the file or a folder above it.
+      throw new Error(
+        `Built-in icon data ${path} cannot be read (${code ?? 'error'}, ${syscall ?? 'read'}). ` +
+          `Fix the access rights or remove whatever is in the way on this path, then ${fix}`,
+      );
     }
     if (!isIconList(content)) {
       throw new Error(`Built-in icon data ${path} is not usable; ${fix}`);

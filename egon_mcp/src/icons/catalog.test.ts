@@ -68,12 +68,27 @@ describe('IconCatalog.fromFile', () => {
     }
   });
 
-  it('says why a path it cannot read failed, and how to clear it', () => {
+  const unreadable = (code: string) =>
+    new RegExp(
+      `cannot be read \\(${code}, \\w+\\)\\. Fix the access rights or remove whatever is in the way on this path, then run "npm run generate:icons", then "npm run build"`,
+    );
+
+  it('says why a path it cannot read failed, names it once, and how to clear it', () => {
     const file = join(dir, 'builtin-icons.json');
     mkdirSync(file);
-    expect(() => IconCatalog.fromFile(pathToFileURL(file))).toThrow(
-      new RegExp(`cannot be read \\(EISDIR[^)]*\\)\\. Make it readable or remove it, then run "npm run generate:icons", then "npm run build"`),
-    );
+    let message = '';
+    try {
+      IconCatalog.fromFile(pathToFileURL(file));
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(unreadable('EISDIR'));
+    expect(message.split(file)).toHaveLength(2);
+  });
+
+  it('covers a file in the way of a folder on the path', () => {
+    writeFileSync(join(dir, 'generated'), 'not a folder');
+    expect(() => IconCatalog.fromFile(pathToFileURL(join(dir, 'generated', 'builtin-icons.json')))).toThrow(unreadable('ENOTDIR'));
   });
 
   it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)('does not call an unreadable folder a missing file', () => {
@@ -82,7 +97,7 @@ describe('IconCatalog.fromFile', () => {
     writeFileSync(join(locked, 'builtin-icons.json'), '[]');
     chmodSync(locked, 0o000);
     try {
-      expect(() => IconCatalog.fromFile(pathToFileURL(join(locked, 'builtin-icons.json')))).toThrow(/cannot be read \(EACCES/);
+      expect(() => IconCatalog.fromFile(pathToFileURL(join(locked, 'builtin-icons.json')))).toThrow(unreadable('EACCES'));
     } finally {
       chmodSync(locked, 0o755);
     }

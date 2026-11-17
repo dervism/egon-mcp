@@ -52,6 +52,12 @@ builtInIcons.putEntry(new Entry(typeof process, 'Probe', []));`;
     expect(person?.keywords).toContain('person');
     expect(new Set(icons.map((icon) => icon.name)).size).toBe(icons.length);
   });
+
+  it('reads only keyword lists without holes', () => {
+    expect(() => extractBuiltInIcons("const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', ['a', , 'b']));\n")).toThrow(
+      /the keywords of A are not a list of strings/,
+    );
+  });
 });
 
 describe('writeIconFile', () => {
@@ -59,7 +65,7 @@ describe('writeIconFile', () => {
     const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
     try {
       const file = join(dir, 'builtin-icons.json');
-      writeIconFile(file, extractBuiltInIcons(sample), isIconList);
+      writeIconFile(file, extractBuiltInIcons(sample));
       expect(JSON.parse(readFileSync(file, 'utf8')).map((icon: { name: string }) => icon.name)).toEqual(['Person', 'Car']);
       expect(readdirSync(dir)).toEqual(['builtin-icons.json']);
     } finally {
@@ -72,7 +78,7 @@ describe('writeIconFile', () => {
     try {
       const file = join(dir, 'builtin-icons.json');
       writeFileSync(file, 'previous');
-      expect(() => writeIconFile(file, [], isIconList)).toThrow(/No built-in icons found/);
+      expect(() => writeIconFile(file, [])).toThrow(/No built-in icons found/);
       expect(readFileSync(file, 'utf8')).toBe('previous');
       expect(readdirSync(dir)).toEqual(['builtin-icons.json']);
     } finally {
@@ -90,7 +96,7 @@ describe('writeIconFile, interrupted', () => {
       // A hard link shares the file's content: a write into the file would show
       // through it, while a new file renamed into place leaves it untouched.
       linkSync(file, join(dir, 'witness'));
-      writeIconFile(file, extractBuiltInIcons(sample), isIconList);
+      writeIconFile(file, extractBuiltInIcons(sample));
       expect(readFileSync(join(dir, 'witness'), 'utf8')).toBe('previous');
       expect(readFileSync(file, 'utf8')).toContain('"Person"');
     } finally {
@@ -104,7 +110,7 @@ describe('writeIconFile, interrupted', () => {
       const file = join(dir, 'builtin-icons.json');
       // A folder in the way makes the final rename fail, and the error names the temporary file.
       mkdirSync(join(file, 'blocker'), { recursive: true });
-      expect(() => writeIconFile(file, extractBuiltInIcons(sample), isIconList)).toThrow(/[\\/]\.builtin-icons\.json\.\d+\.tmp/);
+      expect(() => writeIconFile(file, extractBuiltInIcons(sample))).toThrow(/[\\/]\.builtin-icons\.json\.\d+\.tmp/);
       expect(readdirSync(dir)).toEqual(['builtin-icons.json']);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -116,7 +122,7 @@ describe('generateIconFile', () => {
   it('extracts and writes the icons, and returns how many', () => {
     const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
     try {
-      expect(generateIconFile(sample, join(dir, 'builtin-icons.json'), isIconList)).toBe(2);
+      expect(generateIconFile(sample, join(dir, 'builtin-icons.json'))).toBe(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -126,12 +132,12 @@ describe('generateIconFile', () => {
     const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
     try {
       const file = join(dir, 'builtin-icons.json');
-      expect(() => generateIconFile('const = ;', file, isIconList)).toThrow(
+      expect(() => generateIconFile('const = ;', file)).toThrow(
         /Cannot read Egon's built-in icons \(.+\); its format may have changed\./,
       );
       // Sources may throw values that are not Error objects, or cannot even be turned into text.
-      expect(() => generateIconFile("throw 'boom'", file, isIconList)).toThrow(/Cannot read Egon's built-in icons \(boom\)/);
-      expect(() => generateIconFile('throw Object.create(null)', file, isIconList)).toThrow(
+      expect(() => generateIconFile("throw 'boom'", file)).toThrow(/Cannot read Egon's built-in icons \(boom\)/);
+      expect(() => generateIconFile('throw Object.create(null)', file)).toThrow(
         /Cannot read Egon's built-in icons \(\[object Object\]\)/,
       );
       expect(existsSync(file)).toBe(false);
@@ -155,7 +161,7 @@ describe('generateIconFile', () => {
         "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', ['a', , 'b']));\n",
       ];
       for (const source of changed) {
-        expect(() => generateIconFile(source, file, isIconList), source).toThrow(/its format may have changed/);
+        expect(() => generateIconFile(source, file), source).toThrow(/its format may have changed/);
       }
       expect(existsSync(file)).toBe(false);
     } finally {
@@ -163,22 +169,16 @@ describe('generateIconFile', () => {
     }
   });
 
-  it('reads only keyword lists without holes', () => {
-    expect(() => extractBuiltInIcons("const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', ['a', , 'b']));\n")).toThrow(
-      /the keywords of A are not a list of strings/,
-    );
-  });
-
-  it('refuses icons that the build would reject, naming the change in Egon as the cause', () => {
+  it('writes only what the build accepts, so the build check never fails on a fresh file', () => {
     const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
     try {
       const file = join(dir, 'builtin-icons.json');
-      expect(() => writeIconFile(file, extractBuiltInIcons(sample), () => false)).toThrow(
-        /do not have the shape the server reads; its format may have changed/,
-      );
+      generateIconFile(sample, file);
+      expect(isIconList(readFileSync(file, 'utf8'))).toBe(true);
       // An empty name is caught while reading Egon's source already.
+      rmSync(file);
       const unnamed = "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', '', ['x']));\n";
-      expect(() => generateIconFile(unnamed, file, isIconList)).toThrow(/its format may have changed/);
+      expect(() => generateIconFile(unnamed, file)).toThrow(/its format may have changed/);
       expect(existsSync(file)).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });

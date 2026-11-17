@@ -50,9 +50,12 @@ export function extractBuiltInIcons(typeScriptSource: string): BuiltInIcon[] {
       if (typeof svg !== 'string') {
         throw new TypeError(`the SVG of ${name} is not a string`);
       }
+      if (!Array.isArray(keywords)) {
+        throw new TypeError(`the keywords of ${name} are not a list of strings`);
+      }
       // Check a copy: every() skips holes in a list, the copy turns them into undefined.
-      const list: unknown[] = Array.isArray(keywords) ? [...keywords] : [];
-      if (!Array.isArray(keywords) || !list.every((keyword) => typeof keyword === 'string')) {
+      const list: unknown[] = [...keywords];
+      if (!list.every((keyword) => typeof keyword === 'string')) {
         throw new TypeError(`the keywords of ${name} are not a list of strings`);
       }
       if (collected.some((icon) => icon.name === name)) {
@@ -77,17 +80,15 @@ export function extractBuiltInIcons(typeScriptSource: string): BuiltInIcon[] {
  * Egon's source has changed shape, and writes through a temporary file renamed
  * into place, so an interrupted run never leaves a cut-off file behind. The
  * temporary name starts with a dot, so the build skips one that a killed run left.
- * `usable` is the build's own check for the file (isIconList in
- * src/build-info.ts), so the generator never writes a file the build rejects.
+ * Together with the plain-string rules in extractBuiltInIcons, this writes
+ * exactly what the build's check (isIconList in src/build-info.ts) accepts; a
+ * test holds the two together.
  */
-export function writeIconFile(file: string, icons: BuiltInIcon[], usable: (content: string) => boolean): void {
+export function writeIconFile(file: string, icons: BuiltInIcon[]): void {
   if (icons.length === 0) {
     throw new Error("No built-in icons found in Egon's source; its format may have changed.");
   }
   const content = `${JSON.stringify(icons, null, 1)}\n`;
-  if (!usable(content)) {
-    throw new Error("Egon's built-in icons do not have the shape the server reads; its format may have changed.");
-  }
   mkdirSync(dirname(file), { recursive: true });
   const temporary = join(dirname(file), `.${basename(file)}.${process.pid}.tmp`);
   try {
@@ -99,14 +100,14 @@ export function writeIconFile(file: string, icons: BuiltInIcon[], usable: (conte
 }
 
 /** Extracts the icons from Egon's source and writes them (see writeIconFile); returns how many. */
-export function generateIconFile(egonSource: string, file: string, usable: (content: string) => boolean): number {
+export function generateIconFile(egonSource: string, file: string): number {
   let icons: BuiltInIcon[];
   try {
     icons = extractBuiltInIcons(egonSource);
   } catch (error) {
     throw new Error(`Cannot read Egon's built-in icons (${describeThrown(error)}); its format may have changed.`);
   }
-  writeIconFile(file, icons, usable);
+  writeIconFile(file, icons);
   return icons.length;
 }
 

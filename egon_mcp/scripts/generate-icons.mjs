@@ -4,7 +4,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isIconList } from '../src/build-info.ts';
 import { generateIconFile } from '../src/icons/extract.ts';
 
 const args = process.argv.slice(2);
@@ -24,7 +23,7 @@ if (!existsSync(source)) {
 
 let count;
 try {
-  count = generateIconFile(readFileSync(source, 'utf8'), outFile, isIconList);
+  count = generateIconFile(readFileSync(source, 'utf8'), outFile);
 } catch (error) {
   console.error(error.message);
   process.exit(1);
