@@ -1,4 +1,4 @@
-# egon-mcp
+# Egon-MCP
 
 An MCP server that lets AI agents create, edit, check and render domain stories for [Egon.io](https://egon.io), the Domain Storytelling modeler, plus a skill that teaches agents how to use it.
 
@@ -115,8 +115,21 @@ git push origin main
 
 ## License
 
-egon-mcp is free software under the GNU General Public License, version 3 or (at your option) any later version (`GPL-3.0-or-later`). These are the same terms as Egon ([ADR 14](docs/adr/0014-license-gpl-3-or-later.md)). The full text is in [LICENSE](LICENSE).
+Egon-MCP is free software under the GNU General Public License, version 3 or (at your option) any later version (`GPL-3.0-or-later`). These are the same terms as Egon ([ADR 14](docs/adr/0014-license-gpl-3-or-later.md)). The full text is in [LICENSE](LICENSE).
 
-Copyright (C) 2026 the egon-mcp authors.
+Copyright (C) 2026 Dervis Mansuroglu.
 
-The built-in icons that the build reads from `modules/egon.io` come from Egon, Copyright (C) 2018-present WPS - Workplace Solutions GmbH, under the GPL version 3 or (at your option) any later version. Most of them are based on Google's [Material Icons](https://github.com/google/material-design-icons), which are licensed under the Apache License 2.0.
+Egon-MCP uses the Egon.io application and file format:
+
+### Egon.io, GPLv3.0
+Copyright © 2018-present WPS - Workplace Solutions GmbH
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not, see https://www.gnu.org/licenses/.
+
+### Note about use of icons
+
+The built-in icons that the build reads from `modules/egon.io` come from Egon under the GPL version 3 or (at your option) any later version. Most of them are based on Google's [Material Icons](https://github.com/google/material-design-icons), which are licensed under the Apache License 2.0.
