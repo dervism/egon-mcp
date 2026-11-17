@@ -1,8 +1,9 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { egonSourceRoot } from '../../test/egon-fixtures.js';
-import { extractBuiltInIcons } from './extract.js';
+import { extractBuiltInIcons, writeIconFile } from './extract.js';
 
 const sample = `import { Dictionary, Entry } from 'src/app/domain/entities/dictionary';
 const people = ['person', 'group'];
@@ -49,5 +50,32 @@ builtInIcons.putEntry(new Entry(typeof process, 'Probe', []));`;
     expect(person?.svg).toMatch(/^<svg/);
     expect(person?.keywords).toContain('person');
     expect(new Set(icons.map((icon) => icon.name)).size).toBe(icons.length);
+  });
+});
+
+describe('writeIconFile', () => {
+  it('writes the icons through a temporary file and leaves nothing else behind', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
+    try {
+      const file = join(dir, 'builtin-icons.json');
+      writeIconFile(file, extractBuiltInIcons(sample));
+      expect(JSON.parse(readFileSync(file, 'utf8')).map((icon: { name: string }) => icon.name)).toEqual(['Person', 'Car']);
+      expect(readdirSync(dir)).toEqual(['builtin-icons.json']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses an empty icon list and keeps the previous file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
+    try {
+      const file = join(dir, 'builtin-icons.json');
+      writeFileSync(file, 'previous');
+      expect(() => writeIconFile(file, [])).toThrow(/No built-in icons found/);
+      expect(readFileSync(file, 'utf8')).toBe('previous');
+      expect(readdirSync(dir)).toEqual(['builtin-icons.json']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

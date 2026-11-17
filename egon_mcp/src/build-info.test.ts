@@ -13,6 +13,8 @@ import {
   startBuildRecord,
 } from './build-info.js';
 
+const ICONS = '[{ "name": "Person", "svg": "<svg/>", "keywords": [] }]';
+
 // Creating links on Windows needs extra rights, so the link checks run elsewhere only.
 const links = process.platform !== 'win32';
 
@@ -37,7 +39,7 @@ beforeEach(() => {
   writeFileSync(join(src, 'sub', 'b.ts'), 'export const b = 2;');
   writeFileSync(join(src, 'a.test.ts'), 'test');
   writeFileSync(join(src, 'notes.md'), 'notes');
-  writeFileSync(join(generated, 'builtin-icons.json'), '[]');
+  writeFileSync(join(generated, 'builtin-icons.json'), ICONS);
 });
 
 afterEach(() => {
@@ -167,12 +169,21 @@ describe('copyAssets', () => {
   });
 
   it('fails when a file the server needs is missing, even if its folder is there', () => {
-    const hint = /src\/icons\/generated\/builtin-icons\.json is missing; run "npm run generate:icons"/;
+    const hint = /src\/icons\/generated\/builtin-icons\.json is missing; run "npm run generate:icons", then "npm run build"/;
     rmSync(join(generated, 'builtin-icons.json'));
     writeFileSync(join(generated, '.DS_Store'), 'finder');
     expect(() => copyAssets(packageDir)).toThrow(hint);
     rmSync(generated, { recursive: true });
     expect(() => copyAssets(packageDir)).toThrow(hint);
+  });
+
+  it('fails when a required file holds no usable data, such as an empty or cut-off icon list', () => {
+    for (const content of ['', '[{ "name": "Person"', '[]', '{}', '[{ "name": "Person" }]']) {
+      writeFileSync(join(generated, 'builtin-icons.json'), content);
+      expect(() => copyAssets(packageDir), JSON.stringify(content)).toThrow(
+        /src\/icons\/generated\/builtin-icons\.json is not usable; run "npm run generate:icons", then "npm run build"/,
+      );
+    }
   });
 
   it.runIf(links)('copies links as the files they point to and skips dangling ones', () => {
@@ -216,7 +227,7 @@ describe('build record', () => {
     rmSync(join(generated, 'builtin-icons.json'));
     expect(() => completeBuild(packageDir)).toThrow(/builtin-icons\.json is missing/);
     expect(existsSync(record())).toBe(false);
-    writeFileSync(join(generated, 'builtin-icons.json'), '[]');
+    writeFileSync(join(generated, 'builtin-icons.json'), ICONS);
     completeBuild(packageDir);
     expect(existsSync(record())).toBe(true);
     expect(existsSync(join(dist(), 'icons', 'generated', 'builtin-icons.json'))).toBe(true);

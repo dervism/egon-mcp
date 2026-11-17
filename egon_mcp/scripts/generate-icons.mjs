@@ -1,8 +1,8 @@
 // Extracts Egon's built-in icons from the egon.io submodule into a gitignored
 // JSON file (see docs/adr/0005-generate-icons-from-submodule.md).
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { extractBuiltInIcons } from '../src/icons/extract.ts';
+import { extractBuiltInIcons, writeIconFile } from '../src/icons/extract.ts';
 
 const source = fileURLToPath(
   new URL(
@@ -21,6 +21,10 @@ if (!existsSync(source)) {
 }
 
 const icons = extractBuiltInIcons(readFileSync(source, 'utf8'));
-mkdirSync(outDir, { recursive: true });
-writeFileSync(outFile, `${JSON.stringify(icons, null, 1)}\n`);
+try {
+  writeIconFile(outFile, icons);
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 console.log(`Wrote ${icons.length} built-in icons to src/icons/generated/builtin-icons.json`);

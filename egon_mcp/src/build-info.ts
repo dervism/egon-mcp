@@ -10,16 +10,31 @@ export const BUILD_INFO_FILE = 'build-info.json';
 export const PENDING_BUILD_INFO_FILE = 'build-info.pending.json';
 /**
  * Folders below src/ that the build copies into dist/ as they are, the files
- * the server cannot run without, and how to make them when they are missing.
+ * the server cannot run without with a check that one is usable, and how to
+ * make them again.
  */
-export const ASSETS = [
+export const ASSETS: { dir: string; required: { file: string; usable: (content: string) => boolean }[]; hint: string }[] = [
   {
     dir: 'icons/generated',
-    required: ['builtin-icons.json'],
-    // npm runs this as the prebuild step, but skips it when scripts are ignored.
-    hint: 'run "npm run generate:icons"',
+    required: [{ file: 'builtin-icons.json', usable: isIconList }],
+    // npm runs generate:icons as the prebuild step, but skips it when scripts are ignored.
+    hint: 'run "npm run generate:icons", then "npm run build"',
   },
 ];
+
+/** A non-empty JSON list of icons with a name and an SVG, as the icon generator writes it. */
+function isIconList(content: string): boolean {
+  try {
+    const icons: unknown = JSON.parse(content);
+    return (
+      Array.isArray(icons) &&
+      icons.length > 0 &&
+      icons.every((icon) => typeof icon?.name === 'string' && typeof icon?.svg === 'string')
+    );
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Files that change what tsc emits: the package and compiler settings, and the
@@ -95,7 +110,7 @@ export function startBuildRecord(packageDir: string): void {
  * Copies the asset folders from src/ into cleared folders in dist/, file by
  * file from the same walk sourceHash uses, so dist/ holds exactly what was
  * hashed: links copied as the files they point to, nothing hidden or stale.
- * Fails when a required file is missing, since the server cannot run without it.
+ * Fails when a required file is missing or not usable, since the server cannot run without it.
  */
 export function copyAssets(packageDir: string): void {
   for (const { dir, required, hint } of ASSETS) {
@@ -103,9 +118,12 @@ export function copyAssets(packageDir: string): void {
     const to = join(packageDir, 'dist', dir);
     rmSync(to, { recursive: true, force: true });
     const files = existsSync(from) ? walk(from) : [];
-    for (const file of required) {
+    for (const { file, usable } of required) {
       if (!files.includes(file)) {
         throw new Error(`src/${dir}/${file} is missing; ${hint}.`);
+      }
+      if (!usable(readFileSync(join(from, file), 'utf8'))) {
+        throw new Error(`src/${dir}/${file} is not usable; ${hint}.`);
       }
     }
     for (const file of files) {
