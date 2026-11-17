@@ -1,8 +1,9 @@
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { egonSourceRoot } from '../../test/egon-fixtures.js';
+import { isIconList } from '../build-info.js';
 import { extractBuiltInIcons, generateIconFile, writeIconFile } from './extract.js';
 
 const sample = `import { Dictionary, Entry } from 'src/app/domain/entities/dictionary';
@@ -81,24 +82,21 @@ describe('writeIconFile', () => {
 });
 
 describe('writeIconFile, interrupted', () => {
-  it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)(
-    'never writes into the existing file, so a failed run leaves it whole',
-    () => {
-      const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
+  it('replaces the file instead of writing into it, so a failed run leaves it whole', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
+    try {
       const file = join(dir, 'builtin-icons.json');
       writeFileSync(file, 'previous');
-      // The file stays writable but no new file can be made next to it: a write
-      // straight into the file would succeed, a temporary file cannot.
-      chmodSync(dir, 0o555);
-      try {
-        expect(() => writeIconFile(file, extractBuiltInIcons(sample))).toThrow();
-        expect(readFileSync(file, 'utf8')).toBe('previous');
-      } finally {
-        chmodSync(dir, 0o755);
-        rmSync(dir, { recursive: true, force: true });
-      }
-    },
-  );
+      // A hard link shares the file's content: a write into the file would show
+      // through it, while a new file renamed into place leaves it untouched.
+      linkSync(file, join(dir, 'witness'));
+      writeIconFile(file, extractBuiltInIcons(sample));
+      expect(readFileSync(join(dir, 'witness'), 'utf8')).toBe('previous');
+      expect(readFileSync(file, 'utf8')).toContain('"Person"');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   it('names its temporary file with a leading dot, so the build skips a leftover one', () => {
     const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
@@ -124,9 +122,32 @@ describe('generateIconFile', () => {
     }
   });
 
-  it('explains a source it cannot read as a change in Egon', () => {
-    expect(() => generateIconFile('const = ;', join(tmpdir(), 'never-written.json'))).toThrow(
-      /Cannot read Egon's built-in icons \(.+\); its format may have changed\./,
-    );
+  it('explains a source it cannot read as a change in Egon, and writes nothing', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
+    try {
+      const file = join(dir, 'builtin-icons.json');
+      expect(() => generateIconFile('const = ;', file)).toThrow(
+        /Cannot read Egon's built-in icons \(.+\); its format may have changed\./,
+      );
+      // Sources may throw values that are not Error objects.
+      expect(() => generateIconFile("throw 'boom'", file)).toThrow(/Cannot read Egon's built-in icons \(boom\)/);
+      expect(existsSync(file)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses icons that the build would reject, naming the change in Egon as the cause', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
+    try {
+      const file = join(dir, 'builtin-icons.json');
+      const unnamed = "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', '', ['x']));\n";
+      expect(() => generateIconFile(unnamed, file, isIconList)).toThrow(
+        /do not have the shape the server reads; its format may have changed/,
+      );
+      expect(existsSync(file)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

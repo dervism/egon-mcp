@@ -26,7 +26,7 @@ export const ASSETS: { dir: string; required: { file: string; usable: (content: 
  * A non-empty JSON list of icons in the shape the server reads (BuiltInIcon in
  * src/icons/extract.ts): a name, an SVG and a list of keywords for the search.
  */
-function isIconList(content: string): boolean {
+export function isIconList(content: string): boolean {
   try {
     const icons: unknown = JSON.parse(content);
     return (
