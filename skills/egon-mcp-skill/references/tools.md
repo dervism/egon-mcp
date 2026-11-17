@@ -82,7 +82,7 @@ Lists Egon story files (.egn, .egn.svg, .dst, .dst.svg) in the workspace directo
 
 ## get_story
 
-Returns the story as actors, work objects, activities (with step numbers and names of both ends), groups, annotations, the numbered sentences and a count of validation issues.
+Returns the story as actors, work objects, activities (with step numbers and names and ids of both ends), groups, annotations (with attachedTo and attachedToId for the element a note is attached to), the numbered sentences and a count of validation issues.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

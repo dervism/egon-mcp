@@ -299,6 +299,12 @@ describe('egon-mcp server', () => {
     expect(saved['reopenError']).toMatch(/within a billion pixels/);
   });
 
+  it('says on save when the written file is larger than open_story reads', async () => {
+    await ok('create_story', { title: 'Huge', description: 'x'.repeat(21 * 1024 * 1024) });
+    const saved = await ok('save_story', { storyId: 'huge', path: 'huge.egn' });
+    expect(saved['reopenError']).toMatch(/larger than 20 MB/);
+  });
+
   it('tells agents how shapes get into a group', async () => {
     const { tools } = await client.listTools();
     const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';

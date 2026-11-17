@@ -55,9 +55,15 @@ function nameOf(element: StoryElement | undefined): string {
   return element ? element.name || (element['text'] as string | undefined) || element.id : '';
 }
 
-/** The element with the largest box, for failures outside the grid, such as a refitted group. */
+/**
+ * The element with the largest box, for failures outside the grid such as a
+ * refitted group. Groups with members are left out: auto_layout sizes them
+ * around their members, so the cause is a member.
+ */
 function largestName(story: Story): string {
-  const shapes = story.elements().filter((element) => typeof element['x'] === 'number') as ShapeElement[];
+  const elements = story.elements();
+  const parents = new Set(elements.map((element) => element['parent']));
+  const shapes = elements.filter((element) => typeof element['x'] === 'number' && !(isGroup(element) && parents.has(element.id))) as ShapeElement[];
   const size = (shape: ShapeElement) => Math.max(boundsOf(shape).width, boundsOf(shape).height);
   return nameOf(shapes.sort((a, b) => size(b) - size(a))[0]);
 }
@@ -224,14 +230,12 @@ function layOut(story: Story): void {
       if (!(error instanceof StoryError && /billion/.test(error.message))) {
         throw error;
       }
-      // Rows above push an element down, cells to its left push it right: name the biggest of those.
-      const down = /^y /.test(error.message);
-      const size = (other: string) => (down ? span(other).rows : span(other).cols);
+      // Only rows grow without bound (columns stop at five), so the rows above pushed it down: name the tallest.
       const culprit =
         [...placed]
-          .filter(([, other]) => (down ? other.row < cell.row : other.row === cell.row && other.col < cell.col))
+          .filter(([, other]) => other.row < cell.row)
           .map(([other]) => other)
-          .sort((a, b) => size(b) - size(a) || compareIds(a, b))[0] ?? id;
+          .sort((a, b) => span(b).rows - span(a).rows || compareIds(a, b))[0] ?? id;
       throw tooLarge(nameOf(byId.get(culprit)));
     }
   }

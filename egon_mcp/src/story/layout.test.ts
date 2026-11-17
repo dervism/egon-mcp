@@ -400,6 +400,16 @@ describe('autoLayout', () => {
     expect(JSON.stringify(story.toDocument())).toBe(before);
   });
 
+  it('names the note that makes a group too large, not the group', () => {
+    const story = Story.create({ title: 'T' });
+    const outer = story.addGroup({ name: 'Outer', x: 0, y: 0, width: 5000, height: 5000 });
+    const inner = story.addGroup({ name: 'Inner', x: 100, y: 100, width: 1000, height: 1000 });
+    const note = story.addAnnotation({ text: 'wide note', x: 200, y: 200 }).annotation;
+    expect([story.get(inner.id)?.['parent'], story.get(note.id)?.['parent']]).toEqual([outer.id, inner.id]);
+    story.updateElement(note.id, { width: 999999900 });
+    expect(() => autoLayout(story)).toThrow(/"wide note" is too large/);
+  });
+
   it('names the tall element above the one that does not fit, not just the largest', () => {
     const story = Story.create({ title: 'T' });
     story.addGroup({ name: 'Wide', x: 0, y: 0, width: 9e8, height: 300 });

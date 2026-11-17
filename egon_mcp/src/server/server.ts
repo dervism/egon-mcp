@@ -285,7 +285,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Get story contents',
       description:
-        'Returns the story as actors, work objects, activities (with step numbers and names of both ends), groups, annotations, the numbered sentences and a count of validation issues.',
+        'Returns the story as actors, work objects, activities (with step numbers and names and ids of both ends), groups, annotations (with attachedTo and attachedToId for the element a note is attached to), the numbered sentences and a count of validation issues.',
       inputSchema: { storyId, includePositions: z.boolean().optional().describe('Also return x/y of each shape.') },
       annotations: { readOnlyHint: true },
     },

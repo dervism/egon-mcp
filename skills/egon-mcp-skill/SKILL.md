@@ -176,7 +176,7 @@ Tool errors explain the problem and usually the fix:
 | `No open story` | Use `list_stories`; stories are lost when the server restarts unless saved. |
 | `within a billion pixels`, `no free spot` | Give smaller coordinates, or pass `x` and `y` instead of letting the server pick a spot. From `add_group` with members, a member lies near the limit or the members lie too far apart; move them closer first. From `auto_layout`, make the element it names smaller. From `open_story`, a coordinate in the file is missing, not a number or larger than any drawing needs; ask the user to fix it in Egon. |
 | `too long an id` | An id in the file is over 256 characters, which Egon never writes. Ask the user where the file came from. |
-| `reopenError` in a `save_story` result | The file was written but `open_story` would refuse it; the message says why. Fix the story and save again. |
+| `reopenError` in a `save_story` result | The file was written but `open_story` would refuse it; the message says why. Fix the story and save again. A file over 20 MB cannot be checked for changes, so save to a new path and tell the user the old file can go. |
 
 ## References
 

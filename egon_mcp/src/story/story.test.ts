@@ -72,8 +72,21 @@ describe('element ids, continued', () => {
 
   it('are not used up by a refused edit', () => {
     const story = Story.create({ title: 'T' });
-    expect(() => story.addActor({ name: 'A', x: 5e9, y: 0 })).toThrow(/billion/);
+    // The color is checked after the id is drawn.
+    expect(() => story.addActor({ name: 'A', color: 'not a color!' })).toThrow();
     expect(story.addActor({ name: 'B' }).id).toBe('shape_10000');
+  });
+
+  it('skip ids that dangling arrows still name', () => {
+    const story = fileWith([
+      { type: 'domainStory:actorPerson', id: 'shape_1', name: 'A', x: 0, y: 0 },
+      { type: 'domainStory:activity', id: 'connection_1', name: 'writes', source: 'shape_1', target: 'shape_10000', number: 1, waypoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }] },
+      { type: 'domainStory:actorPerson', id: 'shape_2', name: 'B', x: 500, y: 0, parent: 'shape_10001' },
+    ]);
+    const added = [story.addWorkObject({ name: 'Unrelated' }).id, story.addWorkObject({ name: 'Other' }).id];
+    expect(added).not.toContain('shape_10000');
+    // Opening the file dropped the parent that names no group, so its id is free again.
+    expect(story.get('shape_2')?.['parent']).toBeUndefined();
   });
 
   it('never hand out an id again after its element was removed', () => {

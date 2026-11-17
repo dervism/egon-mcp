@@ -138,11 +138,6 @@ export class Story {
     return structuredClone(this.doc);
   }
 
-  /** Puts the story back to a snapshot taken with toDocument, for example after a failed edit. */
-  restore(snapshot: StoryDocument): void {
-    this.doc = structuredClone(snapshot);
-  }
-
   get title(): string {
     return this.doc.title;
   }
@@ -370,7 +365,9 @@ export class Story {
 
   /**
    * Runs an edit and undoes all of it when it fails, ids handed out
-   * included, so a refused edit leaves the story as it was.
+   * included, so a refused edit leaves the story as it was. Inside another
+   * transaction only the outermost one keeps a copy, so a caller that catches
+   * a nested failure and carries on keeps whatever that edit had changed.
    */
   private atomic<T>(edit: () => T): T {
     // Inside another transaction, that one undoes everything.
@@ -804,15 +801,18 @@ export class Story {
    */
   private newId(kind: 'shape' | 'connection'): string {
     const pattern = new RegExp(`^${kind}_(\\d+)$`);
+    // Ids that elements carry, and ids that dangling arrows or parents still name.
+    const taken = new Set(
+      this.doc.elements.flatMap((element) => [element.id, element['source'], element['target'], element['parent']].filter((id): id is string => typeof id === 'string')),
+    );
     let highest = this.highestIds[kind];
-    for (const element of this.doc.elements) {
-      // Numbers longer than 15 digits cannot meet ours; counting past them would make ids too long to open again.
-      const digits = pattern.exec(element.id)?.[1]?.replace(/^0+(?=\d)/, '');
+    for (const id of taken) {
+      // Past 15 digits a plain number loses precision, and counting from there would make ids too long to open again; the check below still avoids them.
+      const digits = pattern.exec(id)?.[1]?.replace(/^0+(?=\d)/, '');
       if (digits !== undefined && digits.length <= 15 && Number(digits) > highest) {
         highest = Number(digits);
       }
     }
-    const taken = new Set(this.doc.elements.map((element) => element.id));
     let next = highest + 1;
     while (taken.has(`${kind}_${next}`)) {
       next += 1;
