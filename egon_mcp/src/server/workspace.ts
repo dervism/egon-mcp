@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import { parseStoryFile } from '../egon/parse.js';
 import { fileNameFor, toEgnJson, type EgonFormat } from '../egon/serialize.js';
@@ -49,9 +49,12 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024;
  */
 export class Workspace {
   private readonly entries = new Map<string, StoryEntry>();
-  /** Absolute path to the id of the story that last opened or wrote it; only that story may replace it. */
+  /** File identity (see fileKey) to the id of the story that last opened or wrote it; only that story may replace it. */
   private readonly owners = new Map<string, string>();
-  /** Absolute path to the .egn layout of every file this session opened or wrote, kept when the file is replaced. */
+  /**
+   * The .egn layout of every file this session opened or wrote, by file
+   * identity and by path, so the layout survives links and deleted files.
+   */
   private readonly fileLayouts = new Map<string, EgonFormat>();
   readonly root: string;
   /** Layout of written .egn files (docs/adr/0007-write-egon-3-file-layout.md). */
@@ -85,7 +88,7 @@ export class Workspace {
     const entry = this.add(Story.fromDocument(doc), keepPath, false);
     const key = fileKey(absolute);
     this.owners.set(key, entry.id);
-    this.fileLayouts.set(key, doc.version.startsWith('4') ? 'egon4' : 'egon3');
+    this.rememberLayout(absolute, key, doc.version.startsWith('4') ? 'egon4' : 'egon3');
     return entry;
   }
 
@@ -146,17 +149,22 @@ export class Workspace {
     const existingKey = lexists(absolute) ? fileKey(absolute) : undefined;
     const owner = existingKey ? this.owners.get(existingKey) : undefined;
     if (existingKey && owner !== id && !options.overwrite) {
-      const takenOver = owner !== undefined && this.entries.has(owner) ? `, and story "${owner}" opened or wrote it later` : '';
+      // close() forgets a story's files, so an owner is always an open story.
+      const takenOver = owner !== undefined ? `, and story "${owner}" opened or wrote it last` : '';
       throw new WorkspaceError(`${path} already exists${takenOver}. Pass overwrite: true to replace it, or choose another path.`);
     }
-    const layout = options.layout ?? (existingKey ? this.fileLayouts.get(existingKey) : undefined) ?? this.egonFormat;
+    const layout =
+      options.layout ??
+      (existingKey ? this.fileLayouts.get(existingKey) : undefined) ??
+      this.fileLayouts.get(pathKey(absolute)) ??
+      this.egonFormat;
     const content = this.serialize(entry.story, format, layout);
     mkdirSync(dirname(absolute), { recursive: true });
     writeFileSync(absolute, content);
     const key = fileKey(absolute);
     this.owners.set(key, id);
     if (format === 'egn' || format === 'egn.svg') {
-      this.fileLayouts.set(key, layout);
+      this.rememberLayout(absolute, key, layout);
     }
     const relativePath = this.relative(absolute);
     const result: SaveResult = { path: relativePath, format, bytes: Buffer.byteLength(content) };
@@ -206,6 +214,11 @@ export class Workspace {
     };
     walk(start, 0);
     return found;
+  }
+
+  private rememberLayout(absolute: string, key: string, layout: EgonFormat): void {
+    this.fileLayouts.set(key, layout);
+    this.fileLayouts.set(pathKey(absolute), layout);
   }
 
   private add(story: Story, path: string | undefined, dirty: boolean): StoryEntry {
@@ -318,9 +331,15 @@ function lexists(path: string): boolean {
 }
 
 /**
- * One key per file, however the path was spelled: links resolved and, on
- * case-insensitive file systems, the file's own letter case. The file must exist.
+ * One key per file however it is reached (symbolic or hard links, another
+ * letter case): device and inode, plus the birth time where the file system
+ * records one, so a reused inode number is a new file. The file must exist.
  */
 function fileKey(absolute: string): string {
-  return realpathSync.native(absolute);
+  const stats = statSync(absolute, { bigint: true });
+  return `file:${stats.dev}:${stats.ino}:${stats.birthtimeNs}`;
+}
+
+function pathKey(absolute: string): string {
+  return `path:${absolute}`;
 }

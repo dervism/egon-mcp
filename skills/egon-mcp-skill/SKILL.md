@@ -101,7 +101,7 @@ Tool errors explain the problem and usually the fix:
 | `no element with the id or name` | Check spelling with `get_story`. |
 | `Unknown icon` | Pick one of the suggested names or call `search_icons`. |
 | `outside the workspace root`, `symbolic link` | Use a plain path relative to the root; ask the user to move the file or restart the server with another `--root`. |
-| `already exists` | Pick another path, or ask the user whether to pass `overwrite: true`. |
+| `already exists` | Pick another path, save from the story the error names, or ask the user whether to pass `overwrite: true`. |
 | `No open story` | Use `list_stories`; stories are lost when the server restarts unless saved. |
 
 ## References

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -9,6 +9,12 @@ import { Workspace, WorkspaceError } from './workspace.js';
 
 let root: string;
 let workspace: Workspace;
+
+const caseInsensitive = (() => {
+  const dir = mkdtempSync(join(tmpdir(), 'egon-case-'));
+  writeFileSync(join(dir, 'probe'), '');
+  return existsSync(join(dir, 'PROBE'));
+})();
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'egon-ws-'));
@@ -161,11 +167,11 @@ describe('Workspace', () => {
     const first = workspace.open('mine.egn');
     const second = workspace.open('mine.egn');
     expect(() => workspace.save(first.id, {})).toThrow(/already exists/);
-    expect(() => workspace.save(first.id, {})).toThrow(new RegExp(`story "${second.id}" opened or wrote it later`));
+    expect(() => workspace.save(first.id, {})).toThrow(new RegExp(`story "${second.id}" opened or wrote it last`));
     expect(() => workspace.save(second.id, {})).not.toThrow();
   });
 
-  it('treats a file reached through a linked folder or another letter case as the same file', () => {
+  it('treats a file reached through a linked folder or a hard link as the same file', () => {
     mkdirSync(join(root, 'real'));
     symlinkSync(join(root, 'real'), join(root, 'alias'));
     const a = workspace.create({ title: 'A' });
@@ -174,12 +180,27 @@ describe('Workspace', () => {
     workspace.save(b.id, { path: 'alias/x.egn', overwrite: true });
     expect(() => workspace.save(a.id, { path: 'real/x.egn' })).toThrow(/already exists/);
     expect(() => workspace.save(b.id, { path: 'real/x.egn' })).not.toThrow();
-    if (existsSync(join(root, 'REAL', 'X.egn'))) {
-      // Case-insensitive file system, the default on macOS.
-      workspace.save(a.id, { path: 'REAL/X.egn', overwrite: true });
-      expect(() => workspace.save(b.id, { path: 'real/x.egn' })).toThrow(/already exists/);
-      expect(() => workspace.save(a.id, { path: 'real/x.egn' })).not.toThrow();
-    }
+
+    workspace.save(a.id, { path: 'y.egn' });
+    linkSync(join(root, 'y.egn'), join(root, 'hard.egn'));
+    workspace.save(b.id, { path: 'hard.egn', overwrite: true });
+    expect(() => workspace.save(a.id, { path: 'y.egn' })).toThrow(/already exists/);
+  });
+
+  it.runIf(caseInsensitive)('treats another letter case of a file as the same file', () => {
+    const a = workspace.create({ title: 'A' });
+    const b = workspace.create({ title: 'B' });
+    workspace.save(a.id, { path: 'x.egn' });
+    workspace.save(b.id, { path: 'X.EGN', overwrite: true });
+    expect(() => workspace.save(a.id, { path: 'x.egn' })).toThrow(/already exists/);
+    expect(() => workspace.save(b.id, { path: 'x.egn' })).not.toThrow();
+  });
+
+  it('keeps the layout of an opened file when saving back after the file was deleted', () => {
+    writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
+    const entry = workspace.open('four.egn');
+    rmSync(join(root, 'four.egn'));
+    expect(workspace.save(entry.id, {}).layout).toBe('egon4');
   });
 
   it('remembers the layout of a file after the story that opened it is closed', () => {
