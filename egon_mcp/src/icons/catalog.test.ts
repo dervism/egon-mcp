@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, sep } from 'node:path';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { blockingAncestor, DEFAULT_ICON_NAMES, IconCatalog, iconReadError, isFileSystemError, readErrorReason } from './catalog.js';
@@ -98,18 +98,21 @@ describe('IconCatalog.fromFile', () => {
     );
   });
 
-  it('names an existing file read as a folder, whatever error the platform reports', () => {
+  it.runIf(process.platform !== 'win32')('never calls an existing file missing when it is read as a folder', () => {
     const file = join(dir, 'builtin-icons.json');
     writeFileSync(file, '[]');
-    // A trailing slash fails with ENOTDIR on POSIX and as a missing path on Windows.
-    expect(() => IconCatalog.fromFile(new URL(`${pathToFileURL(file).href}/`))).toThrow(
-      `cannot be read (${file} is a file, not a folder)`,
-    );
+    expect(() => IconCatalog.fromFile(new URL(`${pathToFileURL(file).href}/`))).toThrow(unreadable('ENOTDIR', 'not a directory'));
   });
 
-  it('reports a path the system refuses in its own words instead of throwing a raw error', () => {
+  it('passes on programming errors, such as a NUL in the path, unchanged', () => {
     const url = new URL(`${pathToFileURL(join(dir, 'a')).href}%00b/builtin-icons.json`);
-    expect(() => IconCatalog.fromFile(url)).toThrow(/^Built-in icon data .* cannot be read \(/);
+    let thrown: unknown;
+    try {
+      IconCatalog.fromFile(url);
+    } catch (error) {
+      thrown = error;
+    }
+    expect((thrown as NodeJS.ErrnoException).code).toBe('ERR_INVALID_ARG_VALUE');
   });
 
   it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)('does not call an unreadable folder a missing file', () => {
@@ -225,18 +228,11 @@ describe('iconReadError', () => {
     );
   });
 
-  it('names an existing file read through trailing separators, as Windows reports it', () => {
-    const file = join(dir, 'builtin-icons.json');
-    writeFileSync(file, '[]');
-    for (const path of [`${file}${sep}`, `${file}${sep}${sep}`]) {
-      expect(iconReadError(path, missingPath).message, path).toContain(`cannot be read (${file} is a file, not a folder)`);
-    }
-  });
-
-  it.runIf(process.platform !== 'win32')('treats a trailing backslash as part of the name on POSIX', () => {
-    const file = join(dir, 'builtin-icons.json');
-    writeFileSync(file, '[]');
-    expect(iconReadError(`${file}\\`, missingPath).message).toMatch(/ is missing; /);
+  it('gives the system\'s reason for ENOTDIR when no file is in the way', () => {
+    const notADirectory = Object.assign(new Error('ENOTDIR: not a directory'), { code: 'ENOTDIR', syscall: 'open' });
+    expect(iconReadError(join(dir, 'zz', 'builtin-icons.json'), notADirectory).message).toContain(
+      'cannot be read (ENOTDIR: not a directory). Fix what stops it from being read',
+    );
   });
 
   it('calls a path missing only when nothing is in the way', () => {
@@ -249,7 +245,12 @@ describe('iconReadError', () => {
 
 describe('isFileSystemError', () => {
   it('goes by the error\'s shape, so codes like Windows\' UNKNOWN count too', () => {
-    expect(isFileSystemError(failedRead(join(tmpdir(), 'egon-nope', 'x')))).toBe(true);
+    const dir = mkdtempSync(join(tmpdir(), 'egon-catalog-'));
+    try {
+      expect(isFileSystemError(failedRead(join(dir, 'nope')))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
     expect(isFileSystemError(Object.assign(new Error('unknown error, stat'), { code: 'UNKNOWN', errno: -4094, syscall: 'stat' }))).toBe(true);
     expect(isFileSystemError(Object.assign(new Error('bad path'), { code: 'ERR_INVALID_ARG_VALUE' }))).toBe(false);
     expect(isFileSystemError(new Error('plain'))).toBe(false);

@@ -68,22 +68,6 @@ export function blockingAncestor(path: string): string | undefined {
 }
 
 const ICON_DATA_FIX = `${ICON_FIX} in egon_mcp (needs the egon.io submodule).`;
-const TRAILING_SEPARATORS = process.platform === 'win32' ? /[\\/]+$/ : /\/+$/;
-
-/**
- * A file standing where `path` needs a folder: the path itself when it ends in
- * a separator, or an ancestor.
- */
-function fileInTheWay(path: string): string | undefined {
-  const stripped = path.replace(TRAILING_SEPARATORS, '');
-  if (stripped !== path) {
-    const stats = statIfPossible(stripped);
-    if (stats && !stats.isDirectory()) {
-      return stripped;
-    }
-  }
-  return blockingAncestor(path);
-}
 
 /**
  * The error to report when the icon data at `path` could not be read. A file
@@ -93,7 +77,7 @@ function fileInTheWay(path: string): string | undefined {
 export function iconReadError(path: string, error: unknown): Error {
   const { code } = (error ?? {}) as NodeJS.ErrnoException;
   // Only these two codes can mean a file in the way; other errors are reported as they are.
-  const blocker = code === 'ENOENT' || code === 'ENOTDIR' ? fileInTheWay(path) : undefined;
+  const blocker = code === 'ENOENT' || code === 'ENOTDIR' ? blockingAncestor(path) : undefined;
   if (code === 'ENOENT' && !blocker) {
     return new Error(`Built-in icon data ${path} is missing; ${ICON_DATA_FIX}`);
   }
@@ -132,7 +116,8 @@ export class IconCatalog {
     try {
       content = readFileSync(file, 'utf8');
     } catch (error) {
-      throw iconReadError(path, error);
+      // A programming error, such as a NUL in the path, is not a data problem: pass it on.
+      throw isFileSystemError(error) ? iconReadError(path, error) : error;
     }
     if (!isIconList(content)) {
       throw new Error(`Built-in icon data ${path} is not usable; ${ICON_DATA_FIX}`);
