@@ -71,7 +71,7 @@ describe('renderStorySvg', () => {
   it('can embed the story so Egon imports the image as .egn.svg', () => {
     const doc = pizza().toDocument();
     const svg = renderStorySvg(doc, { embedStory: true });
-    expect(svg).toContain('%3CDST%3E');
+    expect(svg).toContain('<!-- <DST>');
     expect(parseStoryFile(svg, 'x.egn.svg').elements).toHaveLength(doc.elements.length);
   });
 

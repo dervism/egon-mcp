@@ -1,13 +1,15 @@
 import { resolve } from 'node:path';
+import type { EgonFormat } from './egon/serialize.js';
 
 export interface CliOptions {
   root: string;
   egonAppUrl?: string;
+  egonFormat?: EgonFormat;
   help?: boolean;
   version?: boolean;
 }
 
-export const USAGE = `Usage: egon-mcp [--root <dir>] [--egon-url <url>]
+export const USAGE = `Usage: egon-mcp [--root <dir>] [--egon-url <url>] [--egon-format egon3|egon4]
 
 Starts the Egon.io MCP server on stdio.
 
@@ -15,6 +17,9 @@ Starts the Egon.io MCP server on stdio.
                     Default: $EGON_MCP_ROOT, else the current directory.
   --egon-url <url>  Egon app used by open_in_egon.
                     Default: $EGON_APP_URL, else https://egon.io/app/
+  --egon-format     Layout of written .egn files: egon3 (works with egon.io 3.x
+                    and Egon 4) or egon4 (keeps title and scope in the file).
+                    Default: $EGON_FORMAT, else egon3.
   --help            Show this help.
   --version         Show the version.`;
 
@@ -22,6 +27,7 @@ Starts the Egon.io MCP server on stdio.
 export function parseOptions(argv: string[], env: Record<string, string | undefined>, cwd: string): CliOptions {
   let root = env['EGON_MCP_ROOT'];
   let egonAppUrl = env['EGON_APP_URL'];
+  let egonFormat = env['EGON_FORMAT'];
   const flags: Partial<CliOptions> = {};
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -41,6 +47,9 @@ export function parseOptions(argv: string[], env: Record<string, string | undefi
       case '--egon-url':
         egonAppUrl = value();
         break;
+      case '--egon-format':
+        egonFormat = value();
+        break;
       case '--help':
       case '-h':
         flags.help = true;
@@ -57,9 +66,13 @@ export function parseOptions(argv: string[], env: Record<string, string | undefi
   if (egonAppUrl !== undefined && !/^https?:\/\//i.test(egonAppUrl)) {
     throw new Error(`The Egon URL must start with http:// or https://, got "${egonAppUrl}".`);
   }
+  if (egonFormat !== undefined && egonFormat !== 'egon3' && egonFormat !== 'egon4') {
+    throw new Error(`The Egon format must be egon3 or egon4, got "${egonFormat}".`);
+  }
   return {
     root: resolve(cwd, root ?? '.'),
     ...(egonAppUrl ? { egonAppUrl } : {}),
+    ...(egonFormat ? { egonFormat } : {}),
     ...flags,
   };
 }

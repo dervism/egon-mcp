@@ -2,7 +2,7 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mc
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { StoryParseError } from '../egon/parse.js';
-import { fileNameFor, toEgnJson } from '../egon/serialize.js';
+import { fileNameFor, toEgnJson, type EgonFormat } from '../egon/serialize.js';
 import { IconCatalog } from '../icons/catalog.js';
 import { renderStorySvg } from '../render/svg.js';
 import { autoLayout } from '../story/layout.js';
@@ -24,6 +24,8 @@ export interface EgonServerOptions {
   root: string;
   /** Egon app used by open_in_egon (default https://egon.io/app/). */
   egonAppUrl?: string;
+  /** Layout of written .egn files (default egon3, which egon.io 3.x and Egon 4 import). */
+  egonFormat?: EgonFormat;
 }
 
 export interface EgonServer {
@@ -75,7 +77,8 @@ const sentenceSchema = {
 const shapeSpec = z.object({ name: z.string(), icon: iconName.optional(), color: color.optional() });
 
 export function createEgonServer(options: EgonServerOptions): EgonServer {
-  const workspace = new Workspace(options.root);
+  const workspace = new Workspace(options.root, options.egonFormat ? { egonFormat: options.egonFormat } : {});
+  const egnFor = (id: string) => toEgnJson(workspace.get(id).story.toDocument(), { format: workspace.egonFormat });
   const links = new LinkServer();
   const catalog = IconCatalog.builtIn();
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { instructions: INSTRUCTIONS });
@@ -592,9 +595,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     },
     run(async ({ storyId: id, startReplay }) => {
       const entry = workspace.get(id);
-      const storyUrl = await links.publish(id, fileNameFor(entry.story.title, 'egn'), () =>
-        toEgnJson(workspace.get(id).story.toDocument()),
-      );
+      const storyUrl = await links.publish(id, fileNameFor(entry.story.title, 'egn'), () => egnFor(id));
       const url = egonAppUrl(storyUrl, {
         startReplay: startReplay ?? false,
         ...(options.egonAppUrl ? { appUrl: options.egonAppUrl } : {}),
@@ -656,7 +657,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
       },
     );
 
-  storyResource('story-egn', 'egn', 'application/json', 'Story as Egon .egn JSON', (id) => toEgnJson(workspace.get(id).story.toDocument()));
+  storyResource('story-egn', 'egn', 'application/json', 'Story as Egon .egn JSON', egnFor);
   storyResource('story-narrative', 'narrative', 'text/markdown', 'Story as numbered sentences', (id) =>
     narrativeMarkdown(workspace.get(id).story.toDocument()),
   );

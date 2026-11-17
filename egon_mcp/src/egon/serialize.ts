@@ -1,17 +1,38 @@
 import { EGON_FORMAT_VERSION, type StoryDocument } from './types.js';
 
 /**
- * Serializes a story as an `.egn` file, matching ExportService.downloadEGN:
- * `{ iconSet, domainStory }` with business objects sorted by id, written in
- * the current Egon format version.
+ * Egon file layouts:
+ * - egon3: `{ domain, dst: [...elements, { info }, { version }] }`, written by
+ *   egon.io 3.x (the public app). Title comes from the file name.
+ * - egon4: `{ iconSet, domainStory: { businessObjects, title, description, version, scope } }`,
+ *   written by Egon 4 (unreleased). Egon 4 also reads egon3 files.
  */
-export function toEgnJson(doc: StoryDocument): string {
+export type EgonFormat = 'egon3' | 'egon4';
+
+export const EGON3_FORMAT_VERSION = '3.2.1';
+
+export interface SerializeOptions {
+  format?: EgonFormat;
+}
+
+/**
+ * Serializes a story as an `.egn` file, matching Egon's own export: business
+ * objects sorted by id and the current version of the chosen layout (Egon
+ * treats a missing or pre-0.5 version as a legacy file).
+ */
+export function toEgnJson(doc: StoryDocument, options: SerializeOptions = {}): string {
+  const elements = [...doc.elements].sort((a, b) => a.id.localeCompare(b.id));
+  if ((options.format ?? 'egon3') === 'egon3') {
+    return JSON.stringify(
+      { domain: doc.iconSet, dst: [...elements, { info: doc.description }, { version: EGON3_FORMAT_VERSION }] },
+      null,
+      2,
+    );
+  }
   const domainStory: Record<string, unknown> = {
-    businessObjects: [...doc.elements].sort((a, b) => a.id.localeCompare(b.id)),
+    businessObjects: elements,
     title: doc.title,
     description: doc.description,
-    // Always the current version: Egon converts stories with a missing or
-    // pre-0.5 version as legacy files, and the parser already did that.
     version: EGON_FORMAT_VERSION,
   };
   if (doc.scope && Object.keys(doc.scope).length > 0) {
@@ -21,26 +42,26 @@ export function toEgnJson(doc: StoryDocument): string {
 }
 
 /**
- * Appends the story to an SVG image the way Egon's SvgService does, so that
- * Egon can import the resulting `.egn.svg`. The JSON payload escapes `<`, `>`,
- * `&` and `--` as JSON unicode escapes, which keeps the SVG well-formed XML
- * and still parses as the same JSON in Egon.
+ * Appends the story to an SVG image so Egon can import it as `.egn.svg`.
+ * Egon 3 reads everything after a literal `<DST>` marker, so the story goes
+ * into a comment after `</svg>`, as in Egon 3's SvgService. Characters that
+ * would end the comment or that Egon's unsanitizers rewrite (`--`, `<`, `>`,
+ * `&`, `%`, en dashes) are written as JSON unicode escapes, which parse back
+ * to the same text.
  */
-export function embedStoryInSvg(svg: string, doc: StoryDocument): string {
+export function embedStoryInSvg(svg: string, doc: StoryDocument, options: SerializeOptions = {}): string {
   const closing = svg.lastIndexOf('</svg>');
   if (closing < 0) {
     throw new Error('The SVG has no closing </svg> tag.');
   }
-  const payload = toEgnJson(doc)
+  const payload = toEgnJson(doc, options)
     .replaceAll('&', '\\u0026')
     .replaceAll('<', '\\u003c')
     .replaceAll('>', '\\u003e')
+    .replaceAll('%', '\\u0025')
+    .replaceAll('–', '\\u2013')
     .replaceAll('--', '-\\u002d');
-  const hidden =
-    "\n<text class='hiddenDomainStory' style='font-size: 0'>\n\n" +
-    `%3CDST%3E${payload}%3C/DST%3E` +
-    '\n\n</text>\n';
-  return svg.slice(0, closing) + hidden + svg.slice(closing);
+  return `${svg.slice(0, closing + '</svg>'.length)}\n<!-- <DST>\n${payload}\n </DST> -->`;
 }
 
 /** Egon's sanitizeForDesktop applied to a title, plus the file extension. */

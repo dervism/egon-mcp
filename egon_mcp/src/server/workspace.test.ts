@@ -47,7 +47,7 @@ describe('Workspace', () => {
   it('saves other formats and creates folders as needed', () => {
     const entry = workspace.create({ title: 'T' });
     expect(workspace.save(entry.id, { path: 'out/story.egn.svg' }).format).toBe('egn.svg');
-    expect(readFileSync(join(root, 'out/story.egn.svg'), 'utf8')).toContain('%3CDST%3E');
+    expect(readFileSync(join(root, 'out/story.egn.svg'), 'utf8')).toContain('<!-- <DST>');
     expect(workspace.save(entry.id, { path: 'out/story.md' }).format).toBe('markdown');
     expect(workspace.save(entry.id, { path: 'out/picture.svg' }).format).toBe('svg');
   });
@@ -104,6 +104,13 @@ describe('Workspace', () => {
     expect(entry.id).toBe('built');
     expect(entry.story).toBe(story);
     expect(entry.dirty).toBe(true);
+  });
+
+  it('writes the Egon 4 layout when the workspace is configured for it', () => {
+    const egon4 = new Workspace(root, { egonFormat: 'egon4' });
+    const entry = egon4.create({ title: 'Four' });
+    egon4.save(entry.id, {});
+    expect(JSON.parse(readFileSync(join(root, 'Four.egn'), 'utf8'))).toHaveProperty('domainStory');
   });
 
   it('marks stories dirty after a change', () => {

@@ -1,4 +1,4 @@
-import { embedStoryInSvg } from '../egon/serialize.js';
+import { embedStoryInSvg, type EgonFormat } from '../egon/serialize.js';
 import {
   iconNameOf,
   isActivity,
@@ -22,6 +22,8 @@ export interface RenderOptions {
   embedStory?: boolean;
   /** Paint a white background instead of a transparent one. */
   whiteBackground?: boolean;
+  /** File layout of the embedded story (default egon3). */
+  format?: EgonFormat;
 }
 
 const FONT = 'Arial, sans-serif';
@@ -130,7 +132,7 @@ export function renderStorySvg(
     header +
     body.join('\n') +
     '</svg>';
-  return options.embedStory ? embedStoryInSvg(svg, doc) : svg;
+  return options.embedStory ? embedStoryInSvg(svg, doc, options.format ? { format: options.format } : {}) : svg;
 }
 
 function drawNode(node: ShapeElement, doc: StoryDocument, catalog: IconCatalog): string {

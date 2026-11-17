@@ -23,6 +23,7 @@ async function main(): Promise<void> {
   const egon = createEgonServer({
     root: options.root,
     ...(options.egonAppUrl ? { egonAppUrl: options.egonAppUrl } : {}),
+    ...(options.egonFormat ? { egonFormat: options.egonFormat } : {}),
   });
   const shutdown = async () => {
     await egon.close();
@@ -33,7 +34,7 @@ async function main(): Promise<void> {
 
   await egon.server.connect(new StdioServerTransport());
   // stdout carries the MCP protocol, so log to stderr only.
-  console.error(`egon-mcp ${SERVER_VERSION} ready. Workspace: ${egon.workspace.root}`);
+  console.error(`egon-mcp ${SERVER_VERSION} ready. Workspace: ${egon.workspace.root}, file layout: ${egon.workspace.egonFormat}`);
 }
 
 main().catch((error: unknown) => {

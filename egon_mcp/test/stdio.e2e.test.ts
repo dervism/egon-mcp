@@ -28,15 +28,16 @@ describe.skipIf(!existsSync(entry))('egon-mcp over stdio', () => {
             { actor: 'Post office clerk', activity: 'scans', workObject: 'Label' },
           ],
         },
-      })) as { structuredContent: { storyId: string } };
+      })) as unknown as { structuredContent: { storyId: string } };
       const saved = (await client.callTool({
         name: 'save_story',
         arguments: { storyId: built.structuredContent.storyId },
-      })) as { structuredContent: { path: string } };
+      })) as unknown as { structuredContent: { path: string } };
 
       const file = JSON.parse(readFileSync(join(root, saved.structuredContent.path), 'utf8'));
-      expect(file.domainStory.title).toBe('Return a parcel');
-      expect(file.domainStory.businessObjects.length).toBe(7);
+      expect(saved.structuredContent.path).toBe('Return a parcel.egn');
+      // Egon 3 layout: 7 elements plus the info and version entries.
+      expect(file.dst.length).toBe(9);
     } finally {
       await client.close();
     }

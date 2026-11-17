@@ -25,6 +25,12 @@ describe('parseOptions', () => {
     expect(parseOptions(['--root', '/flag'], { EGON_MCP_ROOT: '/env' }, '/work').root).toBe('/flag');
   });
 
+  it('selects the Egon file layout', () => {
+    expect(parseOptions(['--egon-format', 'egon4'], {}, '/work').egonFormat).toBe('egon4');
+    expect(parseOptions([], { EGON_FORMAT: 'egon3' }, '/work').egonFormat).toBe('egon3');
+    expect(() => parseOptions(['--egon-format', 'egon5'], {}, '/work')).toThrow(/egon3 or egon4/);
+  });
+
   it('answers --help and --version', () => {
     expect(parseOptions(['--help'], {}, '/work')).toEqual({ root: '/work', help: true });
     expect(parseOptions(['--version'], {}, '/work')).toEqual({ root: '/work', version: true });

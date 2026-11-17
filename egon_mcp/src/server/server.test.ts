@@ -192,7 +192,7 @@ describe('egon-mcp server', () => {
     const svg = await call('export_story', { storyId: 'order-pizza', format: 'svg' });
     expect(text(svg)).toMatch(/^<svg/);
     const egn = await call('export_story', { storyId: 'order-pizza', format: 'egn' });
-    expect(parseStoryFile(text(egn), 'x.egn').title).toBe('Order pizza');
+    expect(parseStoryFile(text(egn), 'Order pizza.egn').elements.length).toBeGreaterThan(5);
     const markdown = await call('export_story', { storyId: 'order-pizza', format: 'markdown' });
     expect(text(markdown)).toContain('# Order pizza');
   });
@@ -225,7 +225,23 @@ describe('egon-mcp server', () => {
     expect(result['egonUrl']).toMatch(/^https:\/\/egon\.io\/app\/\?storyUrl=http%3A%2F%2F127\.0\.0\.1/);
     expect(result['egonUrl']).toMatch(/startReplay=true$/);
     const served = await fetch(result['storyUrl'] as string);
-    expect(parseStoryFile(await served.text(), 'x.egn').title).toBe('Order pizza');
+    expect(result['storyUrl']).toMatch(/\/Order%20pizza\.egn$/);
+    expect(parseStoryFile(await served.text(), 'Order pizza.egn').title).toBe('Order pizza');
+  });
+
+  it('writes the Egon 4 layout when the server is configured for it', async () => {
+    const egon4 = createEgonServer({ root, egonFormat: 'egon4' });
+    const other = new Client({ name: 'egon4-client', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([egon4.server.connect(serverTransport), other.connect(clientTransport)]);
+    try {
+      await other.callTool({ name: 'build_story', arguments: pizza });
+      const egn = (await other.callTool({ name: 'export_story', arguments: { storyId: 'order-pizza', format: 'egn' } })) as ToolResult;
+      expect(JSON.parse(text(egn))).toHaveProperty('domainStory.title', 'Order pizza');
+    } finally {
+      await other.close();
+      await egon4.close();
+    }
   });
 
   it('exposes resources for stories, icons and the notation guide', async () => {

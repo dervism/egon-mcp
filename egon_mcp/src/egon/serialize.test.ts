@@ -1,3 +1,4 @@
+import { XMLValidator } from 'fast-xml-parser';
 import { describe, expect, it } from 'vitest';
 import { readEgonFixture } from '../../test/egon-fixtures.js';
 import { Story } from '../story/story.js';
@@ -13,28 +14,40 @@ function sampleStory() {
 }
 
 describe('toEgnJson', () => {
-  it('writes the Egon 4 layout with iconSet first and domainStory second', () => {
+  it('writes the Egon 3 layout by default, which egon.io 3.2.1 and Egon 4 both import', () => {
     const json = JSON.parse(toEgnJson(sampleStory().toDocument()));
+    expect(Object.keys(json)).toEqual(['domain', 'dst']);
+    expect(json.domain.actors.Person).toMatch(/^<svg/);
+    expect(json.dst.slice(-2)).toEqual([{ info: 'Happy path' }, { version: '3.2.1' }]);
+    expect(json.dst.slice(0, -2).every((element: { id?: string }) => typeof element.id === 'string')).toBe(true);
+  });
+
+  it('writes the Egon 4 layout on request, with title and scope inside the file', () => {
+    const json = JSON.parse(toEgnJson(sampleStory().toDocument(), { format: 'egon4' }));
     expect(Object.keys(json)).toEqual(['iconSet', 'domainStory']);
     expect(Object.keys(json.domainStory)).toEqual(['businessObjects', 'title', 'description', 'version', 'scope']);
     expect(json.domainStory).toMatchObject({ title: 'Order pizza', description: 'Happy path', version: '4.0.0' });
-    expect(json.iconSet.actors.Person).toMatch(/^<svg/);
   });
 
   it('sorts business objects by id like Egon does on export', () => {
-    const ids = JSON.parse(toEgnJson(sampleStory().toDocument())).domainStory.businessObjects.map(
-      (element: { id: string }) => element.id,
-    );
-    expect(ids).toEqual([...ids].sort((a: string, b: string) => a.localeCompare(b)));
+    for (const format of ['egon3', 'egon4'] as const) {
+      const json = JSON.parse(toEgnJson(sampleStory().toDocument(), { format }));
+      const elements = format === 'egon3' ? json.dst.slice(0, -2) : json.domainStory.businessObjects;
+      const ids = elements.map((element: { id: string }) => element.id);
+      expect(ids).toEqual([...ids].sort((a: string, b: string) => a.localeCompare(b)));
+    }
   });
 
-  it('round-trips through the parser', () => {
+  it('round-trips through the parser in both layouts', () => {
     const doc = sampleStory().toDocument();
-    const reparsed = parseStoryFile(toEgnJson(doc), 'x.egn');
-    expect(reparsed.title).toBe(doc.title);
-    expect(reparsed.scope).toEqual(doc.scope);
-    expect(reparsed.elements).toEqual(expect.arrayContaining(doc.elements));
-    expect(reparsed.elements).toHaveLength(doc.elements.length);
+    for (const format of ['egon3', 'egon4'] as const) {
+      const reparsed = parseStoryFile(toEgnJson(doc, { format }), fileNameFor(doc.title, 'egn'));
+      expect(reparsed.title).toBe(doc.title);
+      expect(reparsed.description).toBe(doc.description);
+      expect(reparsed.elements).toEqual(expect.arrayContaining(doc.elements));
+      expect(reparsed.elements).toHaveLength(doc.elements.length);
+    }
+    expect(parseStoryFile(toEgnJson(doc, { format: 'egon4' }), 'x.egn').scope).toEqual(doc.scope);
   });
 
   it('round-trips an Egon export without losing elements', () => {
@@ -44,36 +57,35 @@ describe('toEgnJson', () => {
     expect(again.iconSet).toEqual(original.iconSet);
   });
 
-  it('always writes the current Egon format version, because Egon treats a missing or old version as legacy', () => {
+  it('always writes the current version of the chosen layout, because Egon treats a missing or old version as legacy', () => {
     const doc = parseStoryFile(readEgonFixture('dst_export_version_2_2_0.json'), 'a.dst');
-    expect(JSON.parse(toEgnJson(doc)).domainStory.version).toBe('4.0.0');
+    expect(JSON.parse(toEgnJson(doc)).dst.at(-1)).toEqual({ version: '3.2.1' });
+    expect(JSON.parse(toEgnJson(doc, { format: 'egon4' })).domainStory.version).toBe('4.0.0');
   });
 
   it('omits an empty scope', () => {
-    const json = JSON.parse(toEgnJson(Story.create({ title: 'T' }).toDocument()));
+    const json = JSON.parse(toEgnJson(Story.create({ title: 'T' }).toDocument(), { format: 'egon4' }));
     expect(json.domainStory).not.toHaveProperty('scope');
   });
 });
 
 describe('embedStoryInSvg', () => {
-  it('appends the story as escaped hidden text that the parser and Egon can read back', () => {
+  it('appends the story as a <DST> comment after </svg>, where Egon 3 and 4 look for it', () => {
     const doc = sampleStory().toDocument();
-    doc.elements[0]!.name = 'a <b> -- c';
+    doc.elements[0]!.name = 'a <b> -- c & d';
     const svg = embedStoryInSvg('<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>', doc);
-    expect(svg).toContain("<text class='hiddenDomainStory' style='font-size: 0'>");
-    expect(svg).toContain('%3CDST%3E');
-    expect(svg).not.toMatch(/<DST>/);
-    expect(svg.trimEnd().endsWith('</svg>')).toBe(true);
-    const renamed = parseStoryFile(svg, 'x.egn.svg').elements.find((e) => e.id === doc.elements[0]!.id);
-    expect(renamed?.name).toBe('a <b> -- c');
+    expect(svg).toMatch(/<\/svg>\n<!-- <DST>\n[\s\S]*\n <\/DST> -->$/);
+    const comment = svg.slice(svg.indexOf('<!--') + 4, svg.lastIndexOf('-->'));
+    expect(comment).not.toContain('--');
+    expect(XMLValidator.validate(svg)).toBe(true);
+    const renamed = parseStoryFile(svg, 'Order pizza.egn.svg').elements.find((e) => e.id === doc.elements[0]!.id);
+    expect(renamed?.name).toBe('a <b> -- c & d');
   });
 
-  it('escapes ampersands so the SVG stays well-formed XML', () => {
+  it('can embed the Egon 4 layout', () => {
     const doc = sampleStory().toDocument();
-    doc.title = 'Fish & Chips';
-    const svg = embedStoryInSvg('<svg></svg>', doc);
-    expect(svg).not.toMatch(/&(?!amp;|lt;|gt;|quot;|#\d+;)/);
-    expect(parseStoryFile(svg, 'x.egn.svg').title).toBe('Fish & Chips');
+    const svg = embedStoryInSvg('<svg></svg>', doc, { format: 'egon4' });
+    expect(parseStoryFile(svg, 'x.egn.svg').title).toBe('Order pizza');
   });
 });
 

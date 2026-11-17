@@ -1,7 +1,7 @@
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseStoryFile } from '../egon/parse.js';
-import { fileNameFor, toEgnJson } from '../egon/serialize.js';
+import { fileNameFor, toEgnJson, type EgonFormat } from '../egon/serialize.js';
 import type { Scope } from '../egon/types.js';
 import { renderStorySvg } from '../render/svg.js';
 import { narrativeMarkdown } from '../story/narrate.js';
@@ -33,8 +33,11 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024;
 export class Workspace {
   private readonly entries = new Map<string, StoryEntry>();
   readonly root: string;
+  /** Layout of written .egn files (docs/adr/0007-write-egon-3-file-layout.md). */
+  readonly egonFormat: EgonFormat;
 
-  constructor(root: string) {
+  constructor(root: string, options: { egonFormat?: EgonFormat } = {}) {
+    this.egonFormat = options.egonFormat ?? 'egon3';
     if (!existsSync(root)) {
       throw new WorkspaceError(`The workspace root ${root} does not exist.`);
     }
@@ -113,9 +116,9 @@ export class Workspace {
     const doc = story.toDocument();
     switch (format) {
       case 'egn':
-        return toEgnJson(doc);
+        return toEgnJson(doc, { format: this.egonFormat });
       case 'egn.svg':
-        return renderStorySvg(doc, { title: true, embedStory: true, whiteBackground: true });
+        return renderStorySvg(doc, { title: true, embedStory: true, whiteBackground: true, format: this.egonFormat });
       case 'svg':
         return renderStorySvg(doc, { title: true, whiteBackground: true });
       case 'markdown':
