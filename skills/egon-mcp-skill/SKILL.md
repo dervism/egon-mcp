@@ -48,7 +48,7 @@ Rules to follow while you write the sentences:
 1. Actors do things: people, roles, groups, systems. Work objects are what they work with: documents, calls, emails, money, goods, information.
 2. Never connect two actors. Egon refuses it. Name the work object they exchange instead, such as a call, a message or a form ("Customer calls Waiter" becomes "Customer orders Pizza from Waiter", or uses a Call work object).
 3. Tell one concrete case, usually the happy path. Put variations, rules and open questions into annotations, or into a second story. Do not branch.
-4. Use the domain's words, in the present tense, and the same name for the same thing in every sentence. Actors with the same name (case-insensitive) are one element. Work objects are drawn again in each sentence, as Egon users do, so a recipient in step 3 does not leak into step 1. Set `reuseWorkObject: true`, or pass the work object's id, when a sentence should continue with the very same object.
+4. Use the domain's words, in the present tense, and the same name for the same thing in every sentence. Actors with the same name (case-insensitive) are one element. Work objects are drawn again in each sentence, as Egon users do, so a recipient in step 3 does not leak into step 1. A new copy takes the icon and color of the previous one. Set `reuseWorkObject: true`, or pass the work object's id, when a sentence should continue with the very same object. A work object that no activity uses yet, such as one declared in `workObjects` or added with `add_work_object`, is used by the next sentence that names it.
 5. Keep stories to about 10 to 20 steps. Split longer processes into several stories and say how they connect.
 6. Use the same step number for things that happen in parallel (`number` on `add_sentence` or `add_activity`).
 7. A work object can turn into another one ("Clerk turns Order into Invoice"). Use `add_activity` from the first work object to the second for that.
@@ -75,7 +75,7 @@ Then read `narrate_story` and compare it with what the user said. Each line must
 
 ## Edit precisely
 
-- `get_story` lists every element with its id, name, icon and step number. Pass either the id or the exact name to other tools. Work objects repeat per sentence, so use the id when a name appears more than once; `add_group` and `add_annotation` also accept such a name (all of them, or the first one).
+- `get_story` lists every element with its id, name, icon and step number. Pass either the id or the exact name to other tools. Work objects repeat per sentence, so use the id when a name appears more than once; `add_group` and `add_annotation` also accept such a name (all of them, or the first one). When an actor or work object shares its name with a group or annotation, the name means the actor or work object.
 - `update_element` renames, recolors, changes icons, moves shapes, edits annotation text, and moves an activity to another step (`number`; later steps shift).
 - `remove_element` on an actor or work object also removes its activities and closes the gaps in the numbering.
 - `add_group` draws a box around members (for departments or subdomains). `add_annotation` attaches a note.
@@ -85,7 +85,7 @@ Then read `narrate_story` and compare it with what the user said. Each line must
 
 - `save_story` without a path writes back to the file the story came from, or to `<title>.egn`. The extension picks the format: `.egn` (Egon file), `.egn.svg` (picture that Egon can import), `.svg` (picture only), `.md` (sentences). Legacy `.dst` files can be opened but not written.
 - `save_story` only replaces a file that the same story opened or wrote. Ask the user before passing `overwrite: true`.
-- Egon 3 (the public app) reads the title from the file name, so keep the file name equal to the title. Scope survives only in the Egon 4 layout: pass `layout: "egon4"` to `save_story`, or run the server with `--egon-format egon4`. Replacing an existing file keeps that file's layout.
+- Egon 3 (the public app) reads the title from the file name, so keep the file name equal to the title. Scope survives only in the Egon 4 layout: pass `layout: "egon4"` to `save_story`, or run the server with `--egon-format egon4`. Saving back to a file this server session opened or wrote keeps that file's layout.
 - `open_in_egon` returns an Egon link that loads the story from the running server. Give the user the `egonUrl`. The link works only on the same machine while the server runs, and it always shows the latest state, so edits only need a reload.
 - If the browser blocks the local link (Chrome may ask for local network access; some browsers refuse), save the story and tell the user to use "Import file" in Egon.
 - Image formats: `export_story` with `svg` returns the SVG text, which you can write to a file or show if the client renders SVG.

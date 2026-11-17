@@ -115,4 +115,8 @@ git push origin main
 
 ## License
 
-No license has been chosen yet. Egon itself is GPLv3; the server's build reads Egon's built-in icons from the submodule ([ADR 5](docs/adr/0005-generate-icons-from-submodule.md)), which matters for the choice.
+egon-mcp is free software under the GNU General Public License, version 3 or (at your option) any later version (`GPL-3.0-or-later`). These are the same terms as Egon ([ADR 14](docs/adr/0014-license-gpl-3-or-later.md)). The full text is in [LICENSE](LICENSE).
+
+Copyright (C) 2026 the egon-mcp authors.
+
+The built-in icons that the build reads from `modules/egon.io` come from Egon, Copyright (C) 2018-present WPS - Workplace Solutions GmbH, under the GPL version 3 or (at your option) any later version.

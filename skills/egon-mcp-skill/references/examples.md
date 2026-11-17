@@ -36,7 +36,7 @@ Then `validate_story` with `{ "storyId": "order-pizza-by-phone" }`, `narrate_sto
 6. Customer pays Money to Clerk.
 ```
 
-Steps 2 and 3 each get their own "Order slip", and steps 4 and 5 their own "Pizza". That is how Egon users draw stories, and it keeps "to Pizza baker" out of step 2. Add `"reuseWorkObject": true` to a sentence to continue with the previous object of the same name instead.
+Steps 2 and 3 each get their own "Order slip", and steps 4 and 5 their own "Pizza". That is how Egon users draw stories, and it keeps "to Pizza baker" out of step 2. Add `"reuseWorkObject": true` to a sentence to continue with the previous object of the same name instead. A work object listed in `workObjects` goes to the first sentence that names it, and later sentences draw copies with its icon and color.
 
 ## Interview step by step
 

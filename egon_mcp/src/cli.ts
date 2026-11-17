@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import type { EgonFormat } from './egon/serialize.js';
 
@@ -81,8 +82,21 @@ export function parseOptions(argv: string[], env: Record<string, string | undefi
 /** A warning for roots that give the server more reach than intended (the home directory or above it). */
 export function rootWarning(root: string, home: string): string | undefined {
   const rootWithSeparator = root.endsWith(sep) ? root : root + sep;
-  if (root === home || home.startsWith(rootWithSeparator)) {
-    return `Warning: the workspace root is your home directory (${root}). Consider --root <dir> for a stories folder.`;
+  const advice = 'Consider --root <dir> for a stories folder.';
+  if (root === home) {
+    return `Warning: the workspace root is your home directory (${root}). ${advice}`;
+  }
+  if (home.startsWith(rootWithSeparator)) {
+    return `Warning: the workspace root (${root}) contains your home directory. ${advice}`;
   }
   return undefined;
+}
+
+/** The home directory with links resolved, or as given when it does not exist (service accounts). */
+export function realHome(home: string): string {
+  try {
+    return realpathSync(home);
+  } catch {
+    return home;
+  }
 }

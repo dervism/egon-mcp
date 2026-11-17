@@ -115,6 +115,12 @@ export class Workspace {
   close(id: string): void {
     this.get(id);
     this.entries.delete(id);
+    // Ids are reused, so a later story with the same title must not inherit these files.
+    for (const [path, owner] of this.owners) {
+      if (owner === id) {
+        this.owners.delete(path);
+      }
+    }
   }
 
   touch(id: string): void {

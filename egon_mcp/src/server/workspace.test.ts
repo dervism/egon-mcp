@@ -139,6 +139,23 @@ describe('Workspace', () => {
     expect(() => workspace.save(first.id, { path: 'mine.egn' })).toThrow(/already exists/);
   });
 
+  it('does not let a new story inherit the files of a closed story with the same id', () => {
+    const original = readEgonFixture('egn_export_version_4_0_0.json');
+    writeFileSync(join(root, 'mine.egn'), original);
+    const opened = workspace.open('mine.egn');
+    workspace.close(opened.id);
+    const fresh = workspace.create({ title: opened.story.title });
+    expect(fresh.id).toBe(opened.id);
+    expect(() => workspace.save(fresh.id, { path: 'mine.egn' })).toThrow(/already exists/);
+    expect(readFileSync(join(root, 'mine.egn'), 'utf8')).toBe(original);
+
+    const written = workspace.create({ title: 'Order' });
+    workspace.save(written.id, {});
+    workspace.close(written.id);
+    const again = workspace.create({ title: 'Order' });
+    expect(() => workspace.save(again.id, {})).toThrow(/already exists/);
+  });
+
   it('keeps the Egon 4 layout only when saving in place, unless a layout is given', () => {
     writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
     const entry = workspace.open('four.egn');

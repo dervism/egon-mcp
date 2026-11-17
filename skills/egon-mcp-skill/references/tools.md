@@ -16,7 +16,7 @@ Creates a new, empty domain story with Egon's default icon set and returns its s
 
 ## build_story
 
-Creates a complete domain story in one call from numbered sentences ("Customer tells Order to Clerk"), then lays it out. Each sentence becomes one step. Actors with the same name are one element; each sentence draws its own work object unless it sets reuseWorkObject. Returns the storyId, the narrative and any validation issues.
+Creates a complete domain story in one call from numbered sentences ("Customer tells Order to Clerk"), then lays it out. Each sentence becomes one step. Actors with the same name are one element. Each sentence draws its own work object, except that the first sentence naming a declared work object uses it and reuseWorkObject continues the previous one. Returns the storyId, the narrative and any validation issues.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -24,7 +24,7 @@ Creates a complete domain story in one call from numbered sentences ("Customer t
 | `description` | string | no | Text Egon shows under the title. |
 | `scope` | object {granularity?, pointInTime?, domainPurity?} | no | Scope of the story as shown in Egon's properties panel. |
 | `actors` | array of object {name, icon?, color?} | no | Actors to create first, to choose their icon or color. |
-| `workObjects` | array of object {name, icon?, color?} | no | Work objects to create first, to choose their icon or color. |
+| `workObjects` | array of object {name, icon?, color?} | no | Work objects to create first, to choose their icon or color. The first sentence that names one uses it; later sentences draw new ones with the same icon and color. |
 | `sentences` | array of object {actor, actorIcon?, activity, workObject, workObjectIcon?, reuseWorkObject?, to?, number?} | yes | The steps of the story in order. |
 | `groups` | array of object {name, members, color?} | no | Boxes around elements that belong together. |
 | `annotations` | array of object {text, attachTo?} | no | Notes for variations, rules and open questions. |
@@ -70,7 +70,7 @@ Writes a story into the workspace directory. The extension picks the format: .eg
 | `storyId` | string | yes | Id of an open story, as returned by create_story, build_story, open_story or list_stories. |
 | `path` | string | no | Target path relative to the workspace root. |
 | `overwrite` | boolean | no | Replace an existing file that this story did not write. Ask the user first. |
-| `layout` | `egon3` \| `egon4` | no | .egn layout: egon3 works in egon.io 3.x and Egon 4; egon4 also keeps title and scope. Default: the layout of the file being replaced, else the server setting. |
+| `layout` | `egon3` \| `egon4` | no | .egn layout: egon3 works in egon.io 3.x and Egon 4; egon4 also keeps title and scope. Default: the layout of the file being replaced if this server session opened or wrote it, else the server setting. |
 
 ## list_story_files
 
@@ -157,7 +157,7 @@ Draws an activity arrow between two elements. From an actor to a work object it 
 
 ## add_sentence
 
-Adds one domain story sentence as a new step: actor, verb, work object and optional recipients ("Customer tells Order to Clerk"). Actors are matched by name (case-insensitive) or created; the work object is drawn new for this sentence unless reused.
+Adds one domain story sentence as a new step: actor, verb, work object and optional recipients ("Customer tells Order to Clerk"). Actors are matched by name (case-insensitive) or created; the work object is drawn new for this sentence unless reused (see workObject).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -165,7 +165,7 @@ Adds one domain story sentence as a new step: actor, verb, work object and optio
 | `actor` | string | yes | Name of the actor who acts. Created if missing. |
 | `actorIcon` | string | no | Name of a built-in Egon icon (see search_icons) or a custom icon added with add_custom_icon. |
 | `activity` | string | yes | The verb, for example "orders" or "writes". |
-| `workObject` | string | yes | Name of the work object. Each sentence draws a new one, as in Egon, unless this is the id of an existing work object or reuseWorkObject is true. |
+| `workObject` | string | yes | Name of the work object. Each sentence draws a new one, as in Egon, with the icon and color of the previous one of that name. Exceptions: an id of an existing work object, reuseWorkObject, or a work object of that name that is not used by any activity yet (declared up front or added with add_work_object), which this sentence then uses. |
 | `workObjectIcon` | string | no | Name of a built-in Egon icon (see search_icons) or a custom icon added with add_custom_icon. |
 | `reuseWorkObject` | boolean | no | Use the latest work object with this name instead of drawing a new one. |
 | `to` | array of object {actor, activity?, actorIcon?} | no | Actors who receive the work object. |

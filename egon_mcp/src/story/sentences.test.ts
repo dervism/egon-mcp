@@ -135,6 +135,43 @@ describe('buildStory', () => {
     expect(validateStory(story.toDocument())).toEqual([]);
   });
 
+  it('gives a declared work object the icon its first sentence asks for', () => {
+    const story = buildStory({
+      title: 'T',
+      workObjects: [{ name: 'Pizza' }],
+      sentences: [{ actor: 'Baker', activity: 'bakes', workObject: 'Pizza', workObjectIcon: 'Dining' }],
+    });
+    const pizzas = story.elements().filter((e) => e.name === 'Pizza');
+    expect(pizzas.map((e) => e.type)).toEqual(['domainStory:workObjectDining']);
+
+    const other = Story.create({ title: 'T' });
+    other.addWorkObject({ name: 'Order', icon: 'Email' });
+    addSentence(other, { actor: 'Clerk', activity: 'prints', workObject: 'Order', workObjectIcon: 'Document' });
+    expect(other.elements().filter((e) => e.name === 'Order').map((e) => e.type)).toEqual(['domainStory:workObjectDocument']);
+  });
+
+  it('attaches notes and group members to the actor, not to a group of the same name', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [
+        { actor: 'Kitchen', activity: 'bakes', workObject: 'Pizza', to: [{ activity: 'for', actor: 'Waiter' }] },
+      ],
+      groups: [
+        { name: 'Kitchen', members: ['Kitchen', 'Pizza'] },
+        { name: 'Restaurant', members: ['Kitchen', 'Waiter'] },
+      ],
+      annotations: [{ text: 'Wood-fired', attachTo: 'Kitchen' }],
+    });
+    const actor = story.elements().find(isActor)!;
+    const [kitchenGroup, restaurant] = ['Kitchen', 'Restaurant'].map((name) =>
+      story.elements().find((e) => e.type === 'domainStory:group' && e.name === name),
+    );
+    expect(kitchenGroup).not.toHaveProperty('parent');
+    expect(actor['parent']).toBe(restaurant?.id);
+    const connection = story.elements().find((e) => e.type === 'domainStory:connection');
+    expect(connection?.['source']).toBe(actor.id);
+  });
+
   it('puts every instance of a name into a group and attaches annotations to the first one', () => {
     const story = buildStory({
       title: 'T',

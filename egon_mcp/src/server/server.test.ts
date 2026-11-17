@@ -233,6 +233,22 @@ describe('egon-mcp server', () => {
     expect(((await ok('list_stories'))['stories'] as unknown[]).length).toBe(1);
   });
 
+  it('saves in the layout that save_story asks for', async () => {
+    await ok('build_story', pizza);
+    const saved = await ok('save_story', { storyId: 'order-pizza', layout: 'egon4' });
+    expect(saved['layout']).toBe('egon4');
+    const file = JSON.parse(readFileSync(join(root, 'Order pizza.egn'), 'utf8'));
+    expect(file.domainStory.title).toBe('Order pizza');
+  });
+
+  it('tells agents how sentences pick their work object', async () => {
+    const { tools } = await client.listTools();
+    const fieldDescription = (tool: string, field: string) =>
+      (tools.find((t) => t.name === tool)?.inputSchema.properties?.[field] as { description?: string } | undefined)?.description ?? '';
+    expect(fieldDescription('add_sentence', 'workObject')).toMatch(/not used by any activity yet/);
+    expect(fieldDescription('build_story', 'workObjects')).toMatch(/first sentence that names/);
+  });
+
   it('saves to other formats and refuses paths outside the workspace', async () => {
     await ok('build_story', pizza);
     await ok('save_story', { storyId: 'order-pizza', path: 'out/pizza.egn.svg' });

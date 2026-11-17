@@ -201,6 +201,30 @@ describe('editing', () => {
     expect(() => story.removeElement('Slip')).toThrow(/ambiguous/);
   });
 
+  it('prefers actors and work objects over groups of the same name', () => {
+    const story = Story.create({ title: 'T' });
+    const kitchen = story.addActor({ name: 'Kitchen' });
+    story.addWorkObject({ name: 'Pizza' });
+    const kitchenGroup = story.addGroup({ name: 'Kitchen', members: ['Kitchen', 'Pizza'] });
+    const restaurant = story.addGroup({ name: 'Restaurant', members: ['Kitchen'] });
+    expect(story.get(kitchen.id)?.['parent']).toBe(restaurant.id);
+    expect(story.get(kitchenGroup.id)).not.toHaveProperty('parent');
+    expect(story.addAnnotation({ text: 'Wood-fired', attachTo: 'Kitchen' }).connection?.source).toBe(kitchen.id);
+  });
+
+  it('calls a name ambiguous unless it only repeats a work object', () => {
+    const story = Story.create({ title: 'T' });
+    story.addGroup({ name: 'Area' });
+    story.addGroup({ name: 'Area' });
+    expect(() => story.addAnnotation({ text: 'Note', attachTo: 'Area' })).toThrow(/ambiguous/);
+    story.addActor({ name: 'Ann' });
+    story.addActor({ name: 'Ann' });
+    expect(() => story.addGroup({ name: 'Team', members: ['Ann'] })).toThrow(/ambiguous/);
+    story.addActor({ name: 'Form' });
+    story.addWorkObject({ name: 'Form' });
+    expect(() => story.addGroup({ name: 'Paper', members: ['Form'] })).toThrow(/ambiguous/);
+  });
+
   it('attaches a text annotation to an element', () => {
     const { story, order } = pizzaStory();
     const { annotation, connection } = story.addAnnotation({ text: 'Paper slip', attachTo: order.id });

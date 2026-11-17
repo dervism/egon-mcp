@@ -12,7 +12,8 @@ export interface SentenceInput {
   /**
    * Name of the work object the actor works with. Each sentence draws a new
    * work object, as Egon users do, unless this is the id of an existing work
-   * object or `reuseWorkObject` is set.
+   * object, `reuseWorkObject` is set, or a work object of that name is not used
+   * by any activity yet (see `workObjectFor`).
    */
   workObject: string;
   workObjectIcon?: string;
@@ -148,7 +149,7 @@ function workObjectFor(story: Story, input: SentenceInput, created: StoryElement
   const used = new Set(story.elements().flatMap((element) => (isActivity(element) ? [element.source, element.target] : [])));
   const declared = existing.find((element) => !used.has(element.id));
   if (declared) {
-    return declared;
+    return input.workObjectIcon ? (story.updateElement(declared.id, { icon: input.workObjectIcon }) as ShapeElement) : declared;
   }
   const previous = existing[existing.length - 1];
   const icon = input.workObjectIcon ?? (previous ? iconNameOf(previous.type) : undefined);

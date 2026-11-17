@@ -70,7 +70,7 @@ const sentenceSchema = {
   activity: z.string().describe('The verb, for example "orders" or "writes".'),
   workObject: z
     .string()
-    .describe('Name of the work object. Each sentence draws a new one, as in Egon, unless this is the id of an existing work object or reuseWorkObject is true.'),
+    .describe('Name of the work object. Each sentence draws a new one, as in Egon, with the icon and color of the previous one of that name. Exceptions: an id of an existing work object, reuseWorkObject, or a work object of that name that is not used by any activity yet (declared up front or added with add_work_object), which this sentence then uses.'),
   workObjectIcon: iconName.optional(),
   reuseWorkObject: z.boolean().optional().describe('Use the latest work object with this name instead of drawing a new one.'),
   to: z.array(recipientSchema).optional().describe('Actors who receive the work object.'),
@@ -163,13 +163,13 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Build domain story from sentences',
       description:
-        'Creates a complete domain story in one call from numbered sentences ("Customer tells Order to Clerk"), then lays it out. Each sentence becomes one step. Actors with the same name are one element; each sentence draws its own work object unless it sets reuseWorkObject. Returns the storyId, the narrative and any validation issues.',
+        'Creates a complete domain story in one call from numbered sentences ("Customer tells Order to Clerk"), then lays it out. Each sentence becomes one step. Actors with the same name are one element. Each sentence draws its own work object, except that the first sentence naming a declared work object uses it and reuseWorkObject continues the previous one. Returns the storyId, the narrative and any validation issues.',
       inputSchema: {
         title: titleField,
         description: descriptionField.optional(),
         scope: scopeSchema.optional(),
         actors: z.array(shapeSpec).optional().describe('Actors to create first, to choose their icon or color.'),
-        workObjects: z.array(shapeSpec).optional().describe('Work objects to create first, to choose their icon or color.'),
+        workObjects: z.array(shapeSpec).optional().describe('Work objects to create first, to choose their icon or color. The first sentence that names one uses it; later sentences draw new ones with the same icon and color.'),
         sentences: z.array(z.object(sentenceSchema)).min(1).describe('The steps of the story in order.'),
         groups: z.array(groupSpec).optional().describe('Boxes around elements that belong together.'),
         annotations: z.array(annotationSpec).optional().describe('Notes for variations, rules and open questions.'),
@@ -261,7 +261,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
         layout: z
           .enum(['egon3', 'egon4'])
           .optional()
-          .describe('.egn layout: egon3 works in egon.io 3.x and Egon 4; egon4 also keeps title and scope. Default: the layout of the file being replaced, else the server setting.'),
+          .describe('.egn layout: egon3 works in egon.io 3.x and Egon 4; egon4 also keeps title and scope. Default: the layout of the file being replaced if this server session opened or wrote it, else the server setting.'),
       },
       annotations: { destructiveHint: true, idempotentHint: true },
     },
@@ -408,7 +408,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Add sentence',
       description:
-        'Adds one domain story sentence as a new step: actor, verb, work object and optional recipients ("Customer tells Order to Clerk"). Actors are matched by name (case-insensitive) or created; the work object is drawn new for this sentence unless reused.',
+        'Adds one domain story sentence as a new step: actor, verb, work object and optional recipients ("Customer tells Order to Clerk"). Actors are matched by name (case-insensitive) or created; the work object is drawn new for this sentence unless reused (see workObject).',
       inputSchema: { storyId, ...sentenceSchema },
     },
     run(({ storyId: id, ...sentence }) => {

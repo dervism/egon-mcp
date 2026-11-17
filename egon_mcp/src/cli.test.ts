@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { parseOptions, rootWarning } from './cli.js';
+import { realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { parseOptions, realHome, rootWarning } from './cli.js';
 
 describe('parseOptions', () => {
   it('defaults the workspace root to the current directory', () => {
@@ -47,5 +49,18 @@ describe('rootWarning', () => {
     expect(rootWarning('/Users/ann', '/Users/ann')).toMatch(/home directory/);
     expect(rootWarning('/Users/ann/stories', '/Users/ann')).toBeUndefined();
     expect(rootWarning('/Users', '/Users/ann')).toMatch(/home directory/);
+  });
+
+  it('says when the root is a folder above the home directory', () => {
+    expect(rootWarning('/Users/ann', '/Users/ann')).toMatch(/is your home directory \(\/Users\/ann\)/);
+    expect(rootWarning('/Users', '/Users/ann')).toMatch(/\(\/Users\) contains your home directory/);
+    expect(rootWarning('/Users', '/Users/ann')).not.toMatch(/is your home directory/);
+  });
+});
+
+describe('realHome', () => {
+  it('resolves links in the home directory and keeps a missing one as given', () => {
+    expect(realHome('/nonexistent-egon-home')).toBe('/nonexistent-egon-home');
+    expect(realHome(tmpdir())).toBe(realpathSync(tmpdir()));
   });
 });

@@ -43,4 +43,21 @@ describe('egon-mcp over stdio', () => {
       await client.close();
     }
   }, 20_000);
+
+  it('starts when the home directory does not exist', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'egon-e2e-'));
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [entry, '--root', root],
+      env: { ...(process.env as Record<string, string>), HOME: '/nonexistent-egon-home' },
+      stderr: 'pipe',
+    });
+    const client = new Client({ name: 'e2e', version: '1.0.0' });
+    await client.connect(transport);
+    try {
+      expect((await client.listTools()).tools.length).toBeGreaterThan(0);
+    } finally {
+      await client.close();
+    }
+  }, 20_000);
 });

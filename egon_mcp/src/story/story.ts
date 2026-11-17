@@ -459,25 +459,38 @@ export class Story {
     return element as ShapeElement;
   }
 
-  /** The shape with this id, or every shape with this name, in document order. */
+  /**
+   * The shape with this id, or the shapes with this name in document order.
+   * Actors and work objects win over groups and annotations of the same name.
+   * Several matches are only accepted when they are all work objects, which
+   * repeat per sentence (ADR 13).
+   */
   private resolveShapes(ref: string): ShapeElement[] {
     const byId = this.find(ref);
+    if (byId) {
+      if (isEdge(byId)) {
+        throw new StoryError(`"${ref}" is an activity or connection, not a shape.`);
+      }
+      return [byId as ShapeElement];
+    }
     const wanted = ref.trim().toLowerCase();
-    const matches = byId
-      ? [byId]
-      : this.doc.elements.filter(
-          (element) =>
-            !isEdge(element) &&
-            (element.name.trim().toLowerCase() === wanted ||
-              (isTextAnnotation(element) && (element.text ?? '').trim().toLowerCase() === wanted)),
-        );
+    const matches = this.doc.elements.filter(
+      (element) =>
+        !isEdge(element) &&
+        (element.name.trim().toLowerCase() === wanted ||
+          (isTextAnnotation(element) && (element.text ?? '').trim().toLowerCase() === wanted)),
+    );
     if (matches.length === 0) {
       throw new StoryError(`There is no element with the id or name "${ref}".`);
     }
-    if (matches.some((element) => isEdge(element))) {
-      throw new StoryError(`"${ref}" is an activity or connection, not a shape.`);
+    const nodes = matches.filter((element) => isActor(element) || isWorkObject(element));
+    const candidates = nodes.length > 0 ? nodes : matches;
+    if (candidates.length > 1 && !candidates.every((element) => isWorkObject(element))) {
+      throw new StoryError(
+        `"${ref}" is ambiguous: ${candidates.map((m) => `${m.id} (${describeType(m)})`).join(', ')}. Use the id instead.`,
+      );
     }
-    return matches as ShapeElement[];
+    return candidates as ShapeElement[];
   }
 
   private find(id: string): StoryElement | undefined {
