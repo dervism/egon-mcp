@@ -21,3 +21,4 @@ Each file records one decision for egon-mcp. Fields hold one line each, two sent
 | [0015](0015-replace-files-only-while-unchanged.md) | Replace files only while they hold what the story last saw | Accepted |
 | [0016](0016-group-membership-by-position.md) | Decide group membership by position, as Egon does | Accepted, amended by 0017 |
 | [0017](0017-group-by-steps-and-whole-groups.md) | Group by steps, and take existing groups in whole | Accepted |
+| [0018](0018-publish-to-npm-and-homebrew.md) | Publish to npm and Homebrew | Accepted |

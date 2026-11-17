@@ -59,23 +59,36 @@ Add the server to `claude_desktop_config.json` (on macOS in `~/Library/Applicati
 }
 ```
 
-If Claude Desktop cannot find `npx` or `egon-mcp`, give the full path that `which npx` or `which egon-mcp` prints.
+Claude Desktop does not start servers with your shell's `PATH`. If it cannot find `npx`, or `node` when Node comes from a version manager such as nvm, run the server with the full path to Node that `which node` prints:
+
+```json
+{
+  "mcpServers": {
+    "egon": {
+      "command": "/full/path/to/node",
+      "args": ["/full/path/to/node_modules/egon-mcp/dist/index.js", "--root", "/path/to/your/stories"]
+    }
+  }
+}
+```
+
+After `npm install -g egon-mcp`, `npm root -g` prints the `node_modules` folder that holds `egon-mcp`.
 
 ### The skill
 
 The skill tells an agent which tool to use when and how to write good domain stories. It comes with the package. Link it into your personal Claude Code skills after an npm install:
 
 ```bash
-ln -s "$(npm root -g)/egon-mcp/skill" ~/.claude/skills/egon-mcp-skill
+mkdir -p ~/.claude/skills && ln -s "$(npm root -g)/egon-mcp/skill" ~/.claude/skills/egon-mcp-skill
 ```
 
 Or after a Homebrew install:
 
 ```bash
-ln -s "$(brew --prefix egon-mcp)/share/egon-mcp/skill" ~/.claude/skills/egon-mcp-skill
+mkdir -p ~/.claude/skills && ln -s "$(brew --prefix egon-mcp)/share/egon-mcp/skill" ~/.claude/skills/egon-mcp-skill
 ```
 
-Both links keep working after upgrades. Inside this repository Claude Code loads the skill from [skills/egon-mcp-skill](skills/egon-mcp-skill/SKILL.md) by itself.
+Both links keep working after upgrades. With a Node version manager, the npm link belongs to the Node version you installed with; link again after switching. Inside this repository Claude Code loads the skill from [skills/egon-mcp-skill](skills/egon-mcp-skill/SKILL.md) by itself.
 
 ### From source
 

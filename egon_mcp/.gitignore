@@ -3,7 +3,8 @@ dist/
 src/icons/generated/
 coverage/
 
-# Copied in by scripts/pack-extras.mjs before npm pack
+# Copied in by scripts/pack-extras.mjs before npm pack, and the packed tarball
 /README.md
 /LICENSE
 /skill/
+*.tgz

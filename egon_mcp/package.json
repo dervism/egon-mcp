@@ -23,9 +23,10 @@
   "bin": {
     "egon-mcp": "dist/index.js"
   },
-  "main": "dist/index.js",
   "files": [
     "dist",
+    "!dist/**/*.map",
+    "!dist/docs",
     "skill"
   ],
   "engines": {
@@ -41,7 +42,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/index.js",
     "docs": "npm run build && node scripts/generate-docs.mjs",
-    "prepack": "npm run build && node scripts/pack-extras.mjs"
+    "prepack": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && npm run build && node scripts/pack-extras.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

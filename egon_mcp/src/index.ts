@@ -11,12 +11,13 @@ async function main(): Promise<void> {
     console.error((error as Error).message);
     process.exit(2);
   }
+  // Without the server running, stdout is free for the answer.
   if (options.help) {
-    console.error(USAGE);
+    console.log(USAGE);
     return;
   }
   if (options.version) {
-    console.error(SERVER_VERSION);
+    console.log(SERVER_VERSION);
     return;
   }
 

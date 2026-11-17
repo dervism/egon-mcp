@@ -40,6 +40,6 @@ Tests sit next to the code (`*.test.ts`), plus `test/` for end-to-end and skill 
 ## Releasing
 
 1. Set the version in `package.json` (`npm version <x.y.z> --no-git-tag-version`) and `SERVER_VERSION` in `src/server/server.ts`; a test checks that they match.
-2. Run `npm test`, commit, push and tag `v<x.y.z>`.
-3. Run `npm pack`, check the file list, then `npm publish egon-mcp-<x.y.z>.tgz`.
-4. Point the formula in [dervism/homebrew-tap](https://github.com/dervism/homebrew-tap) at the new tarball on the npm registry, with its SHA-256.
+2. Run `npm test`, commit, tag `v<x.y.z>` and push the commit and the tag (`git push origin main v<x.y.z>`). The README on npm links to files at that tag.
+3. Run `npm pack`, which builds from a clean `dist/`, check the file list, then `npm publish egon-mcp-<x.y.z>.tgz`.
+4. Point the formula in [dervism/homebrew-tap](https://github.com/dervism/homebrew-tap) at the new tarball on the npm registry, with its SHA-256. The formula links the package's `skill` folder to `share/egon-mcp/skill`, the path the README gives for Homebrew installs.
