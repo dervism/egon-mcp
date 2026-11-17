@@ -274,9 +274,9 @@ export class Story {
   }
 
   /**
-   * A box fitted around members (ADR 19): it holds them and the notes attached
-   * to them, goes into the innermost group that holds every member, and that
-   * group and the ones around it grow to fit.
+   * A box fitted around members or step picks (ADR 19, membersFor): it holds
+   * them and the notes attached to them, goes into the group membersFor names,
+   * and that group and the ones around it grow to fit.
    */
   private fitGroup(input: GroupInput, ids: string[]): GroupElement {
     const { host, members: memberIds, left } = membersFor(ids, this.doc.elements, input.fromSteps);
@@ -286,7 +286,7 @@ export class Story {
         return element?.name || id;
       };
       throw new StoryError(
-        `Every work object of these steps already sits in another group (${left.map((id) => `"${nameOf(id)}" in "${nameOf(this.find(id)?.['parent'] as string)}"`).join(', ')}), so there is nothing to group. Name the ones that belong here in members to move them.`,
+        `Every work object of these steps already sits in another group (${left.map((id) => `"${nameOf(id)}" in "${nameOf(this.find(id)?.['parent'] as string)}"`).join(', ')}), so there is nothing to group. Name the ones that belong here in members: each one moves in, and a group that holds only named elements comes along whole.`,
       );
     }
     const members = memberIds.map((id) => this.find(id) as ShapeElement);

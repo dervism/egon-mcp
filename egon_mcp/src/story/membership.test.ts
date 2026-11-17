@@ -371,6 +371,15 @@ describe('what goes into a new group', () => {
     expect(membersFor([], elements, { picked: ['request'], only: [] })).toEqual({ host: 'purchasing', members: ['request'], left: [] });
     // Named next to steps, a work object always moves, and does not decide where the group goes.
     expect(membersFor(['request'], elements, { picked: ['bike'], only: ['bike'] })).toEqual({ host: undefined, members: ['bike', 'request'], left: [] });
+    const apart = doc([
+      group('desk', 0, 0, 600, 400),
+      workObject('bike', 100, 100, 'desk'),
+      workObject('pen', 300, 100, 'desk'),
+      group('stock', 1000, 0, 600, 400),
+      workObject('request', 1100, 100, 'stock'),
+      workObject('part', 1300, 100, 'stock'),
+    ]);
+    expect(membersFor(['request'], apart, { picked: ['bike'], only: [] })).toEqual({ host: 'desk', members: ['bike', 'request'], left: [] });
   });
 
   it('takes a named group with everything in it, and the group around it when that holds nothing else', () => {

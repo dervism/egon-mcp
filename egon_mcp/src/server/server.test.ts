@@ -265,6 +265,9 @@ describe('egon-mcp server', () => {
     const result = await call('add_group', { storyId: 'steps-box', name: 'Intake', steps: [1], x: 0, y: 0, width: 2000, height: 1000 });
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toMatch(/steps fit the box around their work objects/);
+    // A size alone is refused too, and an unknown story is named first.
+    expect((await call('add_group', { storyId: 'steps-box', name: 'Intake', steps: [1], width: 2000 })).content[0]?.text).toMatch(/steps fit the box/);
+    expect((await call('add_group', { storyId: 'nowhere', name: 'Intake', steps: [1], x: 0, y: 0 })).content[0]?.text).toMatch(/No open story/);
   });
 
   it('warns on save about shapes that will join a group when the file is opened again', async () => {

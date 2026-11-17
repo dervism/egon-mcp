@@ -5,8 +5,6 @@ import { noteAnchors } from './membership.js';
 import { narrate } from './narrate.js';
 import { StoryError, type Story } from './story.js';
 
-export { noteAnchors };
-
 const CELL_WIDTH = 220;
 const CELL_HEIGHT = 200;
 const ORIGIN = { x: 60, y: 80 };

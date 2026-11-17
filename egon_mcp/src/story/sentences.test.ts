@@ -5,7 +5,7 @@ import { parseStoryFile } from '../egon/parse.js';
 import { toEgnJson } from '../egon/serialize.js';
 import { isActor, isWorkObject } from '../egon/types.js';
 import { narrate } from './narrate.js';
-import { membersOfSteps, addSentence, buildStory, groupBySteps } from './sentences.js';
+import { addSentence, buildStory, groupBySteps } from './sentences.js';
 import { Story } from './story.js';
 import { validateStory } from './validate.js';
 
@@ -447,15 +447,16 @@ describe('groups hold what you name', () => {
     const bike = story.elements().find((element) => element.name === 'Bike')!;
     const intake = story.elements().find((element) => element.name === 'Intake')!;
     expect(bike['parent']).toBe(intake.id);
-    expect(() => membersOfSteps(story, [3])).toThrow(/Step 3 has no work object of its own/);
+    expect(() => groupBySteps(story, { name: 'Repair', steps: [3] })).toThrow(/Step 3 has no work object of its own/);
     // Shared through an onward arrow: the folder first appears in step 1.
     const filing = buildStory({ title: 'T', sentences: [{ actor: 'Clerk', activity: 'puts', workObject: 'Letter' }] });
     const letter = filing.elements().find((element) => element.name === 'Letter')!;
     const folder = filing.addWorkObject({ name: 'Folder' });
     filing.addActivity({ from: letter.id, to: folder.id, label: 'into' });
     addSentence(filing, { actor: 'Clerk', activity: 'files', workObject: folder.id });
-    expect(membersOfSteps(filing, [1]).sort()).toEqual([folder.id, letter.id].sort());
-    expect(() => membersOfSteps(filing, [2])).toThrow(/Step 2 has no work object of its own/);
+    expect(() => groupBySteps(filing, { name: 'Shelf', steps: [2] })).toThrow(/Step 2 has no work object of its own/);
+    groupBySteps(filing, { name: 'Desk', steps: [1] });
+    expect(filing.elements().filter((element) => element['parent'] !== undefined).map((element) => element.name).sort()).toEqual(['Folder', 'Letter']);
   });
 
   it('moves a work object that is named next to steps into that group', () => {
@@ -512,6 +513,72 @@ describe('groups hold what you name', () => {
     }
   });
 
+  it('nests groups by steps when a work object of the inner group is also used after the steps of the outer one', () => {
+    const later = [...shop, { actor: 'Mechanic', activity: 'returns', workObject: 'Bike', reuseWorkObject: true, to: [{ activity: 'to', actor: 'Customer' }] }];
+    for (const groups of both({ name: 'Intake', steps: [1, 2] }, { name: 'Workshop', steps: [1, 2, 3] })) {
+      expect(groupsOf(buildStory({ title: 'T', sentences: later, groups }))).toBe('Workshop[Intake[Bike Estimate]]');
+    }
+    // The same steps twice: the later group goes around the earlier one.
+    const twice = buildStory({ title: 'T', sentences: later, groups: [{ name: 'One', steps: [1, 2] }, { name: 'Two', steps: [1, 2] }] });
+    expect(groupsOf(twice)).toBe('Two[One[Bike Estimate]]');
+    // Steps around the inner group's steps that leave a gap still take it in.
+    const desk = [...shop, { actor: 'Cashier', activity: 'writes', workObject: 'Invoice' }];
+    for (const groups of both({ name: 'Intake', steps: [1, 2] }, { name: 'Front desk', steps: [1, 2, 4] })) {
+      expect(groupsOf(buildStory({ title: 'T', sentences: desk, groups }))).toBe('Front desk[Intake[Bike Estimate] Invoice]');
+    }
+    // With add_group, naming the inner group puts it inside.
+    const story = buildStory({ title: 'T', sentences: later, groups: [{ name: 'Intake', steps: [1, 2] }] });
+    groupBySteps(story, { name: 'Workshop', steps: [1, 2, 3], members: ['Intake'] });
+    expect(groupsOf(story)).toBe('Workshop[Intake[Bike Estimate]]');
+  });
+
+  it('adds a group that another group names before that one, whatever the order of the list', () => {
+    const desk = [...shop, { actor: 'Cashier', activity: 'writes', workObject: 'Invoice' }];
+    const billing = buildStory({ title: 'T', sentences: desk, groups: [{ name: 'Billing', members: ['Invoice'] }, { name: 'Back office', steps: [3], members: ['Billing'] }] });
+    expect(groupsOf(billing)).toBe('Back office[Billing[Invoice]]');
+    const larger = buildStory({ title: 'T', sentences: desk, groups: [{ name: 'A', steps: [1, 2, 3] }, { name: 'B', steps: [4], members: ['A'] }] });
+    expect(groupsOf(larger)).toBe('B[A[Bike Estimate] Invoice]');
+    const same = buildStory({ title: 'T', sentences: desk, groups: [{ name: 'Inner', steps: [1, 2] }, { name: 'Outer', steps: [1, 2], members: ['Inner'] }] });
+    expect(groupsOf(same)).toBe('Outer[Inner[Bike Estimate]]');
+  });
+
+  it('puts a group whose picks all stay in other groups into the group around them', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [
+        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] },
+        { actor: 'Clerk', activity: 'orders', workObject: 'Part' },
+        { actor: 'Cashier', activity: 'writes', workObject: 'Receipt' },
+        { actor: 'Cashier', activity: 'writes', workObject: 'Invoice' },
+      ],
+      groups: [
+        { name: 'A', members: ['Bike', 'Part'] },
+        { name: 'B', members: ['Estimate', 'Receipt'] },
+        { name: 'W', members: ['A', 'B', 'Invoice'] },
+      ],
+    });
+    const { left } = groupBySteps(story, { name: 'New', steps: [1, 2], members: ['Invoice'] });
+    expect(groupsOf(story)).toBe('W[A[Bike Part] B[Estimate Receipt] New[Invoice]]');
+    expect(left).toEqual([
+      { workObject: 'Bike', group: 'A' },
+      { workObject: 'Estimate', group: 'B' },
+    ]);
+  });
+
+  it('reads a name next to steps that use none of its copies as every copy', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [
+        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] },
+        { actor: 'Mechanic', activity: 'returns', workObject: 'Bike', to: [{ activity: 'to', actor: 'Customer' }] },
+      ],
+    });
+    groupBySteps(story, { name: 'G', steps: [2], members: ['Bike'] });
+    expect(groupsOf(story)).toBe('G[Bike Bike Estimate]');
+  });
+
   it('puts a group whose steps bring nothing of their own beside the group it takes a named work object from', () => {
     for (const groups of both({ name: 'Intake', steps: [1, 2] }, { name: 'Repair', steps: [3], members: ['Bike'] })) {
       expect(groupsOf(buildStory({ title: 'T', sentences: shop, groups }))).toBe('Intake[Estimate] Repair[Bike]');
@@ -524,7 +591,8 @@ describe('groups hold what you name', () => {
     }
     // The same with add_group, the receiving group drawn first.
     const story = buildStory({ title: 'T', sentences: parts, groups: [{ name: 'Purchasing', steps: [3, 4], members: ['Part request'] }] });
-    groupBySteps(story, { name: 'Intake', steps: [1, 2] });
+    // The result says what the steps left in other groups.
+    expect(groupBySteps(story, { name: 'Intake', steps: [1, 2] }).left).toEqual([{ workObject: 'Part request', group: 'Purchasing' }]);
     expect(groupsOf(story)).toBe('Intake[Bike] Purchasing[Part Part request]');
   });
 
@@ -629,6 +697,6 @@ describe('groups hold what you name', () => {
       ],
     });
     const story = Story.fromDocument(parseStoryFile(text, 'story.egn'));
-    expect(() => membersOfSteps(story, [1])).toThrow(/Step 1 reaches no work object at all/);
+    expect(() => groupBySteps(story, { name: 'Filing', steps: [1] })).toThrow(/Step 1 reaches no work object at all/);
   });
 });

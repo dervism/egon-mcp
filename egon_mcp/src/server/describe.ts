@@ -8,7 +8,7 @@ import {
   type ShapeElement,
   type StoryElement,
 } from '../egon/types.js';
-import { noteAnchors } from '../story/layout.js';
+import { noteAnchors } from '../story/membership.js';
 import { narrate } from '../story/narrate.js';
 import { validateStory } from '../story/validate.js';
 import type { StoryEntry } from './workspace.js';

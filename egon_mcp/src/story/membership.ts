@@ -122,18 +122,19 @@ export interface StepPicks {
 /**
  * Where a new group goes and what it holds (ADR 19). An existing group goes in
  * whole when all its actors and work objects are chosen: named, inside a named
- * group, or used by the steps alone. Named elements always move in. Elements
- * the steps picked move in only from the group the new one goes into; one in
- * any other group stays there (`left`). The new group goes into the innermost
- * group around what the steps picked, or without steps around the named ones.
+ * group, or used by the steps alone. Named elements always move in. With
+ * `steps`, the new group goes into the innermost group around what they
+ * picked (the top level when they picked nothing), and a pick moves in only
+ * from that group; one in any other group stays there (`left`). Without
+ * steps, the new group goes into the innermost group around the named ones.
  */
 export function membersFor(
   named: string[],
   elements: StoryElement[],
-  steps: StepPicks = { picked: [], only: [] },
+  steps?: StepPicks,
 ): { host: string | undefined; members: string[]; left: string[] } {
   const byId = new Map(elements.map((element) => [element.id, element]));
-  const chosen = new Set([...named.flatMap((id) => (isGroup(byId.get(id) as StoryElement) ? [id, ...peopleAndThings(id, elements)] : [id])), ...steps.only]);
+  const chosen = new Set([...named.flatMap((id) => (isGroup(byId.get(id) as StoryElement) ? [id, ...peopleAndThings(id, elements)] : [id])), ...(steps?.only ?? [])]);
   const whole = (groupId: string) => {
     const inside = peopleAndThings(groupId, elements);
     return inside.length > 0 && inside.every((id) => chosen.has(id));
@@ -144,19 +145,12 @@ export function membersFor(
     return chains[0]?.find((group) => chains.every((chain) => chain.includes(group)));
   };
   const fromNames = promote(named);
-  const fromSteps = promote(steps.picked);
-  let host = steps.picked.length > 0 ? around(fromSteps) : around(fromNames);
+  const fromSteps = promote(steps?.picked ?? []);
+  const host = steps ? around(fromSteps) : around(fromNames);
   const kept = fromSteps.filter((id) => byId.get(id)?.['parent'] === host);
-  if (steps.picked.length > 0 && kept.length === 0) {
-    host = undefined;
-  }
   // Whatever lies inside another member goes along with it.
   const picked = [...new Set([...kept, ...fromNames])];
   const members = picked.filter((id) => !groupAncestors(byId.get(id), byId).some((ancestor) => picked.includes(ancestor)));
-  const left = steps.picked.filter((id) => !members.some((member) => member === id || groupAncestors(byId.get(id), byId).includes(member)));
-  // The new group cannot go into one of its own members.
-  while (host !== undefined && members.some((id) => id === host || groupAncestors(byId.get(host as string), byId).includes(id))) {
-    host = byId.get(host)?.['parent'] as string | undefined;
-  }
+  const left = (steps?.picked ?? []).filter((id) => !members.some((member) => member === id || groupAncestors(byId.get(id), byId).includes(member)));
   return { host, members, left };
 }

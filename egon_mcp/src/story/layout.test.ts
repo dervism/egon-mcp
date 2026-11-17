@@ -546,6 +546,24 @@ describe('autoLayout', () => {
     expectStableAfterReopening(story);
   });
 
+  it('starts the group blocks further in for a wide actor beside them', () => {
+    const story = buildStory({
+      title: 'Wide',
+      sentences: [
+        { actor: 'Clerk', activity: 'files', workObject: 'Form' },
+        { actor: 'Clerk', activity: 'checks', workObject: 'Order' },
+      ],
+      groups: [{ name: 'Office', steps: [1, 2] }],
+    });
+    const clerk = story.elements().find((element) => element.name === 'Clerk') as ShapeElement;
+    story.updateElement(clerk.id, { width: 260 });
+    autoLayout(story);
+    const office = boundsOf(story.elements().find((element) => element.name === 'Office') as ShapeElement);
+    const wide = boundsOf(story.get(clerk.id) as ShapeElement);
+    expect(wide.x + wide.width).toBeLessThan(office.x);
+    expectStableAfterReopening(story);
+  });
+
   it('lays out a file whose groups named each other as parent', () => {
     const text = JSON.stringify({
       domain: { name: 'default', actors: {}, workObjects: {} },

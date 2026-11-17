@@ -1,4 +1,4 @@
-import { compareIds, iconNameOf, isActivity, isActor, isWorkObject, type GroupElement, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { compareIds, groupAncestors, iconNameOf, isActivity, isActor, isWorkObject, type GroupElement, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { IconCatalog } from '../icons/catalog.js';
 import { autoLayout } from './layout.js';
 import type { StepPicks } from './membership.js';
@@ -102,19 +102,30 @@ export function buildStory(input: BuildStoryInput): Story {
     input.sentences.forEach((sentence, index) => {
       withContext(`sentence ${index + 1}`, () => addSentence(story, sentence));
     });
-    // Groups by steps go first, those with fewer steps before those with more, so a larger
-    // group goes around a smaller one whatever the order of the list.
+    // The order of the list does not matter. A group named in another group's members is added
+    // before it; otherwise groups by steps come first, fewer steps before more, and each takes in
+    // the groups by steps added before it whose steps are all among its own.
     const groups = input.groups ?? [];
+    const names = new Set(groups.map((group) => group.name));
     const size = (group: (typeof groups)[number]) => group.steps?.length ?? Number.POSITIVE_INFINITY;
-    for (const group of [...groups].sort((a, b) => size(a) - size(b))) {
-      if (!group.members?.length && !group.steps?.length) {
+    const pending = [...groups].sort((a, b) => size(a) - size(b));
+    const added: { name: string; steps: number[] | undefined; id: string }[] = [];
+    while (pending.length > 0) {
+      const ready = pending.findIndex((group) =>
+        (group.members ?? []).every((ref) => ref === group.name || !names.has(ref) || added.some((other) => other.name === ref)),
+      );
+      const [group] = pending.splice(Math.max(ready, 0), 1) as [(typeof groups)[number]];
+      const steps = group.steps?.length ? group.steps : undefined;
+      if (!group.members?.length && !steps) {
         throw new StoryError(`The group "${group.name}" needs members or steps.`);
       }
-      withContext(`group "${group.name}"`, () =>
-        group.steps?.length
-          ? groupBySteps(story, { name: group.name, steps: group.steps, members: group.members, color: group.color })
+      const inner = steps ? added.filter((other) => other.steps?.every((number) => steps.includes(number))).map((other) => other.id) : [];
+      const created = withContext(`group "${group.name}"`, () =>
+        steps
+          ? groupBySteps(story, { name: group.name, steps, members: [...(group.members ?? []), ...inner], color: group.color }).group
           : story.addGroup({ name: group.name, members: group.members ?? [], ...(group.color ? { color: group.color } : {}) }),
       );
+      added.push({ name: group.name, steps, id: created.id });
     }
     for (const annotation of input.annotations ?? []) {
       withContext('annotation', () =>
@@ -245,15 +256,6 @@ function stepPicks(story: Story, steps: number[]): StepPicks & { reached: boolea
   };
 }
 
-/** The work objects that first appear in these steps; refused when there are none. */
-export function membersOfSteps(story: Story, steps: number[]): string[] {
-  const { picked, reached } = stepPicks(story, steps);
-  if (picked.length === 0) {
-    throw noWorkObject(steps, reached);
-  }
-  return picked;
-}
-
 function noWorkObject(steps: number[], reached: boolean): StoryError {
   const several = steps.length > 1;
   const which = `${several ? 'Steps' : 'Step'} ${steps.join(', ')}`;
@@ -282,15 +284,38 @@ function namedForSteps(story: Story, refs: string[], steps: number[]): string[] 
   });
 }
 
-/** add_group with steps: their work objects, as stepPicks finds them, and any members named besides. */
-export function groupBySteps(story: Story, input: { name: string; steps: number[]; members?: string[] | undefined; color?: string | undefined }): GroupElement {
+/** A work object that steps picked but left in another group, by name. */
+export interface LeftWorkObject {
+  workObject: string;
+  group: string;
+}
+
+/**
+ * add_group with steps: their work objects, as stepPicks finds them, and any
+ * members named besides. Also returns the picked work objects that stayed in
+ * other groups.
+ */
+export function groupBySteps(
+  story: Story,
+  input: { name: string; steps: number[]; members?: string[] | undefined; color?: string | undefined },
+): { group: GroupElement; left: LeftWorkObject[] } {
   return story.transaction(() => {
     const named = namedForSteps(story, input.members ?? [], input.steps);
     const { picked, only, reached } = stepPicks(story, input.steps);
     if (picked.length === 0 && named.length === 0) {
       throw noWorkObject(input.steps, reached);
     }
-    return story.addGroup({ name: input.name, members: named, fromSteps: { picked, only }, ...(input.color ? { color: input.color } : {}) });
+    const group = story.addGroup({ name: input.name, members: named, fromSteps: { picked, only }, ...(input.color ? { color: input.color } : {}) });
+    const elements = story.elements();
+    const byId = new Map(elements.map((element) => [element.id, element]));
+    const nameOf = (id: unknown) => {
+      const element = typeof id === 'string' ? byId.get(id) : undefined;
+      return element?.name || String(id);
+    };
+    const left = picked
+      .filter((id) => !groupAncestors(byId.get(id), byId).includes(group.id))
+      .map((id) => ({ workObject: nameOf(id), group: nameOf(byId.get(id)?.['parent']) }));
+    return { group, left };
   });
 }
 
