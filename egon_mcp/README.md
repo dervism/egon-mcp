@@ -6,13 +6,13 @@ The egon-mcp server: Node, TypeScript, the official MCP SDK over stdio, tested w
 
 | Command | What it does |
 |---|---|
-| `npm test` | Extracts Egon's icons from the submodule, then runs all tests. |
+| `npm test` | Builds (which extracts Egon's icons from the submodule), then runs all tests. |
 | `npm run typecheck` | Type checks sources and tests. |
 | `npm run build` | Builds `dist/`; `node dist/index.js --help` lists the options. |
 | `npm run docs` | Builds, then regenerates the skill's [tool reference](../skills/egon-mcp-skill/references/tools.md) from the server. A test fails when the reference is out of date. |
 | `npm run generate:icons` | Writes `src/icons/generated/builtin-icons.json` (gitignored) from `modules/egon.io`. |
 
-The stdio end-to-end test in `test/stdio.e2e.test.ts` runs against `dist/`, so build before relying on it; it is skipped when `dist/` is missing.
+The stdio end-to-end test in `test/stdio.e2e.test.ts` starts `dist/index.js`, which `npm test` builds first. Running Vitest directly without a build makes that test fail with a hint.
 
 ## Code map
 

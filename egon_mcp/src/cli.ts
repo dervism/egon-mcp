@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import { resolve, sep } from 'node:path';
 import type { EgonFormat } from './egon/serialize.js';
 
 export interface CliOptions {
@@ -15,6 +15,7 @@ Starts the Egon.io MCP server on stdio.
 
   --root <dir>      Directory the server may read and write story files in.
                     Default: $EGON_MCP_ROOT, else the current directory.
+                    The file system root (/) is refused.
   --egon-url <url>  Egon app used by open_in_egon.
                     Default: $EGON_APP_URL, else https://egon.io/app/
   --egon-format     Layout of written .egn files: egon3 (works with egon.io 3.x
@@ -77,9 +78,10 @@ export function parseOptions(argv: string[], env: Record<string, string | undefi
   };
 }
 
-/** A warning for roots that give the server more reach than intended. */
+/** A warning for roots that give the server more reach than intended (the home directory or above it). */
 export function rootWarning(root: string, home: string): string | undefined {
-  if (root === home) {
+  const rootWithSeparator = root.endsWith(sep) ? root : root + sep;
+  if (root === home || home.startsWith(rootWithSeparator)) {
     return `Warning: the workspace root is your home directory (${root}). Consider --root <dir> for a stories folder.`;
   }
   return undefined;

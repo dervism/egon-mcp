@@ -73,7 +73,7 @@ Server options:
 
 | Flag | Environment | Default | Meaning |
 |---|---|---|---|
-| `--root <dir>` | `EGON_MCP_ROOT` | current directory | The only directory file tools may read and write. |
+| `--root <dir>` | `EGON_MCP_ROOT` | current directory | The only directory file tools may read and write. The file system root is refused, so set it when your client starts servers in `/`. |
 | `--egon-url <url>` | `EGON_APP_URL` | `https://egon.io/app/` | Egon instance that `open_in_egon` links to. |
 | `--egon-format egon3\|egon4` | `EGON_FORMAT` | `egon3` | `.egn` layout. `egon3` works in egon.io 3.x and Egon 4; `egon4` also keeps title and scope in the file. |
 

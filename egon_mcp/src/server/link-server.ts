@@ -58,11 +58,15 @@ export class LinkServer {
   }
 
   private start(): Promise<void> {
-    this.starting ??= this.listen();
+    this.starting ??= this.listen().catch((error: unknown) => {
+      // Let the next call try again instead of caching the failure.
+      this.starting = undefined;
+      throw error;
+    });
     return this.starting;
   }
 
-  private async listen(): Promise<void> {
+  protected async listen(): Promise<void> {
     const server = createServer((request, response) => this.handle(request, response));
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);

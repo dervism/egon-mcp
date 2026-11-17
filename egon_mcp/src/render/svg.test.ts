@@ -55,6 +55,13 @@ describe('renderStorySvg', () => {
     expect(images.some((icon) => icon.includes('#E53935'))).toBe(true);
   });
 
+  it('also writes xlink:href so older SVG tools show the icons', () => {
+    const svg = renderStorySvg(pizza().toDocument());
+    expect(svg).toMatch(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" xmlns:xlink="http:\/\/www\.w3\.org\/1999\/xlink"/);
+    expect(svg).toMatch(/<image [^>]*xlink:href="data:image\/svg\+xml;base64,/);
+    expect(XMLValidator.validate(svg)).toBe(true);
+  });
+
   it('never inlines icon markup, so scripts in untrusted icons cannot run', () => {
     const doc = Story.create({ title: 'T' }).toDocument();
     doc.iconSet.actors['Evil'] =

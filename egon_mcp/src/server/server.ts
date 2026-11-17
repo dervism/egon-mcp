@@ -37,7 +37,7 @@ export interface EgonServer {
 const INSTRUCTIONS = `This server creates, edits, checks and renders domain stories for Egon.io (https://egon.io), the Domain Storytelling modeler.
 
 Typical flow: build_story (or create_story plus add_sentence) -> validate_story -> narrate_story to read it back -> save_story to write an .egn file -> open_in_egon to show it in the Egon app.
-Stories are referenced by storyId. Elements are referenced by id or by their exact name.
+Stories are referenced by storyId. Elements are referenced by id or by their exact name; each sentence draws its own work object, so use ids when a name appears more than once.
 Two actors cannot be connected directly; put the work object they exchange between them.
 Read egon://guide/domain-storytelling for the notation.`;
 
@@ -253,16 +253,20 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Save story to file',
       description:
-        'Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". Existing files that this server did not write are only replaced with overwrite: true.',
+        'Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". Existing files that this story did not write are only replaced with overwrite: true.',
       inputSchema: {
         storyId,
         path: z.string().optional().describe('Target path relative to the workspace root.'),
-        overwrite: z.boolean().optional().describe('Replace an existing file that this server did not write.'),
+        overwrite: z.boolean().optional().describe('Replace an existing file that this story did not write. Ask the user first.'),
+        layout: z
+          .enum(['egon3', 'egon4'])
+          .optional()
+          .describe('.egn layout: egon3 works in egon.io 3.x and Egon 4; egon4 also keeps title and scope. Default: the layout of the file being replaced, else the server setting.'),
       },
       annotations: { destructiveHint: true, idempotentHint: true },
     },
-    run(({ storyId: id, path, overwrite }) => {
-      const saved = workspace.save(id, { ...(path ? { path } : {}), ...(overwrite ? { overwrite } : {}) });
+    run(({ storyId: id, path, overwrite, layout }) => {
+      const saved = workspace.save(id, { ...(path ? { path } : {}), ...(overwrite ? { overwrite } : {}), ...(layout ? { layout } : {}) });
       return json({ ...saved, workspaceRoot: workspace.root });
     }),
   );

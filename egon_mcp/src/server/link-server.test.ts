@@ -81,6 +81,23 @@ describe('LinkServer', () => {
     expect(new URL(a).port).toBe(new URL(b).port);
   });
 
+  it('tries to listen again after a failed start', async () => {
+    let attempts = 0;
+    class FlakyLinkServer extends LinkServer {
+      protected override async listen(): Promise<void> {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error('EADDRNOTAVAIL');
+        }
+        return super.listen();
+      }
+    }
+    const flaky = new FlakyLinkServer();
+    server = flaky;
+    await expect(flaky.publish('s', 's.egn', () => '{}')).rejects.toThrow('EADDRNOTAVAIL');
+    await expect(flaky.publish('s', 's.egn', () => '{}')).resolves.toMatch(/^http:/);
+  });
+
   it('only accepts GET, HEAD and OPTIONS', async () => {
     server = new LinkServer();
     const url = await server.publish('s', 's.egn', () => '{}');

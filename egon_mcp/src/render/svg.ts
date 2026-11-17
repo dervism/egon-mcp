@@ -125,7 +125,7 @@ export function renderStorySvg(
     .join('');
 
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewBox}" font-family="${FONT}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="${viewBox}" font-family="${FONT}">` +
     `<title>${text(doc.title)}</title>` +
     (defs ? `<defs>${defs}</defs>` : '') +
     background +
@@ -160,7 +160,7 @@ function iconSvg(name: string, doc: StoryDocument, catalog: IconCatalog, color: 
   let source = catalog.get(name)?.svg ?? doc.iconSet.actors[name] ?? doc.iconSet.workObjects[name] ?? '';
   const place = `x="${round(box.x)}" y="${round(box.y)}" width="${round(box.width)}" height="${round(box.height)}"`;
   if (/^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(source)) {
-    return `<image ${place} href="${attr(source)}"/>`;
+    return `<image ${place} href="${attr(source)}" xlink:href="${attr(source)}"/>`;
   }
   if (source.startsWith('data:image/svg+xml')) {
     source = decodeDataUrl(source);
@@ -176,7 +176,7 @@ function iconSvg(name: string, doc: StoryDocument, catalog: IconCatalog, color: 
     svg = recolor(svg, color);
   }
   const dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`;
-  return `<image ${place} href="${dataUrl}" preserveAspectRatio="xMidYMid meet"/>`;
+  return `<image ${place} href="${dataUrl}" xlink:href="${dataUrl}" preserveAspectRatio="xMidYMid meet"/>`;
 }
 
 /** Egon's applyColorToIcon: replace every fill, or add one when the icon has none. */

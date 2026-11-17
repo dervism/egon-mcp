@@ -20,113 +20,10 @@
   "dst": [
     {
       "type": "domainStory:activity",
-      "name": "tells",
-      "id": "connection_0776",
-      "source": "shape_1908",
-      "target": "shape_7412",
-      "waypoints": [
-        {
-          "x": 135,
-          "y": 118,
-          "original": {
-            "x": 135,
-            "y": 118
-          }
-        },
-        {
-          "x": 280,
-          "y": 118,
-          "original": {
-            "x": 280,
-            "y": 118
-          }
-        }
-      ],
-      "number": 1
-    },
-    {
-      "type": "domainStory:activity",
-      "name": "to",
-      "id": "connection_0807",
-      "source": "shape_7412",
-      "target": "shape_7129",
-      "waypoints": [
-        {
-          "x": 355,
-          "y": 118,
-          "original": {
-            "x": 355,
-            "y": 118
-          }
-        },
-        {
-          "x": 500,
-          "y": 118,
-          "original": {
-            "x": 500,
-            "y": 118
-          }
-        }
-      ],
-      "number": null
-    },
-    {
-      "type": "domainStory:activity",
-      "name": "to",
-      "id": "connection_1900",
-      "source": "shape_4695",
-      "target": "shape_7129",
-      "waypoints": [
-        {
-          "x": 135,
-          "y": 300,
-          "original": {
-            "x": 135,
-            "y": 300
-          }
-        },
-        {
-          "x": 500,
-          "y": 135,
-          "original": {
-            "x": 500,
-            "y": 135
-          }
-        }
-      ],
-      "number": null
-    },
-    {
-      "type": "domainStory:connection",
-      "name": "",
-      "id": "connection_2704",
-      "source": "shape_0906",
-      "target": "shape_9097",
-      "waypoints": [
-        {
-          "x": 795,
-          "y": 94,
-          "original": {
-            "x": 795,
-            "y": 94
-          }
-        },
-        {
-          "x": 841,
-          "y": 65,
-          "original": {
-            "x": 841,
-            "y": 65
-          }
-        }
-      ]
-    },
-    {
-      "type": "domainStory:activity",
       "name": "pays",
-      "id": "connection_2945",
-      "source": "shape_1908",
-      "target": "shape_4695",
+      "id": "connection_2128",
+      "source": "shape_3288",
+      "target": "shape_6948",
       "waypoints": [
         {
           "x": 98,
@@ -149,10 +46,113 @@
     },
     {
       "type": "domainStory:activity",
+      "name": "tells",
+      "id": "connection_3807",
+      "source": "shape_3288",
+      "target": "shape_5427",
+      "waypoints": [
+        {
+          "x": 135,
+          "y": 118,
+          "original": {
+            "x": 135,
+            "y": 118
+          }
+        },
+        {
+          "x": 280,
+          "y": 118,
+          "original": {
+            "x": 280,
+            "y": 118
+          }
+        }
+      ],
+      "number": 1
+    },
+    {
+      "type": "domainStory:connection",
+      "name": "",
+      "id": "connection_4056",
+      "source": "shape_6218",
+      "target": "shape_4695",
+      "waypoints": [
+        {
+          "x": 795,
+          "y": 94,
+          "original": {
+            "x": 795,
+            "y": 94
+          }
+        },
+        {
+          "x": 841,
+          "y": 65,
+          "original": {
+            "x": 841,
+            "y": 65
+          }
+        }
+      ]
+    },
+    {
+      "type": "domainStory:activity",
+      "name": "for",
+      "id": "connection_5287",
+      "source": "shape_4932",
+      "target": "shape_3288",
+      "waypoints": [
+        {
+          "x": 720,
+          "y": 306,
+          "original": {
+            "x": 720,
+            "y": 306
+          }
+        },
+        {
+          "x": 135,
+          "y": 129,
+          "original": {
+            "x": 135,
+            "y": 129
+          }
+        }
+      ],
+      "number": null
+    },
+    {
+      "type": "domainStory:activity",
+      "name": "to",
+      "id": "connection_5443",
+      "source": "shape_6948",
+      "target": "shape_8200",
+      "waypoints": [
+        {
+          "x": 135,
+          "y": 300,
+          "original": {
+            "x": 135,
+            "y": 300
+          }
+        },
+        {
+          "x": 500,
+          "y": 135,
+          "original": {
+            "x": 500,
+            "y": 135
+          }
+        }
+      ],
+      "number": null
+    },
+    {
+      "type": "domainStory:activity",
       "name": "bakes",
-      "id": "connection_3902",
-      "source": "shape_9374",
-      "target": "shape_1222",
+      "id": "connection_7084",
+      "source": "shape_0740",
+      "target": "shape_4932",
       "waypoints": [
         {
           "x": 940,
@@ -175,10 +175,36 @@
     },
     {
       "type": "domainStory:activity",
+      "name": "to",
+      "id": "connection_7544",
+      "source": "shape_5427",
+      "target": "shape_8200",
+      "waypoints": [
+        {
+          "x": 355,
+          "y": 118,
+          "original": {
+            "x": 355,
+            "y": 118
+          }
+        },
+        {
+          "x": 500,
+          "y": 118,
+          "original": {
+            "x": 500,
+            "y": 118
+          }
+        }
+      ],
+      "number": null
+    },
+    {
+      "type": "domainStory:activity",
       "name": "for",
-      "id": "connection_5194",
-      "source": "shape_0906",
-      "target": "shape_9374",
+      "id": "connection_8290",
+      "source": "shape_6218",
+      "target": "shape_0740",
       "waypoints": [
         {
           "x": 795,
@@ -202,9 +228,9 @@
     {
       "type": "domainStory:activity",
       "name": "writes",
-      "id": "connection_5911",
-      "source": "shape_7129",
-      "target": "shape_0906",
+      "id": "connection_8338",
+      "source": "shape_8200",
+      "target": "shape_6218",
       "waypoints": [
         {
           "x": 575,
@@ -226,87 +252,34 @@
       "number": 2
     },
     {
-      "type": "domainStory:activity",
-      "name": "for",
-      "id": "connection_9087",
-      "source": "shape_1222",
-      "target": "shape_1908",
-      "waypoints": [
-        {
-          "x": 720,
-          "y": 306,
-          "original": {
-            "x": 720,
-            "y": 306
-          }
-        },
-        {
-          "x": 135,
-          "y": 129,
-          "original": {
-            "x": 135,
-            "y": 129
-          }
-        }
-      ],
-      "number": null
-    },
-    {
-      "type": "domainStory:workObjectDocument",
-      "name": "Order slip",
-      "id": "shape_0906",
-      "x": 720,
-      "y": 80
-    },
-    {
-      "type": "domainStory:workObjectDining",
-      "name": "Pizza",
-      "id": "shape_1222",
-      "x": 720,
-      "y": 280
+      "type": "domainStory:actorPerson",
+      "name": "Pizza baker",
+      "id": "shape_0740",
+      "x": 940,
+      "y": 80,
+      "parent": "shape_3377"
     },
     {
       "type": "domainStory:actorPerson",
       "name": "Customer",
-      "id": "shape_1908",
+      "id": "shape_3288",
       "x": 60,
       "y": 80
     },
     {
-      "type": "domainStory:workObjectEuro",
-      "name": "Money",
-      "id": "shape_4695",
-      "x": 60,
-      "y": 280
-    },
-    {
       "type": "domainStory:group",
       "name": "Kitchen",
-      "id": "shape_6255",
+      "id": "shape_3377",
       "x": 900,
       "y": 40,
       "width": 155,
       "height": 175
     },
     {
-      "type": "domainStory:actorPerson",
-      "name": "Clerk",
-      "id": "shape_7129",
-      "x": 500,
-      "y": 80
-    },
-    {
-      "type": "domainStory:workObjectDocument",
-      "name": "Order",
-      "id": "shape_7412",
-      "x": 280,
-      "y": 80
-    },
-    {
       "type": "domainStory:textAnnotation",
       "name": "",
       "text": "Handwritten",
-      "id": "shape_9097",
+      "id": "shape_4695",
       "x": 815,
       "y": 35,
       "width": 100,
@@ -314,12 +287,39 @@
       "number": 30
     },
     {
+      "type": "domainStory:workObjectDining",
+      "name": "Pizza",
+      "id": "shape_4932",
+      "x": 720,
+      "y": 280
+    },
+    {
+      "type": "domainStory:workObjectDocument",
+      "name": "Order",
+      "id": "shape_5427",
+      "x": 280,
+      "y": 80
+    },
+    {
+      "type": "domainStory:workObjectDocument",
+      "name": "Order slip",
+      "id": "shape_6218",
+      "x": 720,
+      "y": 80
+    },
+    {
+      "type": "domainStory:workObjectEuro",
+      "name": "Money",
+      "id": "shape_6948",
+      "x": 60,
+      "y": 280
+    },
+    {
       "type": "domainStory:actorPerson",
-      "name": "Pizza baker",
-      "id": "shape_9374",
-      "x": 940,
-      "y": 80,
-      "parent": "shape_6255"
+      "name": "Clerk",
+      "id": "shape_8200",
+      "x": 500,
+      "y": 80
     },
     {
       "info": "Happy path at the counter"

@@ -169,7 +169,9 @@ export class Story {
       throw new StoryError('Custom icon SVGs must not contain scripts, event handlers or foreignObject.');
     }
     // Egon treats only data URLs as custom icons (util.js, icon-css.service.ts).
-    this.iconMapFor(input.kind)[name] = `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`;
+    // Browsers refuse SVG images without the SVG namespace on the root.
+    const withNamespace = /^<svg\b[^>]*\sxmlns\s*=/i.test(svg) ? svg : svg.replace(/^<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+    this.iconMapFor(input.kind)[name] = `data:image/svg+xml;base64,${Buffer.from(withNamespace, 'utf8').toString('base64')}`;
   }
 
   addActivity(input: ActivityInput): ActivityElement {
@@ -213,7 +215,8 @@ export class Story {
 
   addGroup(input: { name: string; members?: string[]; x?: number; y?: number; width?: number; height?: number; color?: string }): GroupElement {
     let bounds: Bounds;
-    const members = (input.members ?? []).map((ref) => this.resolveShape(ref));
+    // A name shared by several elements (work objects repeat per sentence) groups all of them.
+    const members = (input.members ?? []).flatMap((ref) => this.resolveShapes(ref));
     if (members.length > 0 && input.x === undefined && input.y === undefined) {
       bounds = enclose(members.map((member) => boundsOf(member)), GROUP_PADDING);
     } else {
@@ -246,7 +249,8 @@ export class Story {
     annotation: TextAnnotationElement;
     connection?: ConnectionElement;
   } {
-    const anchor = input.attachTo ? this.resolveShape(input.attachTo) : undefined;
+    // With a shared name, the note goes to the first element of that name.
+    const anchor = input.attachTo ? this.resolveShapes(input.attachTo)[0] : undefined;
     let position: { x: number; y: number };
     if (input.x !== undefined && input.y !== undefined) {
       position = { x: input.x, y: input.y };
@@ -455,12 +459,25 @@ export class Story {
     return element as ShapeElement;
   }
 
-  private resolveShape(ref: string): ShapeElement {
-    const element = this.resolve(ref);
-    if (isEdge(element)) {
+  /** The shape with this id, or every shape with this name, in document order. */
+  private resolveShapes(ref: string): ShapeElement[] {
+    const byId = this.find(ref);
+    const wanted = ref.trim().toLowerCase();
+    const matches = byId
+      ? [byId]
+      : this.doc.elements.filter(
+          (element) =>
+            !isEdge(element) &&
+            (element.name.trim().toLowerCase() === wanted ||
+              (isTextAnnotation(element) && (element.text ?? '').trim().toLowerCase() === wanted)),
+        );
+    if (matches.length === 0) {
+      throw new StoryError(`There is no element with the id or name "${ref}".`);
+    }
+    if (matches.some((element) => isEdge(element))) {
       throw new StoryError(`"${ref}" is an activity or connection, not a shape.`);
     }
-    return element as ShapeElement;
+    return matches as ShapeElement[];
   }
 
   private find(id: string): StoryElement | undefined {

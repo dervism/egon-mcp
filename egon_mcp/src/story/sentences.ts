@@ -1,4 +1,4 @@
-import { isActor, isWorkObject, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { iconNameOf, isActivity, isActor, isWorkObject, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { IconCatalog } from '../icons/catalog.js';
 import { autoLayout } from './layout.js';
 import { Story, StoryError } from './story.js';
@@ -100,7 +100,7 @@ export function buildStory(input: BuildStoryInput): Story {
     withContext(`group "${group.name}"`, () =>
       story.addGroup({
         name: group.name,
-        members: group.members.flatMap((member) => idsFor(story, member)),
+        members: group.members,
         ...(group.color ? { color: group.color } : {}),
       }),
     );
@@ -109,7 +109,7 @@ export function buildStory(input: BuildStoryInput): Story {
     withContext('annotation', () =>
       story.addAnnotation({
         text: annotation.text,
-        ...(annotation.attachTo ? { attachTo: idsFor(story, annotation.attachTo)[0] as string } : {}),
+        ...(annotation.attachTo ? { attachTo: annotation.attachTo } : {}),
       }),
     );
   }
@@ -127,18 +127,38 @@ function findOrCreateActor(story: Story, name: string, icon: string | undefined,
   return create(story, 'actor', name, icon, created);
 }
 
+/**
+ * The work object for a sentence: an existing one given by id, the latest one
+ * of that name with `reuseWorkObject`, a declared one that is not used yet,
+ * or a new one that copies icon and color from earlier work objects of the
+ * same name.
+ */
 function workObjectFor(story: Story, input: SentenceInput, created: StoryElement[]): ShapeElement {
   const byId = story.get(input.workObject);
-  if (byId && isWorkObject(byId)) {
+  if (byId) {
+    if (!isWorkObject(byId)) {
+      throw new StoryError(`"${input.workObject}" is not a work object.`);
+    }
     return byId as ShapeElement;
   }
-  if (input.reuseWorkObject) {
-    const existing = sameName(story, input.workObject, 'workObject');
-    if (existing.length > 0) {
-      return existing[existing.length - 1] as ShapeElement;
-    }
+  const existing = sameName(story, input.workObject, 'workObject') as ShapeElement[];
+  if (input.reuseWorkObject && existing.length > 0) {
+    return existing[existing.length - 1] as ShapeElement;
   }
-  return create(story, 'workObject', input.workObject, input.workObjectIcon, created);
+  const used = new Set(story.elements().flatMap((element) => (isActivity(element) ? [element.source, element.target] : [])));
+  const declared = existing.find((element) => !used.has(element.id));
+  if (declared) {
+    return declared;
+  }
+  const previous = existing[existing.length - 1];
+  const icon = input.workObjectIcon ?? (previous ? iconNameOf(previous.type) : undefined);
+  const element = create(story, 'workObject', input.workObject, icon, created);
+  if (previous?.pickedColor && !input.workObjectIcon) {
+    const colored = story.updateElement(element.id, { color: previous.pickedColor }) as ShapeElement;
+    created[created.length - 1] = colored;
+    return colored;
+  }
+  return element;
 }
 
 /** Actors or work objects with this name, after checking the name is not used by the other kind. */
@@ -169,22 +189,6 @@ function create(
   const element = kind === 'actor' ? story.addActor(input) : story.addWorkObject(input);
   created.push(element);
   return element;
-}
-
-/** The id itself, or every actor and work object with that name. */
-function idsFor(story: Story, ref: string): string[] {
-  if (story.get(ref)) {
-    return [ref];
-  }
-  const wanted = ref.trim().toLowerCase();
-  const ids = story
-    .elements()
-    .filter((element) => (isActor(element) || isWorkObject(element)) && element.name.trim().toLowerCase() === wanted)
-    .map((element) => element.id);
-  if (ids.length === 0) {
-    throw new StoryError(`There is no actor or work object named "${ref}".`);
-  }
-  return ids;
 }
 
 function shapeInput(spec: ShapeSpec) {

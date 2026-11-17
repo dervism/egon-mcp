@@ -75,7 +75,7 @@ Then read `narrate_story` and compare it with what the user said. Each line must
 
 ## Edit precisely
 
-- `get_story` lists every element with its id, name, icon and step number. Pass either the id or the exact name to other tools.
+- `get_story` lists every element with its id, name, icon and step number. Pass either the id or the exact name to other tools. Work objects repeat per sentence, so use the id when a name appears more than once; `add_group` and `add_annotation` also accept such a name (all of them, or the first one).
 - `update_element` renames, recolors, changes icons, moves shapes, edits annotation text, and moves an activity to another step (`number`; later steps shift).
 - `remove_element` on an actor or work object also removes its activities and closes the gaps in the numbering.
 - `add_group` draws a box around members (for departments or subdomains). `add_annotation` attaches a note.
@@ -84,8 +84,8 @@ Then read `narrate_story` and compare it with what the user said. Each line must
 ## Save and show
 
 - `save_story` without a path writes back to the file the story came from, or to `<title>.egn`. The extension picks the format: `.egn` (Egon file), `.egn.svg` (picture that Egon can import), `.svg` (picture only), `.md` (sentences). Legacy `.dst` files can be opened but not written.
-- `save_story` will not replace a file it did not write. Ask the user before passing `overwrite: true`.
-- Egon 3 (the public app) reads the title from the file name, so keep the file name equal to the title. Scope survives only in the Egon 4 layout: when the server runs with `--egon-format egon4`, or when the story was opened from an Egon 4 file (saving in place keeps that layout).
+- `save_story` only replaces a file that the same story opened or wrote. Ask the user before passing `overwrite: true`.
+- Egon 3 (the public app) reads the title from the file name, so keep the file name equal to the title. Scope survives only in the Egon 4 layout: pass `layout: "egon4"` to `save_story`, or run the server with `--egon-format egon4`. Replacing an existing file keeps that file's layout.
 - `open_in_egon` returns an Egon link that loads the story from the running server. Give the user the `egonUrl`. The link works only on the same machine while the server runs, and it always shows the latest state, so edits only need a reload.
 - If the browser blocks the local link (Chrome may ask for local network access; some browsers refuse), save the story and tell the user to use "Import file" in Egon.
 - Image formats: `export_story` with `svg` returns the SVG text, which you can write to a file or show if the client renders SVG.

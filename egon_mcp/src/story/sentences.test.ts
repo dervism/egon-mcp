@@ -55,6 +55,25 @@ describe('addSentence', () => {
     expect(types).toContain('domainStory:workObjectEmail');
   });
 
+  it('gives a repeated work object the icon and color of the previous one', () => {
+    const story = Story.create({ title: 'T' });
+    addSentence(story, { actor: 'Baker', activity: 'bakes', workObject: 'Pizza', workObjectIcon: 'Dining' });
+    story.updateElement(story.elements().find((e) => e.name === 'Pizza')!.id, { color: '#E53935' });
+    addSentence(story, { actor: 'Clerk', activity: 'serves', workObject: 'Pizza' });
+    const pizzas = story.elements().filter((e) => e.name === 'Pizza');
+    expect(pizzas.map((e) => e.type)).toEqual(['domainStory:workObjectDining', 'domainStory:workObjectDining']);
+    expect(pizzas.map((e) => e.pickedColor)).toEqual(['#E53935', '#E53935']);
+  });
+
+  it('checks work object names in every case', () => {
+    const story = Story.create({ title: 'T' });
+    expect(() => addSentence(story, { actor: 'A', activity: 'does', workObject: '   ' })).toThrow(/name/);
+    addSentence(story, { actor: 'Customer', activity: 'fills in', workObject: 'Form' });
+    expect(() => addSentence(story, { actor: 'Clerk', activity: 'notes', workObject: 'Customer' })).toThrow(/already a actor/);
+    const actorId = story.elements().find((e) => e.name === 'Customer')!.id;
+    expect(() => addSentence(story, { actor: 'Clerk', activity: 'notes', workObject: actorId })).toThrow(/not a work object/);
+  });
+
   it('adds parallel activities to an existing step', () => {
     const story = Story.create({ title: 'T' });
     addSentence(story, { actor: 'A', activity: 'fills in', workObject: 'Form' });
@@ -99,6 +118,21 @@ describe('buildStory', () => {
     ]);
     expect(doc.elements.find((e) => e.name === 'Pizza baker')?.pickedColor).toBe('#FB8C00');
     expect(validateStory(doc)).toEqual([]);
+  });
+
+  it('uses work objects declared up front in the first sentence that names them', () => {
+    const story = buildStory({
+      title: 'T',
+      workObjects: [{ name: 'Pizza', icon: 'Dining', color: '#E53935' }],
+      sentences: [
+        { actor: 'Baker', activity: 'bakes', workObject: 'Pizza' },
+        { actor: 'Clerk', activity: 'serves', workObject: 'Pizza' },
+      ],
+    });
+    const pizzas = story.elements().filter((e) => e.name === 'Pizza');
+    expect(pizzas).toHaveLength(2);
+    expect(pizzas.every((e) => e.type === 'domainStory:workObjectDining' && e.pickedColor === '#E53935')).toBe(true);
+    expect(validateStory(story.toDocument())).toEqual([]);
   });
 
   it('puts every instance of a name into a group and attaches annotations to the first one', () => {

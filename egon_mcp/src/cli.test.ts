@@ -46,5 +46,6 @@ describe('rootWarning', () => {
   it('warns when the workspace is the home directory', () => {
     expect(rootWarning('/Users/ann', '/Users/ann')).toMatch(/home directory/);
     expect(rootWarning('/Users/ann/stories', '/Users/ann')).toBeUndefined();
+    expect(rootWarning('/Users', '/Users/ann')).toMatch(/home directory/);
   });
 });

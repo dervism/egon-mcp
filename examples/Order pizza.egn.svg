@@ -1,21 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1070" height="461" viewBox="15 -56 1070 461" font-family="Arial, sans-serif"><title>Order pizza</title><defs><marker id="arrow-black" viewBox="0 0 20 20" refX="11" refY="10" markerWidth="10" markerHeight="10" orient="auto"><path d="M 1 5 L 11 10 L 1 15 Z" fill="black" stroke="black" stroke-width="1"/></marker></defs><rect x="15" y="-56" width="1070" height="461" fill="white"/><text font-size="30" text-anchor="start" fill="black"><tspan x="15" y="-24">Order pizza</tspan></text><text font-size="12" text-anchor="start" fill="black"><tspan x="15" y="-4">Happy path at the counter</tspan></text><g data-element-id="shape_6255"><rect x="900" y="40" width="155" height="175" fill="none" stroke="#000000" stroke-width="2"/><text font-size="12" text-anchor="start" fill="black"><tspan x="908" y="59">Kitchen</tspan></text></g>
-<polyline data-element-id="connection_2704" points="795,94 841,65" fill="none" stroke="black" stroke-width="1.5" stroke-dasharray="5, 5"/>
-<g data-element-id="connection_0776"><polyline points="135,118 280,118" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="207.5" y="133">tells</tspan></text><circle cx="155" cy="118" r="11" fill="white" stroke="black" stroke-width="1.5"/><text x="155" y="122" font-size="11" text-anchor="middle">1</text></g>
-<g data-element-id="connection_0807"><polyline points="355,118 500,118" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="427.5" y="133">to</tspan></text></g>
-<g data-element-id="connection_5911"><polyline points="575,118 720,118" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="647.5" y="133">writes</tspan></text><circle cx="595" cy="118" r="11" fill="white" stroke="black" stroke-width="1.5"/><text x="595" y="122" font-size="11" text-anchor="middle">2</text></g>
-<g data-element-id="connection_5194"><polyline points="795,118 940,118" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="867.5" y="133">for</tspan></text></g>
-<g data-element-id="connection_3902"><polyline points="940,152 795,283" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="867.5" y="232.5">bakes</tspan></text><circle cx="925.16" cy="165.41" r="11" fill="white" stroke="black" stroke-width="1.5"/><text x="925.16" y="169.41" font-size="11" text-anchor="middle">3</text></g>
-<g data-element-id="connection_9087"><polyline points="720,306 135,129" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="427.5" y="232.5">for</tspan></text></g>
-<g data-element-id="connection_2945"><polyline points="98,155 98,280" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="start" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="106" y="217.5">pays</tspan></text><circle cx="98" cy="175" r="11" fill="white" stroke="black" stroke-width="1.5"/><text x="98" y="179" font-size="11" text-anchor="middle">4</text></g>
-<g data-element-id="connection_1900"><polyline points="135,300 500,135" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="317.5" y="232.5">to</tspan></text></g>
-<g data-element-id="shape_1908"><image x="60" y="80" width="75" height="75" href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEyIDUuOWMxLjE2IDAgMi4xLjk0IDIuMSAyLjFzLS45NCAyLjEtMi4xIDIuMVM5LjkgOS4xNiA5LjkgOHMuOTQtMi4xIDIuMS0yLjFtMCA5YzIuOTcgMCA2LjEgMS40NiA2LjEgMi4xdjEuMUg1LjlWMTdjMC0uNjQgMy4xMy0yLjEgNi4xLTIuMU0xMiA0QzkuNzkgNCA4IDUuNzkgOCA4czEuNzkgNCA0IDQgNC0xLjc5IDQtNC0xLjc5LTQtNC00em0wIDljLTIuNjcgMC04IDEuMzQtOCA0djNoMTZ2LTNjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="97.5" y="155">Customer</tspan></text></g>
-<g data-element-id="shape_7412"><image x="292.5" y="92.5" width="48.75" height="48.75" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI2Ij48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDI0djI0SDBWMHoiLz48cGF0aCBkPSJNOCAxNmg4djJIOHptMC00aDh2Mkg4em02LTEwSDZjLTEuMSAwLTIgLjktMiAydjE2YzAgMS4xLjg5IDIgMS45OSAySDE4YzEuMSAwIDItLjkgMi0yVjhsLTYtNnptNCAxOEg2VjRoN3Y1aDV2MTF6Ii8+PC9zdmc+" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="317.5" y="154.75">Order</tspan></text></g>
-<g data-element-id="shape_7129"><image x="500" y="80" width="75" height="75" href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEyIDUuOWMxLjE2IDAgMi4xLjk0IDIuMSAyLjFzLS45NCAyLjEtMi4xIDIuMVM5LjkgOS4xNiA5LjkgOHMuOTQtMi4xIDIuMS0yLjFtMCA5YzIuOTcgMCA2LjEgMS40NiA2LjEgMi4xdjEuMUg1LjlWMTdjMC0uNjQgMy4xMy0yLjEgNi4xLTIuMU0xMiA0QzkuNzkgNCA4IDUuNzkgOCA4czEuNzkgNCA0IDQgNC0xLjc5IDQtNC0xLjc5LTQtNC00em0wIDljLTIuNjcgMC04IDEuMzQtOCA0djNoMTZ2LTNjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="537.5" y="155">Clerk</tspan></text></g>
-<g data-element-id="shape_0906"><image x="732.5" y="92.5" width="48.75" height="48.75" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI2Ij48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDI0djI0SDBWMHoiLz48cGF0aCBkPSJNOCAxNmg4djJIOHptMC00aDh2Mkg4em02LTEwSDZjLTEuMSAwLTIgLjktMiAydjE2YzAgMS4xLjg5IDIgMS45OSAySDE4YzEuMSAwIDItLjkgMi0yVjhsLTYtNnptNCAxOEg2VjRoN3Y1aDV2MTF6Ii8+PC9zdmc+" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="757.5" y="154.75">Order slip</tspan></text></g>
-<g data-element-id="shape_9374"><image x="940" y="80" width="75" height="75" href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEyIDUuOWMxLjE2IDAgMi4xLjk0IDIuMSAyLjFzLS45NCAyLjEtMi4xIDIuMVM5LjkgOS4xNiA5LjkgOHMuOTQtMi4xIDIuMS0yLjFtMCA5YzIuOTcgMCA2LjEgMS40NiA2LjEgMi4xdjEuMUg1LjlWMTdjMC0uNjQgMy4xMy0yLjEgNi4xLTIuMU0xMiA0QzkuNzkgNCA4IDUuNzkgOCA4czEuNzkgNCA0IDQgNC0xLjc5IDQtNC0xLjc5LTQtNC00em0wIDljLTIuNjcgMC04IDEuMzQtOCA0djNoMTZ2LTNjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="977.5" y="155">Pizza baker</tspan></text></g>
-<g data-element-id="shape_1222"><image x="732.5" y="292.5" width="48.75" height="48.75" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI2Ij48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDI0djI0SDBWMHoiLz48cGF0aCBkPSJNOC4xIDEzLjM0bDIuODMtMi44M0wzLjkxIDMuNWMtMS41NiAxLjU2LTEuNTYgNC4wOSAwIDUuNjZsNC4xOSA0LjE4em02Ljc4LTEuODFjMS41My43MSAzLjY4LjIxIDUuMjctMS4zOCAxLjkxLTEuOTEgMi4yOC00LjY1LjgxLTYuMTItMS40Ni0xLjQ2LTQuMi0xLjEtNi4xMi44MS0xLjU5IDEuNTktMi4wOSAzLjc0LTEuMzggNS4yN0wzLjcgMTkuODdsMS40MSAxLjQxTDEyIDE0LjQxbDYuODggNi44OCAxLjQxLTEuNDFMMTMuNDEgMTNsMS40Ny0xLjQ3eiIvPjwvc3ZnPg==" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="757.5" y="354.75">Pizza</tspan></text></g>
-<g data-element-id="shape_4695"><image x="72.5" y="292.5" width="48.75" height="48.75" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI2Ij48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDI0djI0SDBWMHoiLz48cGF0aCBkPSJNMTUgMTguNWMtMi41MSAwLTQuNjgtMS40Mi01Ljc2LTMuNUgxNXYtMkg4LjU4Yy0uMDUtLjMzLS4wOC0uNjYtLjA4LTFzLjAzLS42Ny4wOC0xSDE1VjlIOS4yNEMxMC4zMiA2LjkyIDEyLjUgNS41IDE1IDUuNWMxLjYxIDAgMy4wOS41OSA0LjIzIDEuNTdMMjEgNS4zQzE5LjQxIDMuODcgMTcuMyAzIDE1IDNjLTMuOTIgMC03LjI0IDIuNTEtOC40OCA2SDN2MmgzLjA2Yy0uMDQuMzMtLjA2LjY2LS4wNiAxcy4wMi42Ny4wNiAxSDN2MmgzLjUyYzEuMjQgMy40OSA0LjU2IDYgOC40OCA2IDIuMzEgMCA0LjQxLS44NyA2LTIuM2wtMS43OC0xLjc3Yy0xLjEzLjk4LTIuNiAxLjU3LTQuMjIgMS41N3oiLz48L3N2Zz4=" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="97.5" y="354.75">Money</tspan></text></g>
-<g data-element-id="shape_9097"><path d="M 825 35 l -10 0 l 0 30 l 10 0" fill="none" stroke="black" stroke-width="2"/><text font-size="12" text-anchor="start" fill="black"><tspan x="820" y="52">Handwritten</tspan></text></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1070" height="461" viewBox="15 -56 1070 461" font-family="Arial, sans-serif"><title>Order pizza</title><defs><marker id="arrow-black" viewBox="0 0 20 20" refX="11" refY="10" markerWidth="10" markerHeight="10" orient="auto"><path d="M 1 5 L 11 10 L 1 15 Z" fill="black" stroke="black" stroke-width="1"/></marker></defs><rect x="15" y="-56" width="1070" height="461" fill="white"/><text font-size="30" text-anchor="start" fill="black"><tspan x="15" y="-24">Order pizza</tspan></text><text font-size="12" text-anchor="start" fill="black"><tspan x="15" y="-4">Happy path at the counter</tspan></text><g data-element-id="shape_3377"><rect x="900" y="40" width="155" height="175" fill="none" stroke="#000000" stroke-width="2"/><text font-size="12" text-anchor="start" fill="black"><tspan x="908" y="59">Kitchen</tspan></text></g>
+<polyline data-element-id="connection_4056" points="795,94 841,65" fill="none" stroke="black" stroke-width="1.5" stroke-dasharray="5, 5"/>
+<g data-element-id="connection_3807"><polyline points="135,118 280,118" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="207.5" y="133">tells</tspan></text><circle cx="155" cy="118" r="11" fill="white" stroke="black" stroke-width="1.5"/><text x="155" y="122" font-size="11" text-anchor="middle">1</text></g>
+<g data-element-id="connection_7544"><polyline points="355,118 500,118" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="427.5" y="133">to</tspan></text></g>
+<g data-element-id="connection_8338"><polyline points="575,118 720,118" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="647.5" y="133">writes</tspan></text><circle cx="595" cy="118" r="11" fill="white" stroke="black" stroke-width="1.5"/><text x="595" y="122" font-size="11" text-anchor="middle">2</text></g>
+<g data-element-id="connection_8290"><polyline points="795,118 940,118" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="867.5" y="133">for</tspan></text></g>
+<g data-element-id="connection_7084"><polyline points="940,152 795,283" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="867.5" y="232.5">bakes</tspan></text><circle cx="925.16" cy="165.41" r="11" fill="white" stroke="black" stroke-width="1.5"/><text x="925.16" y="169.41" font-size="11" text-anchor="middle">3</text></g>
+<g data-element-id="connection_5287"><polyline points="720,306 135,129" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="427.5" y="232.5">for</tspan></text></g>
+<g data-element-id="connection_2128"><polyline points="98,155 98,280" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="start" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="106" y="217.5">pays</tspan></text><circle cx="98" cy="175" r="11" fill="white" stroke="black" stroke-width="1.5"/><text x="98" y="179" font-size="11" text-anchor="middle">4</text></g>
+<g data-element-id="connection_5443"><polyline points="135,300 500,135" fill="none" stroke="black" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow-black)"/><text font-size="11" text-anchor="middle" fill="black" stroke="white" stroke-width="3" paint-order="stroke"><tspan x="317.5" y="232.5">to</tspan></text></g>
+<g data-element-id="shape_3288"><image x="60" y="80" width="75" height="75" href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEyIDUuOWMxLjE2IDAgMi4xLjk0IDIuMSAyLjFzLS45NCAyLjEtMi4xIDIuMVM5LjkgOS4xNiA5LjkgOHMuOTQtMi4xIDIuMS0yLjFtMCA5YzIuOTcgMCA2LjEgMS40NiA2LjEgMi4xdjEuMUg1LjlWMTdjMC0uNjQgMy4xMy0yLjEgNi4xLTIuMU0xMiA0QzkuNzkgNCA4IDUuNzkgOCA4czEuNzkgNCA0IDQgNC0xLjc5IDQtNC0xLjc5LTQtNC00em0wIDljLTIuNjcgMC04IDEuMzQtOCA0djNoMTZ2LTNjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" xlink:href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEyIDUuOWMxLjE2IDAgMi4xLjk0IDIuMSAyLjFzLS45NCAyLjEtMi4xIDIuMVM5LjkgOS4xNiA5LjkgOHMuOTQtMi4xIDIuMS0yLjFtMCA5YzIuOTcgMCA2LjEgMS40NiA2LjEgMi4xdjEuMUg1LjlWMTdjMC0uNjQgMy4xMy0yLjEgNi4xLTIuMU0xMiA0QzkuNzkgNCA4IDUuNzkgOCA4czEuNzkgNCA0IDQgNC0xLjc5IDQtNC0xLjc5LTQtNC00em0wIDljLTIuNjcgMC04IDEuMzQtOCA0djNoMTZ2LTNjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="97.5" y="155">Customer</tspan></text></g>
+<g data-element-id="shape_5427"><image x="292.5" y="92.5" width="48.75" height="48.75" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI2Ij48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDI0djI0SDBWMHoiLz48cGF0aCBkPSJNOCAxNmg4djJIOHptMC00aDh2Mkg4em02LTEwSDZjLTEuMSAwLTIgLjktMiAydjE2YzAgMS4xLjg5IDIgMS45OSAySDE4YzEuMSAwIDItLjkgMi0yVjhsLTYtNnptNCAxOEg2VjRoN3Y1aDV2MTF6Ii8+PC9zdmc+" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI2Ij48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDI0djI0SDBWMHoiLz48cGF0aCBkPSJNOCAxNmg4djJIOHptMC00aDh2Mkg4em02LTEwSDZjLTEuMSAwLTIgLjktMiAydjE2YzAgMS4xLjg5IDIgMS45OSAySDE4YzEuMSAwIDItLjkgMi0yVjhsLTYtNnptNCAxOEg2VjRoN3Y1aDV2MTF6Ii8+PC9zdmc+" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="317.5" y="154.75">Order</tspan></text></g>
+<g data-element-id="shape_8200"><image x="500" y="80" width="75" height="75" href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEyIDUuOWMxLjE2IDAgMi4xLjk0IDIuMSAyLjFzLS45NCAyLjEtMi4xIDIuMVM5LjkgOS4xNiA5LjkgOHMuOTQtMi4xIDIuMS0yLjFtMCA5YzIuOTcgMCA2LjEgMS40NiA2LjEgMi4xdjEuMUg1LjlWMTdjMC0uNjQgMy4xMy0yLjEgNi4xLTIuMU0xMiA0QzkuNzkgNCA4IDUuNzkgOCA4czEuNzkgNCA0IDQgNC0xLjc5IDQtNC0xLjc5LTQtNC00em0wIDljLTIuNjcgMC04IDEuMzQtOCA0djNoMTZ2LTNjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" xlink:href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEyIDUuOWMxLjE2IDAgMi4xLjk0IDIuMSAyLjFzLS45NCAyLjEtMi4xIDIuMVM5LjkgOS4xNiA5LjkgOHMuOTQtMi4xIDIuMS0yLjFtMCA5YzIuOTcgMCA2LjEgMS40NiA2LjEgMi4xdjEuMUg1LjlWMTdjMC0uNjQgMy4xMy0yLjEgNi4xLTIuMU0xMiA0QzkuNzkgNCA4IDUuNzkgOCA4czEuNzkgNCA0IDQgNC0xLjc5IDQtNC0xLjc5LTQtNC00em0wIDljLTIuNjcgMC04IDEuMzQtOCA0djNoMTZ2LTNjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="537.5" y="155">Clerk</tspan></text></g>
+<g data-element-id="shape_6218"><image x="732.5" y="92.5" width="48.75" height="48.75" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI2Ij48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDI0djI0SDBWMHoiLz48cGF0aCBkPSJNOCAxNmg4djJIOHptMC00aDh2Mkg4em02LTEwSDZjLTEuMSAwLTIgLjktMiAydjE2YzAgMS4xLjg5IDIgMS45OSAySDE4YzEuMSAwIDItLjkgMi0yVjhsLTYtNnptNCAxOEg2VjRoN3Y1aDV2MTF6Ii8+PC9zdmc+" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI2Ij48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDI0djI0SDBWMHoiLz48cGF0aCBkPSJNOCAxNmg4djJIOHptMC00aDh2Mkg4em02LTEwSDZjLTEuMSAwLTIgLjktMiAydjE2YzAgMS4xLjg5IDIgMS45OSAySDE4YzEuMSAwIDItLjkgMi0yVjhsLTYtNnptNCAxOEg2VjRoN3Y1aDV2MTF6Ii8+PC9zdmc+" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="757.5" y="154.75">Order slip</tspan></text></g>
+<g data-element-id="shape_0740"><image x="940" y="80" width="75" height="75" href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEyIDUuOWMxLjE2IDAgMi4xLjk0IDIuMSAyLjFzLS45NCAyLjEtMi4xIDIuMVM5LjkgOS4xNiA5LjkgOHMuOTQtMi4xIDIuMS0yLjFtMCA5YzIuOTcgMCA2LjEgMS40NiA2LjEgMi4xdjEuMUg1LjlWMTdjMC0uNjQgMy4xMy0yLjEgNi4xLTIuMU0xMiA0QzkuNzkgNCA4IDUuNzkgOCA4czEuNzkgNCA0IDQgNC0xLjc5IDQtNC0xLjc5LTQtNC00em0wIDljLTIuNjcgMC04IDEuMzQtOCA0djNoMTZ2LTNjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" xlink:href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEyIDUuOWMxLjE2IDAgMi4xLjk0IDIuMSAyLjFzLS45NCAyLjEtMi4xIDIuMVM5LjkgOS4xNiA5LjkgOHMuOTQtMi4xIDIuMS0yLjFtMCA5YzIuOTcgMCA2LjEgMS40NiA2LjEgMi4xdjEuMUg1LjlWMTdjMC0uNjQgMy4xMy0yLjEgNi4xLTIuMU0xMiA0QzkuNzkgNCA4IDUuNzkgOCA4czEuNzkgNCA0IDQgNC0xLjc5IDQtNC0xLjc5LTQtNC00em0wIDljLTIuNjcgMC04IDEuMzQtOCA0djNoMTZ2LTNjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PHBhdGggZD0iTTAgMGgyNHYyNEgweiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="977.5" y="155">Pizza baker</tspan></text></g>
+<g data-element-id="shape_4932"><image x="732.5" y="292.5" width="48.75" height="48.75" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI2Ij48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDI0djI0SDBWMHoiLz48cGF0aCBkPSJNOC4xIDEzLjM0bDIuODMtMi44M0wzLjkxIDMuNWMtMS41NiAxLjU2LTEuNTYgNC4wOSAwIDUuNjZsNC4xOSA0LjE4em02Ljc4LTEuODFjMS41My43MSAzLjY4LjIxIDUuMjctMS4zOCAxLjkxLTEuOTEgMi4yOC00LjY1LjgxLTYuMTItMS40Ni0xLjQ2LTQuMi0xLjEtNi4xMi44MS0xLjU5IDEuNTktMi4wOSAzLjc0LTEuMzggNS4yN0wzLjcgMTkuODdsMS40MSAxLjQxTDEyIDE0LjQxbDYuODggNi44OCAxLjQxLTEuNDFMMTMuNDEgMTNsMS40Ny0xLjQ3eiIvPjwvc3ZnPg==" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI2Ij48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDI0djI0SDBWMHoiLz48cGF0aCBkPSJNOC4xIDEzLjM0bDIuODMtMi44M0wzLjkxIDMuNWMtMS41NiAxLjU2LTEuNTYgNC4wOSAwIDUuNjZsNC4xOSA0LjE4em02Ljc4LTEuODFjMS41My43MSAzLjY4LjIxIDUuMjctMS4zOCAxLjkxLTEuOTEgMi4yOC00LjY1LjgxLTYuMTItMS40Ni0xLjQ2LTQuMi0xLjEtNi4xMi44MS0xLjU5IDEuNTktMi4wOSAzLjc0LTEuMzggNS4yN0wzLjcgMTkuODdsMS40MSAxLjQxTDEyIDE0LjQxbDYuODggNi44OCAxLjQxLTEuNDFMMTMuNDEgMTNsMS40Ny0xLjQ3eiIvPjwvc3ZnPg==" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="757.5" y="354.75">Pizza</tspan></text></g>
+<g data-element-id="shape_6948"><image x="72.5" y="292.5" width="48.75" height="48.75" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI2Ij48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDI0djI0SDBWMHoiLz48cGF0aCBkPSJNMTUgMTguNWMtMi41MSAwLTQuNjgtMS40Mi01Ljc2LTMuNUgxNXYtMkg4LjU4Yy0uMDUtLjMzLS4wOC0uNjYtLjA4LTFzLjAzLS42Ny4wOC0xSDE1VjlIOS4yNEMxMC4zMiA2LjkyIDEyLjUgNS41IDE1IDUuNWMxLjYxIDAgMy4wOS41OSA0LjIzIDEuNTdMMjEgNS4zQzE5LjQxIDMuODcgMTcuMyAzIDE1IDNjLTMuOTIgMC03LjI0IDIuNTEtOC40OCA2SDN2MmgzLjA2Yy0uMDQuMzMtLjA2LjY2LS4wNiAxcy4wMi42Ny4wNiAxSDN2MmgzLjUyYzEuMjQgMy40OSA0LjU2IDYgOC40OCA2IDIuMzEgMCA0LjQxLS44NyA2LTIuM2wtMS43OC0xLjc3Yy0xLjEzLjk4LTIuNiAxLjU3LTQuMjIgMS41N3oiLz48L3N2Zz4=" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI2Ij48cGF0aCBmaWxsPSJub25lIiBkPSJNMCAwaDI0djI0SDBWMHoiLz48cGF0aCBkPSJNMTUgMTguNWMtMi41MSAwLTQuNjgtMS40Mi01Ljc2LTMuNUgxNXYtMkg4LjU4Yy0uMDUtLjMzLS4wOC0uNjYtLjA4LTFzLjAzLS42Ny4wOC0xSDE1VjlIOS4yNEMxMC4zMiA2LjkyIDEyLjUgNS41IDE1IDUuNWMxLjYxIDAgMy4wOS41OSA0LjIzIDEuNTdMMjEgNS4zQzE5LjQxIDMuODcgMTcuMyAzIDE1IDNjLTMuOTIgMC03LjI0IDIuNTEtOC40OCA2SDN2MmgzLjA2Yy0uMDQuMzMtLjA2LjY2LS4wNiAxcy4wMi42Ny4wNiAxSDN2MmgzLjUyYzEuMjQgMy40OSA0LjU2IDYgOC40OCA2IDIuMzEgMCA0LjQxLS44NyA2LTIuM2wtMS43OC0xLjc3Yy0xLjEzLjk4LTIuNiAxLjU3LTQuMjIgMS41N3oiLz48L3N2Zz4=" preserveAspectRatio="xMidYMid meet"/><text font-size="12" text-anchor="middle" fill="black"><tspan x="97.5" y="354.75">Money</tspan></text></g>
+<g data-element-id="shape_4695"><path d="M 825 35 l -10 0 l 0 30 l 10 0" fill="none" stroke="black" stroke-width="2"/><text font-size="12" text-anchor="start" fill="black"><tspan x="820" y="52">Handwritten</tspan></text></g></svg>
 <!-- <DST>
 {
   "domain": {
@@ -39,113 +39,10 @@
   "dst": [
     {
       "type": "domainStory:activity",
-      "name": "tells",
-      "id": "connection_0776",
-      "source": "shape_1908",
-      "target": "shape_7412",
-      "waypoints": [
-        {
-          "x": 135,
-          "y": 118,
-          "original": {
-            "x": 135,
-            "y": 118
-          }
-        },
-        {
-          "x": 280,
-          "y": 118,
-          "original": {
-            "x": 280,
-            "y": 118
-          }
-        }
-      ],
-      "number": 1
-    },
-    {
-      "type": "domainStory:activity",
-      "name": "to",
-      "id": "connection_0807",
-      "source": "shape_7412",
-      "target": "shape_7129",
-      "waypoints": [
-        {
-          "x": 355,
-          "y": 118,
-          "original": {
-            "x": 355,
-            "y": 118
-          }
-        },
-        {
-          "x": 500,
-          "y": 118,
-          "original": {
-            "x": 500,
-            "y": 118
-          }
-        }
-      ],
-      "number": null
-    },
-    {
-      "type": "domainStory:activity",
-      "name": "to",
-      "id": "connection_1900",
-      "source": "shape_4695",
-      "target": "shape_7129",
-      "waypoints": [
-        {
-          "x": 135,
-          "y": 300,
-          "original": {
-            "x": 135,
-            "y": 300
-          }
-        },
-        {
-          "x": 500,
-          "y": 135,
-          "original": {
-            "x": 500,
-            "y": 135
-          }
-        }
-      ],
-      "number": null
-    },
-    {
-      "type": "domainStory:connection",
-      "name": "",
-      "id": "connection_2704",
-      "source": "shape_0906",
-      "target": "shape_9097",
-      "waypoints": [
-        {
-          "x": 795,
-          "y": 94,
-          "original": {
-            "x": 795,
-            "y": 94
-          }
-        },
-        {
-          "x": 841,
-          "y": 65,
-          "original": {
-            "x": 841,
-            "y": 65
-          }
-        }
-      ]
-    },
-    {
-      "type": "domainStory:activity",
       "name": "pays",
-      "id": "connection_2945",
-      "source": "shape_1908",
-      "target": "shape_4695",
+      "id": "connection_2128",
+      "source": "shape_3288",
+      "target": "shape_6948",
       "waypoints": [
         {
           "x": 98,
@@ -168,10 +65,113 @@
     },
     {
       "type": "domainStory:activity",
+      "name": "tells",
+      "id": "connection_3807",
+      "source": "shape_3288",
+      "target": "shape_5427",
+      "waypoints": [
+        {
+          "x": 135,
+          "y": 118,
+          "original": {
+            "x": 135,
+            "y": 118
+          }
+        },
+        {
+          "x": 280,
+          "y": 118,
+          "original": {
+            "x": 280,
+            "y": 118
+          }
+        }
+      ],
+      "number": 1
+    },
+    {
+      "type": "domainStory:connection",
+      "name": "",
+      "id": "connection_4056",
+      "source": "shape_6218",
+      "target": "shape_4695",
+      "waypoints": [
+        {
+          "x": 795,
+          "y": 94,
+          "original": {
+            "x": 795,
+            "y": 94
+          }
+        },
+        {
+          "x": 841,
+          "y": 65,
+          "original": {
+            "x": 841,
+            "y": 65
+          }
+        }
+      ]
+    },
+    {
+      "type": "domainStory:activity",
+      "name": "for",
+      "id": "connection_5287",
+      "source": "shape_4932",
+      "target": "shape_3288",
+      "waypoints": [
+        {
+          "x": 720,
+          "y": 306,
+          "original": {
+            "x": 720,
+            "y": 306
+          }
+        },
+        {
+          "x": 135,
+          "y": 129,
+          "original": {
+            "x": 135,
+            "y": 129
+          }
+        }
+      ],
+      "number": null
+    },
+    {
+      "type": "domainStory:activity",
+      "name": "to",
+      "id": "connection_5443",
+      "source": "shape_6948",
+      "target": "shape_8200",
+      "waypoints": [
+        {
+          "x": 135,
+          "y": 300,
+          "original": {
+            "x": 135,
+            "y": 300
+          }
+        },
+        {
+          "x": 500,
+          "y": 135,
+          "original": {
+            "x": 500,
+            "y": 135
+          }
+        }
+      ],
+      "number": null
+    },
+    {
+      "type": "domainStory:activity",
       "name": "bakes",
-      "id": "connection_3902",
-      "source": "shape_9374",
-      "target": "shape_1222",
+      "id": "connection_7084",
+      "source": "shape_0740",
+      "target": "shape_4932",
       "waypoints": [
         {
           "x": 940,
@@ -194,10 +194,36 @@
     },
     {
       "type": "domainStory:activity",
+      "name": "to",
+      "id": "connection_7544",
+      "source": "shape_5427",
+      "target": "shape_8200",
+      "waypoints": [
+        {
+          "x": 355,
+          "y": 118,
+          "original": {
+            "x": 355,
+            "y": 118
+          }
+        },
+        {
+          "x": 500,
+          "y": 118,
+          "original": {
+            "x": 500,
+            "y": 118
+          }
+        }
+      ],
+      "number": null
+    },
+    {
+      "type": "domainStory:activity",
       "name": "for",
-      "id": "connection_5194",
-      "source": "shape_0906",
-      "target": "shape_9374",
+      "id": "connection_8290",
+      "source": "shape_6218",
+      "target": "shape_0740",
       "waypoints": [
         {
           "x": 795,
@@ -221,9 +247,9 @@
     {
       "type": "domainStory:activity",
       "name": "writes",
-      "id": "connection_5911",
-      "source": "shape_7129",
-      "target": "shape_0906",
+      "id": "connection_8338",
+      "source": "shape_8200",
+      "target": "shape_6218",
       "waypoints": [
         {
           "x": 575,
@@ -245,87 +271,34 @@
       "number": 2
     },
     {
-      "type": "domainStory:activity",
-      "name": "for",
-      "id": "connection_9087",
-      "source": "shape_1222",
-      "target": "shape_1908",
-      "waypoints": [
-        {
-          "x": 720,
-          "y": 306,
-          "original": {
-            "x": 720,
-            "y": 306
-          }
-        },
-        {
-          "x": 135,
-          "y": 129,
-          "original": {
-            "x": 135,
-            "y": 129
-          }
-        }
-      ],
-      "number": null
-    },
-    {
-      "type": "domainStory:workObjectDocument",
-      "name": "Order slip",
-      "id": "shape_0906",
-      "x": 720,
-      "y": 80
-    },
-    {
-      "type": "domainStory:workObjectDining",
-      "name": "Pizza",
-      "id": "shape_1222",
-      "x": 720,
-      "y": 280
+      "type": "domainStory:actorPerson",
+      "name": "Pizza baker",
+      "id": "shape_0740",
+      "x": 940,
+      "y": 80,
+      "parent": "shape_3377"
     },
     {
       "type": "domainStory:actorPerson",
       "name": "Customer",
-      "id": "shape_1908",
+      "id": "shape_3288",
       "x": 60,
       "y": 80
     },
     {
-      "type": "domainStory:workObjectEuro",
-      "name": "Money",
-      "id": "shape_4695",
-      "x": 60,
-      "y": 280
-    },
-    {
       "type": "domainStory:group",
       "name": "Kitchen",
-      "id": "shape_6255",
+      "id": "shape_3377",
       "x": 900,
       "y": 40,
       "width": 155,
       "height": 175
     },
     {
-      "type": "domainStory:actorPerson",
-      "name": "Clerk",
-      "id": "shape_7129",
-      "x": 500,
-      "y": 80
-    },
-    {
-      "type": "domainStory:workObjectDocument",
-      "name": "Order",
-      "id": "shape_7412",
-      "x": 280,
-      "y": 80
-    },
-    {
       "type": "domainStory:textAnnotation",
       "name": "",
       "text": "Handwritten",
-      "id": "shape_9097",
+      "id": "shape_4695",
       "x": 815,
       "y": 35,
       "width": 100,
@@ -333,12 +306,39 @@
       "number": 30
     },
     {
+      "type": "domainStory:workObjectDining",
+      "name": "Pizza",
+      "id": "shape_4932",
+      "x": 720,
+      "y": 280
+    },
+    {
+      "type": "domainStory:workObjectDocument",
+      "name": "Order",
+      "id": "shape_5427",
+      "x": 280,
+      "y": 80
+    },
+    {
+      "type": "domainStory:workObjectDocument",
+      "name": "Order slip",
+      "id": "shape_6218",
+      "x": 720,
+      "y": 80
+    },
+    {
+      "type": "domainStory:workObjectEuro",
+      "name": "Money",
+      "id": "shape_6948",
+      "x": 60,
+      "y": 280
+    },
+    {
       "type": "domainStory:actorPerson",
-      "name": "Pizza baker",
-      "id": "shape_9374",
-      "x": 940,
-      "y": 80,
-      "parent": "shape_6255"
+      "name": "Clerk",
+      "id": "shape_8200",
+      "x": 500,
+      "y": 80
     },
     {
       "info": "Happy path at the counter"

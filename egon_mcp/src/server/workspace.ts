@@ -18,16 +18,16 @@ export interface StoryEntry {
   story: Story;
   /** Path relative to the workspace root that the story was opened from or last saved to as .egn / .egn.svg. */
   path?: string;
-  /** File layout to keep when saving in place, for stories opened from Egon 4 files. */
-  layout?: EgonFormat;
   dirty: boolean;
 }
 
 export interface SaveOptions {
   path?: string;
   format?: SaveFormat;
-  /** Replace an existing file that this server did not write. */
+  /** Replace an existing file that this story did not write. */
   overwrite?: boolean;
+  /** .egn layout; default: the layout of the story's own file when saving in place, else the server's. */
+  layout?: EgonFormat;
 }
 
 export interface SaveResult {
@@ -49,8 +49,10 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024;
  */
 export class Workspace {
   private readonly entries = new Map<string, StoryEntry>();
-  /** Absolute paths this workspace wrote, which it may overwrite again. */
-  private readonly written = new Set<string>();
+  /** Absolute path to the id of the story that opened or wrote it; a story may overwrite its own files. */
+  private readonly owners = new Map<string, string>();
+  /** Absolute path to the .egn layout of that file, kept when the file is replaced. */
+  private readonly fileLayouts = new Map<string, EgonFormat>();
   readonly root: string;
   /** Layout of written .egn files (docs/adr/0007-write-egon-3-file-layout.md). */
   readonly egonFormat: EgonFormat;
@@ -81,9 +83,8 @@ export class Workspace {
     const relativePath = this.relative(absolute);
     const keepPath = /\.egn(\.svg)?$/i.test(relativePath) ? relativePath : undefined;
     const entry = this.add(Story.fromDocument(doc), keepPath, false);
-    if (doc.version.startsWith('4')) {
-      entry.layout = 'egon4';
-    }
+    this.owners.set(absolute, entry.id);
+    this.fileLayouts.set(absolute, doc.version.startsWith('4') ? 'egon4' : 'egon3');
     return entry;
   }
 
@@ -123,8 +124,8 @@ export class Workspace {
   /**
    * Writes a story to disk. The format follows the file extension. Without a
    * path, the story goes back to the file it came from, else to "<title>.egn".
-   * Existing files are only replaced if this workspace wrote them, if they are
-   * the story's own file, or with `overwrite`.
+   * Existing files are only replaced if this story opened or wrote them, or
+   * with `overwrite`. Replacing a file keeps its .egn layout.
    */
   save(id: string, options: SaveOptions): SaveResult {
     const entry = this.get(id);
@@ -134,15 +135,17 @@ export class Workspace {
       throw new WorkspaceError(`The extension of ${path} does not match the format ${format}.`);
     }
     const absolute = this.resolveForWrite(path);
-    const ownFile = entry.path !== undefined && this.lexicallyInside(entry.path) === absolute;
-    if (lexists(absolute) && !ownFile && !this.written.has(absolute) && !options.overwrite) {
+    if (lexists(absolute) && this.owners.get(absolute) !== id && !options.overwrite) {
       throw new WorkspaceError(`${path} already exists. Pass overwrite: true to replace it, or choose another path.`);
     }
-    const layout = entry.layout ?? this.egonFormat;
+    const layout = options.layout ?? this.fileLayouts.get(absolute) ?? this.egonFormat;
     const content = this.serialize(entry.story, format, layout);
     mkdirSync(dirname(absolute), { recursive: true });
     writeFileSync(absolute, content);
-    this.written.add(absolute);
+    this.owners.set(absolute, id);
+    if (format === 'egn' || format === 'egn.svg') {
+      this.fileLayouts.set(absolute, layout);
+    }
     const relativePath = this.relative(absolute);
     const result: SaveResult = { path: relativePath, format, bytes: Buffer.byteLength(content) };
     if (format === 'egn' || format === 'egn.svg') {

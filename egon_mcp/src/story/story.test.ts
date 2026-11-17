@@ -59,7 +59,10 @@ describe('adding actors and work objects', () => {
     story.addCustomIcon({ kind: 'workObject', name: 'Pizza', svg: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>' });
     expect(story.addWorkObject({ name: 'Margherita', icon: 'Pizza' }).type).toBe('domainStory:workObjectPizza');
     // Egon only treats data URLs as custom icons (util.js, icon-css.service.ts).
-    expect(story.toDocument().iconSet.workObjects['Pizza']).toMatch(/^data:image\/svg\+xml;base64,/);
+    const dataUrl = story.toDocument().iconSet.workObjects['Pizza'] as string;
+    expect(dataUrl).toMatch(/^data:image\/svg\+xml;base64,/);
+    // Browsers only draw SVG images whose root declares the SVG namespace.
+    expect(Buffer.from(dataUrl.split(',')[1] as string, 'base64').toString()).toMatch(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
   });
 
   it('stores a picked color', () => {
@@ -186,6 +189,16 @@ describe('editing', () => {
     expect(story.get(a.id)?.['parent']).toBe(group.id);
     story.removeElement(group.id);
     expect(story.get(a.id)).not.toHaveProperty('parent');
+  });
+
+  it('groups every element of a repeated name and annotates the first one', () => {
+    const story = Story.create({ title: 'T' });
+    const first = story.addWorkObject({ name: 'Slip' });
+    const second = story.addWorkObject({ name: 'Slip' });
+    const group = story.addGroup({ name: 'Desk', members: ['Slip'] });
+    expect([first, second].map((e) => story.get(e.id)?.['parent'])).toEqual([group.id, group.id]);
+    expect(story.addAnnotation({ text: 'Paper', attachTo: 'slip' }).connection?.source).toBe(first.id);
+    expect(() => story.removeElement('Slip')).toThrow(/ambiguous/);
   });
 
   it('attaches a text annotation to an element', () => {

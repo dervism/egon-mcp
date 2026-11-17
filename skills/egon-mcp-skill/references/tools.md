@@ -63,13 +63,14 @@ Closes an open story without saving it. Save first with save_story if it has uns
 
 ## save_story
 
-Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". Existing files that this server did not write are only replaced with overwrite: true.
+Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". Existing files that this story did not write are only replaced with overwrite: true.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `storyId` | string | yes | Id of an open story, as returned by create_story, build_story, open_story or list_stories. |
 | `path` | string | no | Target path relative to the workspace root. |
-| `overwrite` | boolean | no | Replace an existing file that this server did not write. |
+| `overwrite` | boolean | no | Replace an existing file that this story did not write. Ask the user first. |
+| `layout` | `egon3` \| `egon4` | no | .egn layout: egon3 works in egon.io 3.x and Egon 4; egon4 also keeps title and scope. Default: the layout of the file being replaced, else the server setting. |
 
 ## list_story_files
 

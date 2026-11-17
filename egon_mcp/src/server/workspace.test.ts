@@ -128,6 +128,25 @@ describe('Workspace', () => {
     expect(() => workspace.save(entry.id, { path: 'mine.svg' })).not.toThrow();
   });
 
+  it('does not let one story replace a file another story wrote', () => {
+    const first = workspace.create({ title: 'Order' });
+    const second = workspace.create({ title: 'Order' });
+    workspace.save(first.id, {});
+    expect(() => workspace.save(second.id, {})).toThrow(/already exists/);
+    writeFileSync(join(root, 'mine.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
+    const opened = workspace.open('mine.egn');
+    workspace.save(opened.id, {});
+    expect(() => workspace.save(first.id, { path: 'mine.egn' })).toThrow(/already exists/);
+  });
+
+  it('keeps the Egon 4 layout only when saving in place, unless a layout is given', () => {
+    writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
+    const entry = workspace.open('four.egn');
+    expect(workspace.save(entry.id, { path: 'copy.egn' }).layout).toBe('egon3');
+    expect(workspace.save(entry.id, { path: 'four.egn' }).layout).toBe('egon4');
+    expect(workspace.save(entry.id, { path: 'four.egn', layout: 'egon3' }).layout).toBe('egon3');
+  });
+
   it('refuses to write legacy .dst files', () => {
     const entry = workspace.create({ title: 'T' });
     expect(() => workspace.save(entry.id, { path: 'old.dst.svg' })).toThrow(/\.dst/);
