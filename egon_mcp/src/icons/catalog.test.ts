@@ -1,9 +1,9 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_ICON_NAMES, IconCatalog } from './catalog.js';
+import { blockingAncestor, DEFAULT_ICON_NAMES, IconCatalog, readErrorReason } from './catalog.js';
 
 describe('IconCatalog', () => {
   const catalog = IconCatalog.builtIn();
@@ -90,10 +90,14 @@ describe('IconCatalog.fromFile', () => {
     expect(messageFor(file)).toMatch(unreadable('EISDIR', 'illegal operation on a directory'));
   });
 
-  // On Windows a file in the way of a folder reads as a missing path.
-  it.runIf(process.platform !== 'win32')('covers a file in the way of a folder on the path', () => {
+  it('covers a file in the way of a folder on the path', () => {
     writeFileSync(join(dir, 'generated'), 'not a folder');
-    expect(messageFor(join(dir, 'generated', 'builtin-icons.json'))).toMatch(unreadable('ENOTDIR', 'not a directory'));
+    // POSIX reports ENOTDIR; Windows reports a missing path, which blockingAncestor turns into the same advice.
+    expect(messageFor(join(dir, 'generated', 'builtin-icons.json'))).toMatch(
+      new RegExp(
+        `cannot be read \\((ENOTDIR: not a directory|.*generated is a file, not a folder)\\)\\. Fix what stops it from being read`,
+      ),
+    );
   });
 
   it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)('does not call an unreadable folder a missing file', () => {
@@ -126,5 +130,39 @@ describe('IconCatalog.fromFile', () => {
     writeFileSync(file, '[]');
     expect(() => IconCatalog.builtIn(pathToFileURL(file))).toThrow(`${file} is not usable; ${fix}`);
     expect(IconCatalog.builtIn().names().length).toBeGreaterThan(100);
+  });
+});
+
+describe('readErrorReason', () => {
+  it('uses the system text for system errors, without the path that Node repeats', () => {
+    let error: unknown;
+    try {
+      readFileSync(tmpdir());
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(readErrorReason(error)).toBe('EISDIR: illegal operation on a directory');
+  });
+
+  it('falls back to the message for errors without a system error number', () => {
+    const tooLarge = Object.assign(new Error('File size (3000000000) is greater than 2 GiB'), { code: 'ERR_FS_FILE_TOO_LARGE' });
+    expect(readErrorReason(tooLarge)).toBe('File size (3000000000) is greater than 2 GiB');
+    // getSystemErrorMessage throws for numbers libuv never uses, such as positive ones.
+    expect(readErrorReason(Object.assign(new Error('raw text'), { code: 'EACCES', errno: 13 }))).toBe('raw text');
+    expect(readErrorReason('not an error')).toBe('unknown error');
+  });
+});
+
+describe('blockingAncestor', () => {
+  it('finds a file standing where a folder on the path should be', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'egon-catalog-'));
+    try {
+      expect(blockingAncestor(join(dir, 'generated', 'builtin-icons.json'))).toBeUndefined();
+      writeFileSync(join(dir, 'generated'), 'not a folder');
+      expect(blockingAncestor(join(dir, 'generated', 'builtin-icons.json'))).toBe(join(dir, 'generated'));
+      expect(blockingAncestor(join(dir, 'generated', 'deeper', 'builtin-icons.json'))).toBe(join(dir, 'generated'));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

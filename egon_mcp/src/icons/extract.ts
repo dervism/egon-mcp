@@ -1,9 +1,10 @@
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { basename, dirname, join } from 'node:path';
-// With a .ts extension, so scripts/generate-icons.mjs can load this file through type stripping.
-import { isIconList } from '../build-info.ts';
 import { runInNewContext } from 'node:vm';
+// Written as .ts so Node's type stripping can load it (scripts/generate-icons.mjs);
+// tsc rewrites it to .js in dist (rewriteRelativeImportExtensions).
+import { isIconList } from '../build-info.ts';
 
 export interface BuiltInIcon {
   name: string;

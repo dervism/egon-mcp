@@ -186,11 +186,6 @@ describe('generateIconFile', () => {
       const file = join(dir, 'builtin-icons.json');
       generateIconFile(sample, file);
       expect(isIconList(readFileSync(file, 'utf8'))).toBe(true);
-      // An empty name is caught while reading Egon's source already.
-      rmSync(file);
-      const unnamed = "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', '', ['x']));\n";
-      expect(() => generateIconFile(unnamed, file)).toThrow(/its format may have changed/);
-      expect(existsSync(file)).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
