@@ -75,7 +75,7 @@ Then read `narrate_story` and compare it with what the user said. Each line must
 
 ## Edit precisely
 
-- `get_story` lists every element with its id, name, icon and step number. Pass either the id or the exact name to other tools. Work objects repeat per sentence, so use the id when a name appears more than once; `add_group` and `add_annotation` also accept such a name (all of them, or the first one). When an actor or work object shares its name with a group or annotation, the name means the actor or work object.
+- `get_story` lists every element with its id, name, icon and step number. Pass either the id or the exact name to other tools. Work objects repeat per sentence, so use the id when a name appears more than once; `add_group` and `add_annotation` also accept such a name (all of them, or the first one). When an actor or work object shares its name with a group or annotation, `add_group`, `add_annotation` and `add_activity` take the name to mean the actor or work object; `update_element` and `remove_element` call it ambiguous and need the id.
 - `update_element` renames, recolors, changes icons, moves shapes, edits annotation text, and moves an activity to another step (`number`; later steps shift).
 - `remove_element` on an actor or work object also removes its activities and closes the gaps in the numbering.
 - `add_group` draws a box around members (for departments or subdomains). `add_annotation` attaches a note.
@@ -84,7 +84,7 @@ Then read `narrate_story` and compare it with what the user said. Each line must
 ## Save and show
 
 - `save_story` without a path writes back to the file the story came from, or to `<title>.egn`. The extension picks the format: `.egn` (Egon file), `.egn.svg` (picture that Egon can import), `.svg` (picture only), `.md` (sentences). Legacy `.dst` files can be opened but not written.
-- `save_story` only replaces a file that the same story opened or wrote. Ask the user before passing `overwrite: true`.
+- `save_story` only replaces a file if this story was the last to open or write it. Ask the user before passing `overwrite: true`.
 - Egon 3 (the public app) reads the title from the file name, so keep the file name equal to the title. Scope survives only in the Egon 4 layout: pass `layout: "egon4"` to `save_story`, or run the server with `--egon-format egon4`. Saving back to a file this server session opened or wrote keeps that file's layout.
 - `open_in_egon` returns an Egon link that loads the story from the running server. Give the user the `egonUrl`. The link works only on the same machine while the server runs, and it always shows the latest state, so edits only need a reload.
 - If the browser blocks the local link (Chrome may ask for local network access; some browsers refuse), save the story and tell the user to use "Import file" in Egon.

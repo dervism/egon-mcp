@@ -24,9 +24,9 @@ export interface StoryEntry {
 export interface SaveOptions {
   path?: string;
   format?: SaveFormat;
-  /** Replace an existing file that this story did not write. */
+  /** Replace an existing file even if this story was not the last to open or write it. */
   overwrite?: boolean;
-  /** .egn layout; default: the layout of the story's own file when saving in place, else the server's. */
+  /** .egn layout; default: the layout of the target file if this session opened or wrote it, else the server's. */
   layout?: EgonFormat;
 }
 
@@ -49,9 +49,9 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024;
  */
 export class Workspace {
   private readonly entries = new Map<string, StoryEntry>();
-  /** Absolute path to the id of the story that opened or wrote it; a story may overwrite its own files. */
+  /** Absolute path to the id of the story that last opened or wrote it; only that story may replace it. */
   private readonly owners = new Map<string, string>();
-  /** Absolute path to the .egn layout of that file, kept when the file is replaced. */
+  /** Absolute path to the .egn layout of every file this session opened or wrote, kept when the file is replaced. */
   private readonly fileLayouts = new Map<string, EgonFormat>();
   readonly root: string;
   /** Layout of written .egn files (docs/adr/0007-write-egon-3-file-layout.md). */
@@ -130,8 +130,9 @@ export class Workspace {
   /**
    * Writes a story to disk. The format follows the file extension. Without a
    * path, the story goes back to the file it came from, else to "<title>.egn".
-   * Existing files are only replaced if this story opened or wrote them, or
-   * with `overwrite`. Replacing a file keeps its .egn layout.
+   * An existing file is only replaced if this story was the last to open or
+   * write it, or with `overwrite`. Without `layout`, a file this session
+   * opened or wrote keeps its .egn layout (ADR 15).
    */
   save(id: string, options: SaveOptions): SaveResult {
     const entry = this.get(id);

@@ -1,4 +1,5 @@
 import { realpathSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { resolve, sep } from 'node:path';
 import type { EgonFormat } from './egon/serialize.js';
 
@@ -80,7 +81,10 @@ export function parseOptions(argv: string[], env: Record<string, string | undefi
 }
 
 /** A warning for roots that give the server more reach than intended (the home directory or above it). */
-export function rootWarning(root: string, home: string): string | undefined {
+export function rootWarning(root: string, home: string | undefined): string | undefined {
+  if (home === undefined) {
+    return undefined;
+  }
   const rootWithSeparator = root.endsWith(sep) ? root : root + sep;
   const advice = 'Consider --root <dir> for a stories folder.';
   if (root === home) {
@@ -92,11 +96,20 @@ export function rootWarning(root: string, home: string): string | undefined {
   return undefined;
 }
 
-/** The home directory with links resolved, or as given when it does not exist (service accounts). */
-export function realHome(home: string): string {
+/**
+ * The home directory with links resolved, as given when it does not exist,
+ * or undefined when the system has none (service accounts, containers).
+ */
+export function realHome(home: () => string = homedir): string | undefined {
+  let path: string;
   try {
-    return realpathSync(home);
+    path = home();
   } catch {
-    return home;
+    return undefined;
+  }
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
   }
 }

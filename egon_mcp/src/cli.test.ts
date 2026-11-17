@@ -60,7 +60,16 @@ describe('rootWarning', () => {
 
 describe('realHome', () => {
   it('resolves links in the home directory and keeps a missing one as given', () => {
-    expect(realHome('/nonexistent-egon-home')).toBe('/nonexistent-egon-home');
-    expect(realHome(tmpdir())).toBe(realpathSync(tmpdir()));
+    expect(realHome(() => '/nonexistent-egon-home')).toBe('/nonexistent-egon-home');
+    expect(realHome(() => tmpdir())).toBe(realpathSync(tmpdir()));
+  });
+
+  it('returns nothing when the system knows no home directory', () => {
+    expect(
+      realHome(() => {
+        throw new Error('no home directory');
+      }),
+    ).toBeUndefined();
+    expect(rootWarning('/srv/stories', undefined)).toBeUndefined();
   });
 });

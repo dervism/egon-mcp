@@ -156,6 +156,21 @@ describe('Workspace', () => {
     expect(() => workspace.save(again.id, {})).toThrow(/already exists/);
   });
 
+  it('lets only the story that last opened or wrote a file replace it', () => {
+    writeFileSync(join(root, 'mine.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
+    const first = workspace.open('mine.egn');
+    const second = workspace.open('mine.egn');
+    expect(() => workspace.save(first.id, {})).toThrow(/already exists/);
+    expect(() => workspace.save(second.id, {})).not.toThrow();
+  });
+
+  it('remembers the layout of a file after the story that opened it is closed', () => {
+    writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
+    workspace.close(workspace.open('four.egn').id);
+    const other = workspace.create({ title: 'Other' });
+    expect(workspace.save(other.id, { path: 'four.egn', overwrite: true }).layout).toBe('egon4');
+  });
+
   it('keeps the Egon 4 layout only when saving in place, unless a layout is given', () => {
     writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
     const entry = workspace.open('four.egn');

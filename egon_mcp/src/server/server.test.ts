@@ -247,6 +247,8 @@ describe('egon-mcp server', () => {
       (tools.find((t) => t.name === tool)?.inputSchema.properties?.[field] as { description?: string } | undefined)?.description ?? '';
     expect(fieldDescription('add_sentence', 'workObject')).toMatch(/not used by any activity yet/);
     expect(fieldDescription('build_story', 'workObjects')).toMatch(/first sentence that names/);
+    expect(fieldDescription('build_story', 'workObjects')).toMatch(/workObjectIcon on that sentence replaces/);
+    expect(fieldDescription('save_story', 'overwrite')).toMatch(/last to open or write/);
   });
 
   it('saves to other formats and refuses paths outside the workspace', async () => {

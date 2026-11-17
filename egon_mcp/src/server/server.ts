@@ -169,7 +169,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
         description: descriptionField.optional(),
         scope: scopeSchema.optional(),
         actors: z.array(shapeSpec).optional().describe('Actors to create first, to choose their icon or color.'),
-        workObjects: z.array(shapeSpec).optional().describe('Work objects to create first, to choose their icon or color. The first sentence that names one uses it; later sentences draw new ones with the same icon and color.'),
+        workObjects: z.array(shapeSpec).optional().describe('Work objects to create first, to choose their icon or color. The first sentence that names one uses it, and a workObjectIcon on that sentence replaces its icon; later sentences draw new ones with the same icon and color.'),
         sentences: z.array(z.object(sentenceSchema)).min(1).describe('The steps of the story in order.'),
         groups: z.array(groupSpec).optional().describe('Boxes around elements that belong together.'),
         annotations: z.array(annotationSpec).optional().describe('Notes for variations, rules and open questions.'),
@@ -253,11 +253,11 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Save story to file',
       description:
-        'Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". Existing files that this story did not write are only replaced with overwrite: true.',
+        'Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". An existing file is only replaced if this story was the last to open or write it, or with overwrite: true.',
       inputSchema: {
         storyId,
         path: z.string().optional().describe('Target path relative to the workspace root.'),
-        overwrite: z.boolean().optional().describe('Replace an existing file that this story did not write. Ask the user first.'),
+        overwrite: z.boolean().optional().describe('Replace an existing file even if this story was not the last to open or write it. Ask the user first.'),
         layout: z
           .enum(['egon3', 'egon4'])
           .optional()

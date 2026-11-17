@@ -212,6 +212,16 @@ describe('editing', () => {
     expect(story.addAnnotation({ text: 'Wood-fired', attachTo: 'Kitchen' }).connection?.source).toBe(kitchen.id);
   });
 
+  it('connects the actor when a group shares its name, but edits need the id', () => {
+    const story = Story.create({ title: 'T' });
+    const kitchen = story.addActor({ name: 'Kitchen' });
+    story.addWorkObject({ name: 'Pizza' });
+    story.addGroup({ name: 'Kitchen', members: ['Kitchen'] });
+    expect(story.addActivity({ from: 'Kitchen', to: 'Pizza', label: 'bakes' }).source).toBe(kitchen.id);
+    expect(() => story.updateElement('Kitchen', { name: 'Galley' })).toThrow(/ambiguous/);
+    expect(() => story.removeElement('Kitchen')).toThrow(/ambiguous/);
+  });
+
   it('calls a name ambiguous unless it only repeats a work object', () => {
     const story = Story.create({ title: 'T' });
     story.addGroup({ name: 'Area' });

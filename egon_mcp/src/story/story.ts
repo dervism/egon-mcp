@@ -452,6 +452,16 @@ export class Story {
   }
 
   private resolveNode(ref: string): ShapeElement {
+    // Only actors and work objects can be activity ends, so a group or note of the same name does not count.
+    if (!this.find(ref)) {
+      const wanted = ref.trim().toLowerCase();
+      const nodes = this.doc.elements.filter(
+        (element) => (isActor(element) || isWorkObject(element)) && element.name.trim().toLowerCase() === wanted,
+      );
+      if (nodes.length === 1) {
+        return nodes[0] as ShapeElement;
+      }
+    }
     const element = this.resolve(ref);
     if (!isActor(element) && !isWorkObject(element)) {
       throw new StoryError(`"${ref}" is a ${describeType(element)}. Activities connect actors and work objects.`);

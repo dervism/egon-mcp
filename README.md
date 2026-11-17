@@ -119,4 +119,4 @@ egon-mcp is free software under the GNU General Public License, version 3 or (at
 
 Copyright (C) 2026 the egon-mcp authors.
 
-The built-in icons that the build reads from `modules/egon.io` come from Egon, Copyright (C) 2018-present WPS - Workplace Solutions GmbH, under the GPL version 3 or (at your option) any later version.
+The built-in icons that the build reads from `modules/egon.io` come from Egon, Copyright (C) 2018-present WPS - Workplace Solutions GmbH, under the GPL version 3 or (at your option) any later version. Most of them are based on Google's [Material Icons](https://github.com/google/material-design-icons), which are licensed under the Apache License 2.0.

@@ -24,7 +24,7 @@ Creates a complete domain story in one call from numbered sentences ("Customer t
 | `description` | string | no | Text Egon shows under the title. |
 | `scope` | object {granularity?, pointInTime?, domainPurity?} | no | Scope of the story as shown in Egon's properties panel. |
 | `actors` | array of object {name, icon?, color?} | no | Actors to create first, to choose their icon or color. |
-| `workObjects` | array of object {name, icon?, color?} | no | Work objects to create first, to choose their icon or color. The first sentence that names one uses it; later sentences draw new ones with the same icon and color. |
+| `workObjects` | array of object {name, icon?, color?} | no | Work objects to create first, to choose their icon or color. The first sentence that names one uses it, and a workObjectIcon on that sentence replaces its icon; later sentences draw new ones with the same icon and color. |
 | `sentences` | array of object {actor, actorIcon?, activity, workObject, workObjectIcon?, reuseWorkObject?, to?, number?} | yes | The steps of the story in order. |
 | `groups` | array of object {name, members, color?} | no | Boxes around elements that belong together. |
 | `annotations` | array of object {text, attachTo?} | no | Notes for variations, rules and open questions. |
@@ -63,13 +63,13 @@ Closes an open story without saving it. Save first with save_story if it has uns
 
 ## save_story
 
-Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". Existing files that this story did not write are only replaced with overwrite: true.
+Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". An existing file is only replaced if this story was the last to open or write it, or with overwrite: true.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `storyId` | string | yes | Id of an open story, as returned by create_story, build_story, open_story or list_stories. |
 | `path` | string | no | Target path relative to the workspace root. |
-| `overwrite` | boolean | no | Replace an existing file that this story did not write. Ask the user first. |
+| `overwrite` | boolean | no | Replace an existing file even if this story was not the last to open or write it. Ask the user first. |
 | `layout` | `egon3` \| `egon4` | no | .egn layout: egon3 works in egon.io 3.x and Egon 4; egon4 also keeps title and scope. Default: the layout of the file being replaced if this server session opened or wrote it, else the server setting. |
 
 ## list_story_files

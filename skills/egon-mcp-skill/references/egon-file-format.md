@@ -36,7 +36,7 @@ Egon 4 (unreleased, on egon.io's `main` branch) writes:
 }
 ```
 
-Egon 4 also reads the Egon 3 layout, so egon-mcp writes Egon 3 by default. Start the server with `--egon-format egon4` to keep title and scope inside the file.
+Egon 4 also reads the Egon 3 layout, so egon-mcp writes Egon 3 by default. To keep title and scope inside the file, pass `layout: "egon4"` to `save_story` or start the server with `--egon-format egon4`. A file this server session opened or wrote keeps its layout when saved again.
 
 In `.egn.svg` files the JSON sits in a comment after `</svg>`: `<!-- <DST> {...} </DST> -->`. Egon 3 finds it by the literal `<DST>` marker.
 

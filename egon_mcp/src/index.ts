@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { homedir } from 'node:os';
 import { parseOptions, realHome, rootWarning, USAGE } from './cli.js';
 import { createEgonServer, SERVER_VERSION } from './server/server.js';
 
@@ -33,7 +32,7 @@ async function main(): Promise<void> {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  const warning = rootWarning(egon.workspace.root, realHome(homedir()));
+  const warning = rootWarning(egon.workspace.root, realHome());
   if (warning) {
     console.error(warning);
   }
