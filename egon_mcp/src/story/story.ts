@@ -30,7 +30,7 @@ import {
   type WorkObjectElement,
 } from '../egon/types.js';
 import { boundsOf, DEFAULT_ANNOTATION_SIZE, edgeWaypoints, routeEdge, type Bounds } from './geometry.js';
-import { cornerInside, joinGroupAt, settleMembership, takeIn } from './membership.js';
+import { cornerInside, joinGroupAt, settleMembership, takeIn, takeWholeGroups } from './membership.js';
 
 export class StoryError extends Error {
   override name = 'StoryError';
@@ -248,7 +248,12 @@ export class Story {
   private applyAddGroup(input: GroupInput): GroupElement {
     let bounds: Bounds;
     // A name shared by several elements (work objects repeat per sentence) groups all of them.
-    const members = (input.members ?? []).flatMap((ref) => this.resolveShapes(ref));
+    // A group whose work objects are all among the members goes in whole, so none is left empty.
+    const resolved = (input.members ?? []).flatMap((ref) => this.resolveShapes(ref));
+    const members = takeWholeGroups(
+      resolved.map((member) => member.id),
+      this.doc.elements,
+    ).map((id) => this.find(id) as ShapeElement);
     const given = this.givenPosition(input);
     const fitted = members.length > 0 && !given;
     if (fitted) {
@@ -292,13 +297,21 @@ export class Story {
       member['parent'] = group.id;
     }
     if (fitted && shared) {
-      const around = boundsOf(byId.get(shared) as ShapeElement);
-      if (around.width * around.height <= bounds.width * bounds.height) {
-        throw new StoryError(
-          `The new group would take all members of "${byId.get(shared)?.name || shared}" without fitting inside it. Pass "${byId.get(shared)?.name || shared}" itself as a member, or rename that group.`,
-        );
-      }
       group['parent'] = shared;
+      // The groups around grow where needed, so each stays larger than what it holds.
+      let inner: Bounds = bounds;
+      for (const id of [shared, ...groupAncestors(byId.get(shared), byId)]) {
+        const outer = byId.get(id) as ShapeElement;
+        const box = union(boundsOf(outer), {
+          x: inner.x - GROUP_PADDING,
+          y: inner.y - GROUP_PADDING,
+          width: inner.width + 2 * GROUP_PADDING,
+          height: inner.height + 2 * GROUP_PADDING,
+        });
+        checkCoordinates(box);
+        Object.assign(outer, box);
+        inner = box;
+      }
     } else if (!fitted) {
       // A box drawn with coordinates goes where it lies and takes in what it covers, as in Egon.
       joinGroupAt(group, this.doc.elements);
@@ -879,6 +892,12 @@ function checkCoordinates(values: Partial<Bounds>): void {
       throw new StoryError(`${key} must be within a billion pixels.`);
     }
   }
+}
+
+function union(a: Bounds, b: Bounds): Bounds {
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  return { x, y, width: Math.max(a.x + a.width, b.x + b.width) - x, height: Math.max(a.y + a.height, b.y + b.height) - y };
 }
 
 function enclose(boxes: Bounds[], padding: number): Bounds {

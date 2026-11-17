@@ -145,6 +145,7 @@ function layOut(story: Story): void {
   }
   // Notes on those actors go below them in the same column, a row each.
   const besideNotes = new Map<string, string[]>();
+  const noteSizes = new Map<string, { width: number; height: number }>();
   for (const [noteId, anchor] of [...anchors].sort((a, b) => compareIds(a[0], b[0]))) {
     if (beside.has(anchor.id) && !inGroup(byId.get(noteId) as StoryElement)) {
       besideNotes.set(anchor.id, [...(besideNotes.get(anchor.id) ?? []), noteId]);
@@ -253,10 +254,24 @@ function layOut(story: Story): void {
       emptyGroups.push(group.id);
       continue;
     }
+    // The box's left edge is known ahead: the first member column, less the padding of every
+    // nesting level. Notes are narrowed to the room before it and get as many rows as they need.
+    const depthBelow = (groupId: string): number =>
+      Math.max(0, ...children(groupId).filter(isGroup).map((child) => 1 + depthBelow(child.id)));
+    const leftEdge = ORIGIN.x + firstCol * CELL_WIDTH - GROUP_PADDING * (1 + depthBelow(group.id));
     let besideRow = blockRow;
-    for (const id of [...actors.flatMap((actor) => [actor, ...(besideNotes.get(actor) ?? [])])]) {
-      take(id, { col: 0, row: besideRow });
+    for (const actor of actors) {
+      take(actor, { col: 0, row: besideRow });
       besideRow += 1;
+      for (const noteId of besideNotes.get(actor) ?? []) {
+        const note = byId.get(noteId) as ShapeElement;
+        const width = Math.max(80, Math.min(boundsOf(note).width, leftEdge - 20 - ORIGIN.x));
+        const lines = wrap(String(note['text'] ?? ''), Math.max(10, Math.floor(width / 6.5))).length;
+        const height = Math.max(30, 14 + lines * 17);
+        noteSizes.set(noteId, { width, height });
+        take(noteId, { col: 0, row: besideRow });
+        besideRow += Math.max(1, Math.ceil((height + 60) / CELL_HEIGHT));
+      }
     }
     const end = placeRows(rows, blockRow, firstCol);
     const bottom = Math.max(end, besideRow);
@@ -268,8 +283,10 @@ function layOut(story: Story): void {
   }
 
   for (const [id, cell] of placed) {
+    // An empty group's box is its own edge, so it moves out by the padding to line up with fitted boxes.
+    const shift = isGroup(byId.get(id) as StoryElement) ? GROUP_PADDING : 0;
     try {
-      story.setBounds(id, { x: ORIGIN.x + cell.col * CELL_WIDTH, y: ORIGIN.y + cell.row * CELL_HEIGHT });
+      story.setBounds(id, { x: ORIGIN.x + cell.col * CELL_WIDTH - shift, y: ORIGIN.y + cell.row * CELL_HEIGHT - shift, ...noteSizes.get(id) });
     } catch (error) {
       if (!(error instanceof StoryError && /billion/.test(error.message))) {
         throw error;
@@ -287,16 +304,6 @@ function layOut(story: Story): void {
   const notesBeside = new Set([...besideNotes.values()].flat());
   placeAnnotations(story, notesBeside);
   refitGroups(story);
-  // Narrow the notes beside a group to the room left of its box, now that the box has its size.
-  for (const [actor, notes] of besideNotes) {
-    const box = boundsOf(story.get(beside.get(actor) as string) as ShapeElement);
-    for (const noteId of notes) {
-      const note = story.get(noteId) as ShapeElement;
-      const width = Math.max(80, Math.min(boundsOf(note).width, box.x - 20 - note.x));
-      const lines = wrap(String(note['text'] ?? ''), Math.max(10, Math.floor(width / 6.5))).length;
-      story.setBounds(noteId, { width, height: Math.max(30, 14 + lines * 17) });
-    }
-  }
   story.rerouteAllEdges();
 }
 

@@ -1,6 +1,7 @@
 import { compareIds, groupAncestors, iconNameOf, isGroup, isActivity, isActor, isWorkObject, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { IconCatalog } from '../icons/catalog.js';
 import { autoLayout } from './layout.js';
+import { takeWholeGroups } from './membership.js';
 import { narrate } from './narrate.js';
 import { Story, StoryError } from './story.js';
 
@@ -249,37 +250,24 @@ export function membersOfSteps(story: Story, steps: number[]): string[] {
     const others = (stepsOf.get(id) ?? []).filter((number) => !steps.includes(number));
     if (others.length > 0) {
       throw new StoryError(
-        `"${nameOf(id)}" in step ${stepOf.get(id)} is used by ${others.length > 1 ? 'steps' : 'step'} ${others.join(', ')} too, so it cannot go into a group of these steps alone. Group by members (ids from get_story) and choose the group it belongs to.`,
+        `"${nameOf(id)}" in step ${stepOf.get(id)} is used by ${others.length > 1 ? 'steps' : 'step'} ${others.join(', ')} too, so it cannot go into a group of these steps alone. Decide which group it belongs to, then group by members instead (after build_story, with add_group and ids from get_story).`,
       );
     }
   }
   // An existing group whose work objects all belong to these steps goes in whole, outermost first.
-  const workObjectsIn = (groupId: string): string[] =>
-    doc.elements.flatMap((element) =>
-      element['parent'] !== groupId ? [] : isGroup(element) ? workObjectsIn(element.id) : isWorkObject(element) ? [element.id] : [],
-    );
-  const members: string[] = [];
-  for (const id of ids) {
-    const whole = groupAncestors(byId.get(id), byId)
-      .filter((groupId) => workObjectsIn(groupId).every((inside) => ids.includes(inside)))
-      .at(-1);
-    const member = whole ?? id;
-    if (!members.includes(member)) {
-      members.push(member);
-    }
-  }
+  const members = takeWholeGroups(ids, doc.elements);
   if (members.length === 1 && isGroup(byId.get(members[0] as string) as StoryElement)) {
     throw new StoryError(
-      `${steps.length > 1 ? 'Steps' : 'Step'} ${steps.join(', ')} ${steps.length > 1 ? 'are' : 'is'} already the group "${nameOf(members[0] as string)}". Rename it with update_element, or choose other steps.`,
+      `${steps.length > 1 ? 'Steps' : 'Step'} ${steps.join(', ')} ${steps.length > 1 ? 'are' : 'is'} already the group "${nameOf(members[0] as string)}"; leave out one of the two groups, or choose other steps.`,
     );
   }
-  // What is left must not be spread over other groups; all in one group is fine, which then holds the new group.
+  // What is left must not cross other groups; all in one group is fine, which then holds the new group.
   const homes = members.map((id) => groupAncestors(byId.get(id), byId)[0]);
   if (new Set(homes).size > 1) {
     const index = homes.findIndex((home) => home !== undefined);
     const id = members[index] as string;
     throw new StoryError(
-      `"${nameOf(id)}"${stepOf.has(id) ? ` in step ${stepOf.get(id)}` : ''} is already in the group "${nameOf(homes[index] as string)}". Add the outer group first, or group by members instead.`,
+      `"${nameOf(id)}"${stepOf.has(id) ? ` in step ${stepOf.get(id)}` : ''} is in the group "${nameOf(homes[index] as string)}", which also holds work objects outside these steps, so the two groups would cross. Change or remove that group, or group by members instead.`,
     );
   }
   return members;

@@ -472,6 +472,8 @@ describe('autoLayout', () => {
       ],
       annotations: [{ text: 'Works part time, mornings only, in the back room', attachTo: 'Storekeeper' }],
     });
+    story.addGroup({ name: 'Later', x: 0, y: 9000, width: 300, height: 200 });
+    autoLayout(story);
     const elements = story.elements();
     const note = boundsOf(elements.find((element) => element['text']?.toString().startsWith('Works part time')) as ShapeElement);
     const boxes = elements.filter((element) => element.type === 'domainStory:group').map((group) => boundsOf(group as ShapeElement));
@@ -486,7 +488,7 @@ describe('autoLayout', () => {
   });
 
   it('gives the notes of an actor beside a nested group rows of their own', () => {
-    const long = 'Comes in twice a year with the whole family fleet, always asks for the same mechanic, and pays by invoice at the end of the month.';
+    const long = 'Comes in twice a year with the whole family fleet, always asks for the same mechanic, and pays by invoice at the end of the month. '.repeat(4);
     const story = buildStory({
       title: 'Nested',
       sentences: [

@@ -1,4 +1,4 @@
-import { groupAncestors, isEdge, isGroup, type GroupElement, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { groupAncestors, isEdge, isGroup, isWorkObject, type GroupElement, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { boundsOf } from './geometry.js';
 
 /**
@@ -86,4 +86,32 @@ export function settleMembership(elements: StoryElement[]): void {
       joinGroupAt(element, elements);
     }
   }
+}
+
+/**
+ * The members for a new group, with every existing group whose work objects
+ * are all among them taken in whole instead of one by one, so no group is
+ * left empty and inner groups may be drawn before outer ones.
+ */
+export function takeWholeGroups(ids: string[], elements: StoryElement[]): string[] {
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  const chosen = new Set(ids);
+  const workObjectsIn = (groupId: string): string[] =>
+    elements.flatMap((element) =>
+      element['parent'] !== groupId ? [] : isGroup(element) ? workObjectsIn(element.id) : isWorkObject(element) ? [element.id] : [],
+    );
+  const members: string[] = [];
+  for (const id of ids) {
+    const whole = groupAncestors(byId.get(id), byId)
+      .filter((groupId) => {
+        const inside = workObjectsIn(groupId);
+        return inside.length > 0 && inside.every((workObject) => chosen.has(workObject));
+      })
+      .at(-1);
+    const member = whole ?? id;
+    if (!members.includes(member)) {
+      members.push(member);
+    }
+  }
+  return members;
 }
