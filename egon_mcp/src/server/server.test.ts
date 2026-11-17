@@ -303,6 +303,8 @@ describe('egon-mcp server', () => {
     expect((egn.contents[0] as { mimeType: string }).mimeType).toBe('application/json');
     const guide = await client.readResource({ uri: 'egon://guide/domain-storytelling' });
     expect((guide.contents[0] as { text: string }).text).toContain('work object');
+    expect((guide.contents[0] as { text: string }).text).toContain('give every sentence its own work objects');
+    expect((guide.contents[0] as { text: string }).text).toContain('assumptions that keep the story on one path');
   });
 
   it('offers prompts for modeling and reviewing domain stories', async () => {

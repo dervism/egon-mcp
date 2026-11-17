@@ -24,6 +24,20 @@ describe('narrate', () => {
     expect(steps.map((step) => step.number)).toEqual([1, 2]);
   });
 
+  it('does not double "and" when a recipient arrow is already labeled "and", as the book draws it', () => {
+    const story = Story.create({ title: 'Send an invoice' });
+    const clerk = story.addActor({ name: 'Clerk' });
+    const invoice = story.addWorkObject({ name: 'Invoice' });
+    const customer = story.addActor({ name: 'Customer' });
+    const accountant = story.addActor({ name: 'Accountant' });
+    const archive = story.addActor({ name: 'Archive' });
+    story.addActivity({ from: clerk.id, to: invoice.id, label: 'sends' });
+    story.addActivity({ from: invoice.id, to: customer.id, label: 'to' });
+    story.addActivity({ from: invoice.id, to: accountant.id, label: 'and' });
+    story.addActivity({ from: invoice.id, to: archive.id, label: 'to' });
+    expect(narrate(story.toDocument())[0]?.sentence).toBe('Clerk sends Invoice to Customer and Accountant and to Archive.');
+  });
+
   it('lists the elements that take part in each step', () => {
     const { story, customer, order, clerk } = pizza();
     const [first] = narrate(story.toDocument());

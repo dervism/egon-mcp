@@ -60,6 +60,9 @@ Other details:
 - Built-in icons are stored as SVG text in the icon set, but Egon draws them from its own copy. Custom icons must be data URLs (`data:image/svg+xml;base64,...`); `add_custom_icon` stores them that way.
 - Egon draws activities from the waypoints in the file and does not recompute them, so moved shapes need new waypoints. `update_element` and `auto_layout` take care of that.
 - Egon's import drops activities whose `source` or `target` does not exist, and it can fail on more than one. `validate_story` reports these as `dangling-reference`.
+- The story's description (`info` in the Egon 3 layout) is where story-level assumptions go, such as "happy path; customer without subscription". Notes about single elements are text annotations.
+- An activity may have an empty label. Classic stories label every activity with a verb, but the message-flow variant leaves arrows unlabeled on purpose; `validate_story` then warns with `unlabeled-activity`.
+- The example stories from the Domain Storytelling book, in [WPS/egon.io-examples](https://github.com/WPS/egon.io-examples), are `.egn` and `.dst` files that `open_story` reads.
 
 ## Rules Egon enforces when editing
 

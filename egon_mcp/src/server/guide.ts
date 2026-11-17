@@ -29,6 +29,8 @@ Rules that Egon enforces:
 ## Good practice
 
 - Tell one concrete case (a happy path) per story. Model variations as separate stories or as annotations.
+- Draw each actor once, but give every sentence its own work objects; name a new copy after its new state (Contract, Signed contract).
+- Put the assumptions that keep the story on one path into its description.
 - Use the domain's own words for actors, work objects and verbs, and keep verbs in the present tense.
 - Keep a story to roughly 10 to 20 steps; split longer ones.
 - Use the same name for the same thing everywhere. Egon's label dictionary lists names across a story.

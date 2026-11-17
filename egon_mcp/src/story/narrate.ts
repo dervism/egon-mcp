@@ -82,7 +82,12 @@ function continueFrom(
     addUnique(step.elementIds, next.id);
     parts.push(`${label(next)} ${continueFrom(target, step, byId, activities, visited)}`);
   }
-  return parts.length > 0 ? `${displayName(element)} ${parts.join(' and ')}` : displayName(element);
+  if (parts.length === 0) {
+    return displayName(element);
+  }
+  // Join onward arrows with "and", unless an arrow is already labeled "and" (the book labels a second recipient so).
+  const joined = parts.map((part, index) => (index === 0 ? part : /^and\b/i.test(part) ? ` ${part}` : ` and ${part}`)).join('');
+  return `${displayName(element)} ${joined}`;
 }
 
 function isActorId(byId: Map<string, StoryElement>, id: string): boolean {
