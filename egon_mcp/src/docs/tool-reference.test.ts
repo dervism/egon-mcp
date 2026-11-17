@@ -12,13 +12,20 @@ async function currentTools() {
   try {
     const egon = createEgonServer({ root });
     const client = new Client({ name: 'docs', version: '1.0.0' });
+    let tools;
     try {
       const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
       await Promise.all([egon.server.connect(serverTransport), client.connect(clientTransport)]);
-      return (await client.listTools()).tools;
+      tools = (await client.listTools()).tools;
     } finally {
-      await Promise.allSettled([client.close(), egon.close()]);
+      const closed = await Promise.allSettled([client.close(), egon.close()]);
+      const failure = closed.find((result) => result.status === 'rejected');
+      // Report a failed close, unless an earlier error is already on its way.
+      if (tools && failure) {
+        throw failure.reason;
+      }
     }
+    return tools;
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

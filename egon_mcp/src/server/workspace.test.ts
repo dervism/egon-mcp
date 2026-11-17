@@ -302,8 +302,11 @@ describe('Workspace', () => {
   it.runIf(process.platform !== 'win32')('refuses named pipes without blocking (built code)', (context) => {
     expect(existsSync(builtWorkspace), 'dist is missing; run "npm run build" or "npm test"').toBe(true);
     if (statSync(builtWorkspace).mtimeMs < statSync(sourceWorkspace).mtimeMs) {
-      // `npm test` always builds first; a watch run after editing the source does not.
-      context.skip('dist is older than src/server/workspace.ts; run "npm run build"');
+      const stale = 'dist/server/workspace.js is older than src/server/workspace.ts; run "npm run build"';
+      // A watch run after editing the source has not rebuilt yet. `npm test` and CI
+      // always build first, so there an older dist means something is wrong.
+      expect(process.env['npm_lifecycle_event'] !== 'test' && !process.env['CI'], stale).toBe(true);
+      context.skip(stale);
     }
     for (const name of ['pipe.md', 'pipe.egn']) {
       execFileSync('mkfifo', [join(root, name)]);

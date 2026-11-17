@@ -21,9 +21,12 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await client.close();
-  await egon.close();
-  rmSync(root, { recursive: true, force: true });
+  try {
+    await client?.close();
+    await egon?.close();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 type ToolResult = { isError?: boolean; content: { type: string; text?: string }[]; structuredContent?: Record<string, unknown> };

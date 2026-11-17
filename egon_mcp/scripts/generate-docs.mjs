@@ -17,7 +17,12 @@ try {
     await Promise.all([egon.server.connect(serverTransport), client.connect(clientTransport)]);
     ({ tools } = await client.listTools());
   } finally {
-    await Promise.allSettled([client.close(), egon.close()]);
+    const closed = await Promise.allSettled([client.close(), egon.close()]);
+    const failure = closed.find((result) => result.status === 'rejected');
+    // Report a failed close, unless an earlier error is already on its way.
+    if (tools && failure) {
+      throw failure.reason;
+    }
   }
 } finally {
   rmSync(root, { recursive: true, force: true });

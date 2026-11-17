@@ -26,9 +26,14 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await client.close();
-  await egon.close();
-  rmSync(root, { recursive: true, force: true });
+  try {
+    await client?.close();
+    await egon?.close();
+  } finally {
+    if (root) {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
 });
 
 function jsonBlocks(markdown: string): string[] {
@@ -97,7 +102,7 @@ describe('egon-mcp-skill', () => {
       .map((file) =>
         readFileSync(join(srcDir, file), 'utf8')
           .replace(/\/\*[\s\S]*?\*\//g, '')
-          .replace(/(^|\s)\/\/\s.*$/gm, '$1'),
+          .replace(/(^|[ \t])\/\/.*$/gm, '$1'),
       )
       .join('\n');
     for (const key of keys) {
