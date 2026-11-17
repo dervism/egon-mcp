@@ -5,7 +5,7 @@ import { parseStoryFile } from '../egon/parse.js';
 import { toEgnJson } from '../egon/serialize.js';
 import { isActor, isWorkObject } from '../egon/types.js';
 import { narrate } from './narrate.js';
-import { membersOfSteps, namedForSteps, addSentence, buildStory } from './sentences.js';
+import { membersOfSteps, addSentence, buildStory } from './sentences.js';
 import { Story } from './story.js';
 import { validateStory } from './validate.js';
 
@@ -228,70 +228,6 @@ describe('buildStory', () => {
     expect(() => buildStory({ title: 'T', sentences: [{ actor: 'A', activity: 'does', workObject: 'W' }], groups: [{ name: 'G', steps: [7] }] })).toThrow(/no step 7/);
   });
 
-  it('refuses to group by steps a work object that also serves a sentence outside them', () => {
-    const shared = () =>
-      buildStory({
-        title: 'T',
-        sentences: [
-          { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
-          { actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] },
-          { actor: 'Mechanic', activity: 'repairs', workObject: 'Bike', reuseWorkObject: true },
-        ],
-        groups: [{ name: 'Intake', steps: [1, 2] }],
-      });
-    expect(shared).toThrow(/"Bike" in step 1 is used by step 3 too/);
-    // Shared through an onward arrow, without reuseWorkObject.
-    const story = buildStory({ title: 'T', sentences: [{ actor: 'Clerk', activity: 'puts', workObject: 'Letter' }] });
-    const letter = story.elements().find((element) => element.name === 'Letter')!;
-    const folder = story.addWorkObject({ name: 'Folder' });
-    story.addActivity({ from: letter.id, to: folder.id, label: 'into' });
-    addSentence(story, { actor: 'Clerk', activity: 'files', workObject: folder.id });
-    expect(() => membersOfSteps(story, [1])).toThrow(/"Folder" in step 1 is used by step 2 too/);
-    expect(() => membersOfSteps(story, [1, 2])).not.toThrow();
-  });
-
-  it('does not take a shared work object in the group around all its steps as decided', () => {
-    const story = buildStory({
-      title: 'T',
-      sentences: [
-        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
-        { actor: 'Mechanic', activity: 'notes', workObject: 'Part request', to: [{ activity: 'for', actor: 'Clerk' }] },
-        { actor: 'Clerk', activity: 'reads', workObject: 'Part request', reuseWorkObject: true },
-        { actor: 'Clerk', activity: 'orders', workObject: 'Part' },
-      ],
-      groups: [{ name: 'Repair', steps: [1, 2, 3, 4] }],
-    });
-    expect(() => membersOfSteps(story, [1, 2])).toThrow(/is used by step 3 too/);
-    // Naming it in the same call settles where it goes.
-    const request = story.elements().find((element) => element.name === 'Part request')!;
-    expect(() => membersOfSteps(story, [1, 2], [request.id])).not.toThrow();
-    const intake = story.addGroup({ name: 'Intake', members: [request.id, ...membersOfSteps(story, [1, 2], [request.id])] });
-    expect(story.get(request.id)?.['parent']).toBe(intake.id);
-  });
-
-  it('reads a member name next to steps as the copies those steps use', () => {
-    const story = buildStory({
-      title: 'T',
-      sentences: [
-        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
-        { actor: 'Mechanic', activity: 'notes', workObject: 'Part request', to: [{ activity: 'for', actor: 'Clerk' }] },
-        { actor: 'Clerk', activity: 'reads', workObject: 'Part request', reuseWorkObject: true },
-        { actor: 'Clerk', activity: 'orders', workObject: 'Part' },
-        { actor: 'Mechanic', activity: 'files', workObject: 'Part request' },
-      ],
-      groups: [
-        { name: 'Filing', steps: [5] },
-        { name: 'Intake', steps: [1, 2], members: ['Part request'] },
-        { name: 'Purchasing', steps: [3, 4] },
-      ],
-    });
-    const groups = story.elements().filter((element) => element.type === 'domainStory:group');
-    const named = (name: string) => groups.find((group) => group.name === name)!;
-    expect(groups.map((group) => group['parent'])).toEqual([undefined, undefined, undefined]);
-    const contents = (name: string) => story.elements().filter((element) => element['parent'] === named(name).id).map((element) => element.name).sort();
-    expect([contents('Filing'), contents('Intake'), contents('Purchasing')]).toEqual([['Part request'], ['Bike', 'Part request'], ['Part']]);
-  });
-
   it('takes an outer group whole when the groups inside it are named', () => {
     const story = buildStory({
       title: 'T',
@@ -312,93 +248,6 @@ describe('buildStory', () => {
     expect([find('Repair')['parent'], find('Invoice')['parent']]).toEqual([shop.id, shop.id]);
   });
 
-  it('works out the group around shared work objects when the steps have no others', () => {
-    const story = buildStory({
-      title: 'T',
-      sentences: [
-        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
-        { actor: 'Mechanic', activity: 'notes', workObject: 'Part request', to: [{ activity: 'for', actor: 'Clerk' }] },
-        { actor: 'Clerk', activity: 'reads', workObject: 'Part request', reuseWorkObject: true },
-      ],
-      groups: [{ name: 'Repair', steps: [1, 2, 3] }],
-    });
-    expect(() => membersOfSteps(story, [2])).toThrow(/nothing left to group\. To move one into this group, pass it in members/);
-  });
-
-  it('names the member outside every group when the new box would cross one', () => {
-    const story = buildStory({
-      title: 'T',
-      sentences: [
-        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
-        { actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] },
-        { actor: 'Clerk', activity: 'orders', workObject: 'Part' },
-      ],
-      groups: [{ name: 'Repair', steps: [1, 2, 3] }],
-    });
-    const mechanic = story.elements().find((element) => element.name === 'Mechanic')!;
-    expect(() => membersOfSteps(story, [1, 2], [mechanic.id])).toThrow(/"Mechanic" is in no group/);
-  });
-
-  it('takes a group whole even with a note on the group itself', () => {
-    const story = buildStory({
-      title: 'T',
-      sentences: [
-        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
-        { actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] },
-        { actor: 'Mechanic', activity: 'repairs', workObject: 'Bike' },
-      ],
-      groups: [{ name: 'Intake', steps: [1, 2] }],
-    });
-    const intake = story.elements().find((element) => element.name === 'Intake')!;
-    story.addAnnotation({ text: 'one customer at a time', attachTo: intake.id });
-    expect(membersOfSteps(story, [1, 2, 3])).toContain(intake.id);
-    expect(() => membersOfSteps(story, [1, 2])).toThrow(/already the group "Intake"/);
-  });
-
-  it('says what keeps a group from going in whole', () => {
-    const story = buildStory({
-      title: 'T',
-      sentences: [
-        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
-        { actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] },
-      ],
-      groups: [{ name: 'Workshop', members: ['Mechanic', 'Estimate'] }],
-    });
-    expect(() => membersOfSteps(story, [1, 2])).toThrow(/"Workshop", which also holds the actor "Mechanic"/);
-  });
-
-  it('leaves a shared work object in the group it was given, once that is decided', () => {
-    const story = buildStory({
-      title: 'T',
-      sentences: [
-        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
-        { actor: 'Mechanic', activity: 'notes', workObject: 'Part request', to: [{ activity: 'for', actor: 'Clerk' }] },
-        { actor: 'Clerk', activity: 'reads', workObject: 'Part request', reuseWorkObject: true },
-        { actor: 'Clerk', activity: 'orders', workObject: 'Part' },
-      ],
-    });
-    expect(() => membersOfSteps(story, [3, 4])).toThrow(/is used by step 2 too/);
-    const intake = story.addGroup({ name: 'Intake', members: ['Bike', 'Part request'] });
-    const purchasing = story.addGroup({ name: 'Purchasing', members: membersOfSteps(story, [3, 4]) });
-    const find = (name: string) => story.elements().find((element) => element.name === name)!;
-    expect([find('Part request')['parent'], find('Part')['parent']]).toEqual([intake.id, purchasing.id]);
-    expect(() => membersOfSteps(story, [3])).toThrow(/nothing left to group/);
-  });
-
-  it('refuses to group by steps when some of their work objects sit in a group the steps only partly cover', () => {
-    const story = buildStory({
-      title: 'T',
-      sentences: [
-        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
-        { actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] },
-        { actor: 'Mechanic', activity: 'repairs', workObject: 'Bike' },
-      ],
-    });
-    const bikes = story.elements().filter((element) => element.name === 'Bike');
-    story.addGroup({ name: 'Pricing', members: ['Estimate', bikes[1]!.id] });
-    expect(() => membersOfSteps(story, [1, 2])).toThrow(/"Estimate" in step 2 is in the group "Pricing", which also holds the work object "Bike"/);
-  });
-
   it('puts an existing group that the steps cover whole into the new group, so inner groups may come first', () => {
     const story = buildStory({
       title: 'T',
@@ -417,16 +266,17 @@ describe('buildStory', () => {
     const intake = groups.find((group) => group.name === 'Intake')!;
     expect(intake['parent']).toBe(workshop.id);
     expect(story.elements().filter((element) => element['parent'] === intake.id).map((element) => element.name).sort()).toEqual(['Bike', 'Estimate']);
-    expect(() =>
-      buildStory({
-        title: 'T',
-        sentences: [{ actor: 'A', activity: 'does', workObject: 'W' }],
-        groups: [
-          { name: 'One', steps: [1] },
-          { name: 'Two', steps: [1] },
-        ],
-      }),
-    ).toThrow(/Step 1 is already the group "One"; leave out one of the two groups/);
+    // The same steps again give a box inside the first one, holding the same work object.
+    const twice = buildStory({
+      title: 'T',
+      sentences: [{ actor: 'A', activity: 'does', workObject: 'W' }],
+      groups: [
+        { name: 'One', steps: [1] },
+        { name: 'Two', steps: [1] },
+      ],
+    });
+    const named = (name: string) => twice.elements().find((element) => element.name === name)!;
+    expect([named('Two')['parent'], named('W')['parent']]).toEqual([named('One').id, named('Two').id]);
   });
 
   it('nests a group of some steps of an outer group even when its box is as large, and grows the outer group', () => {
@@ -464,22 +314,23 @@ describe('buildStory', () => {
     const find = (name: string) => story.elements().find((element) => element.name === name)!;
     expect(find('Pricing')['parent']).toBe(intake.id);
     expect(find('Estimate')['parent']).toBe(find('Pricing').id);
-    // Naming the same element again would only wrap the group in a copy of itself.
-    expect(() => story.addGroup({ name: 'Again', members: ['Estimate'] })).toThrow(/already the group "Pricing"/);
-    // Naming the group itself wraps it on purpose.
+    // Naming the group itself wraps it.
     const around = story.addGroup({ name: 'Around', members: ['Pricing'] });
-    expect(find('Pricing')['parent']).toBe(around.id);
+    expect([find('Pricing')['parent'], around['parent']]).toEqual([around.id, intake.id]);
+    // Naming what one group holds draws a box inside that group.
+    const again = story.addGroup({ name: 'Again', members: ['Estimate'] });
+    expect([find('Estimate')['parent'], again['parent']]).toEqual([again.id, find('Pricing').id]);
   });
 
-  it('moves members one by one out of a group that also holds something else', () => {
+  it('moves members out of a group that also holds something else', () => {
     const story = buildStory({
       title: 'T',
       sentences: [{ actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] }],
       groups: [{ name: 'Workshop', members: ['Mechanic', 'Estimate'] }],
     });
-    const paperwork = story.addGroup({ name: 'Paperwork', members: ['Estimate'], x: 2000, y: 2000, width: 300, height: 200 });
+    const paperwork = story.addGroup({ name: 'Paperwork', members: ['Estimate', 'Customer'] });
     const find = (name: string) => story.elements().find((element) => element.name === name)!;
-    expect(find('Estimate')['parent']).toBe(paperwork.id);
+    expect([find('Estimate')['parent'], find('Customer')['parent'], paperwork['parent']]).toEqual([paperwork.id, paperwork.id, undefined]);
     expect(find('Mechanic')['parent']).toBe(find('Workshop').id);
   });
 
@@ -504,23 +355,7 @@ describe('buildStory', () => {
     expect(link.waypoints[0]!.x).toBeGreaterThanOrEqual(box.x + box.width - 1);
   });
 
-  it('keeps a named group whole in a box drawn with x and y, and moves a note with its element', () => {
-    const story = Story.create({ title: 'T' });
-    const estimate = story.addWorkObject({ name: 'Estimate', x: 100, y: 100 });
-    const bike = story.addWorkObject({ name: 'Bike', x: 400, y: 100 });
-    const mechanic = story.addActor({ name: 'Mechanic', x: 700, y: 100 });
-    const pricing = story.addGroup({ name: 'Pricing', members: [estimate.id, bike.id] });
-    const around = story.addGroup({ name: 'Around', members: [pricing.id, estimate.id], x: -500, y: -500, width: 5000, height: 5000 });
-    expect([story.get(pricing.id)?.['parent'], story.get(estimate.id)?.['parent']]).toEqual([around.id, pricing.id]);
-    const note = story.addAnnotation({ text: 'about Mechanic', attachTo: mechanic.id, x: 800, y: 100 }).annotation;
-    const boss = story.addActor({ name: 'Boss', x: 950, y: 100 });
-    const workshop = story.addGroup({ name: 'Workshop', members: [mechanic.id, note.id, boss.id], x: 650, y: 50, width: 400, height: 200 });
-    const alone = story.addGroup({ name: 'Alone', members: [mechanic.id], x: 2000, y: 2000, width: 300, height: 200 });
-    expect([story.get(mechanic.id)?.['parent'], story.get(note.id)?.['parent']]).toEqual([alone.id, alone.id]);
-    expect(story.get(boss.id)?.['parent']).toBe(workshop.id);
-  });
-
-  it('draws a fitted box around the notes that move along, and lets an x/y box go inside the group it sits in', () => {
+  it('draws a fitted box around the notes of its members, and lets an x/y box go inside the group it sits in', () => {
     const story = Story.create({ title: 'T' });
     const part = story.addWorkObject({ name: 'Part', x: 300, y: 300 });
     const note = story.addAnnotation({ text: 'weekly', attachTo: part.id }).annotation;
@@ -532,7 +367,7 @@ describe('buildStory', () => {
     const g = story.addGroup({ name: 'G', x: 2000, y: 0, width: 800, height: 600 });
     const a = story.addWorkObject({ name: 'A', x: 2100, y: 100 });
     expect(story.get(a.id)?.['parent']).toBe(g.id);
-    const sub = story.addGroup({ name: 'Sub', members: [a.id], x: 2050, y: 50, width: 300, height: 200 });
+    const sub = story.addGroup({ name: 'Sub', x: 2050, y: 50, width: 300, height: 200 });
     expect([story.get(sub.id)?.['parent'], story.get(a.id)?.['parent']]).toEqual([g.id, sub.id]);
   });
 
@@ -542,7 +377,7 @@ describe('buildStory', () => {
     const a = story.addWorkObject({ name: 'A', x: -999_999_950, y: 0 });
     const b = story.addWorkObject({ name: 'B', x: -999_999_500, y: 0 });
     const third = story.addWorkObject({ name: 'C', x: -999_999_000, y: 0 });
-    story.addGroup({ name: 'Edge', members: [a.id, b.id, third.id], x: -999_999_960, y: -100, width: 2000, height: 400 });
+    story.addGroup({ name: 'Edge', members: [a.id, b.id, third.id] });
     const before = JSON.stringify(story.toDocument());
     expect(() => story.addGroup({ name: 'Both', members: [a.id, b.id] })).toThrow(/"Edge" would have to grow past a billion pixels/);
     expect(JSON.stringify(story.toDocument())).toBe(before);
@@ -599,27 +434,56 @@ describe('buildStory', () => {
   });
 });
 
-describe('grouping edge cases', () => {
+describe('groups hold what you name', () => {
   const parentOf = (story: Story, id: string) => story.get(id)?.['parent'];
+  const shop = [
+    { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+    { actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] },
+    { actor: 'Mechanic', activity: 'repairs', workObject: 'Bike', reuseWorkObject: true },
+  ];
 
-  it('takes a nested group whole into an x/y box drawn inside the group around it', () => {
-    const story = Story.create({ title: 'T' });
-    const g = story.addGroup({ name: 'G', x: 0, y: 0, width: 3000, height: 3000 });
-    const a = story.addWorkObject({ name: 'A', x: 100, y: 100 });
-    const h = story.addGroup({ name: 'H', x: 500, y: 500, width: 400, height: 300 });
-    const b = story.addWorkObject({ name: 'B', x: 550, y: 550 });
-    expect([parentOf(story, a.id), parentOf(story, h.id), parentOf(story, b.id)]).toEqual([g.id, g.id, h.id]);
-    const sub = story.addGroup({ name: 'Sub', members: [a.id, b.id], x: 50, y: 50, width: 2000, height: 2000 });
-    expect([parentOf(story, sub.id), parentOf(story, a.id), parentOf(story, h.id), parentOf(story, b.id)]).toEqual([g.id, sub.id, sub.id, h.id]);
-    expect(validateStory(story.toDocument()).filter((issue) => issue.code === 'group-encloses-non-member')).toEqual([]);
+  it('gives a work object that later steps use too to the step that drew it', () => {
+    const story = buildStory({ title: 'T', sentences: shop, groups: [{ name: 'Intake', steps: [1, 2] }] });
+    const bike = story.elements().find((element) => element.name === 'Bike')!;
+    const intake = story.elements().find((element) => element.name === 'Intake')!;
+    expect(bike['parent']).toBe(intake.id);
+    expect(() => membersOfSteps(story, [3])).toThrow(/Step 3 has no work object of its own/);
+    // Shared through an onward arrow: the folder first appears in step 1.
+    const filing = buildStory({ title: 'T', sentences: [{ actor: 'Clerk', activity: 'puts', workObject: 'Letter' }] });
+    const letter = filing.elements().find((element) => element.name === 'Letter')!;
+    const folder = filing.addWorkObject({ name: 'Folder' });
+    filing.addActivity({ from: letter.id, to: folder.id, label: 'into' });
+    addSentence(filing, { actor: 'Clerk', activity: 'files', workObject: folder.id });
+    expect(membersOfSteps(filing, [1]).sort()).toEqual([folder.id, letter.id].sort());
+    expect(() => membersOfSteps(filing, [2])).toThrow(/Step 2 has no work object of its own/);
   });
 
-  it('finds the group an x/y box sits in by the size of the box', () => {
+  it('moves a work object that is named next to steps into that group', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: shop,
+      groups: [
+        { name: 'Intake', steps: [1, 2] },
+        { name: 'Repair', steps: [3], members: ['Bike'] },
+      ],
+    });
+    const find = (name: string) => story.elements().find((element) => element.name === name)!;
+    expect([find('Bike')['parent'], find('Estimate')['parent']]).toEqual([find('Repair').id, find('Intake').id]);
+  });
+
+  it('keeps a note on a group with it when the group goes into another one whole', () => {
+    const story = buildStory({ title: 'T', sentences: shop, groups: [{ name: 'Intake', steps: [1, 2] }] });
+    const intake = story.elements().find((element) => element.name === 'Intake')!;
+    const note = story.addAnnotation({ text: 'one customer at a time', attachTo: intake.id }).annotation;
+    story.addWorkObject({ name: 'Invoice' });
+    const shopGroup = story.addGroup({ name: 'Shop', members: [intake.id, 'Invoice'] });
+    expect([parentOf(story, intake.id), parentOf(story, note.id)]).toEqual([shopGroup.id, intake.id]);
+  });
+
+  it('refuses members together with x and y', () => {
     const story = Story.create({ title: 'T' });
-    const g = story.addGroup({ name: 'G', x: 0, y: 0, width: 250, height: 200 });
-    const a = story.addWorkObject({ name: 'A', x: 20, y: 20 });
-    const sub = story.addGroup({ name: 'Sub', members: [a.id], x: 10, y: 10, width: 150, height: 150 });
-    expect([parentOf(story, sub.id), parentOf(story, a.id)]).toEqual([g.id, sub.id]);
+    const a = story.addWorkObject({ name: 'A', x: 100, y: 100 });
+    expect(() => story.addGroup({ name: 'G', members: [a.id], x: 0, y: 0, width: 500, height: 500 })).toThrow(/not both/);
   });
 
   it('settles a shared work object named by a later group, whatever the order of the groups', () => {
@@ -641,18 +505,6 @@ describe('grouping edge cases', () => {
     expect(homes(first)).toContain('Part request:Intake');
   });
 
-  it('refuses a name that none of the steps use', () => {
-    const story = buildStory({
-      title: 'T',
-      sentences: [
-        { actor: 'Mechanic', activity: 'checks', workObject: 'Bike' },
-        { actor: 'Mechanic', activity: 'cleans', workObject: 'Bike' },
-        { actor: 'Clerk', activity: 'orders', workObject: 'Part' },
-      ],
-    });
-    expect(() => namedForSteps(story, ['Bike'], [3])).toThrow(/"Bike" names 2 elements and these steps use none of them/);
-  });
-
   it('nests a box around a named group and a work object in the group that holds both', () => {
     const story = Story.create({ title: 'T' });
     const q = story.addGroup({ name: 'Q', x: 0, y: 0, width: 2000, height: 2000 });
@@ -662,15 +514,6 @@ describe('grouping edge cases', () => {
     expect([parentOf(story, p.id), parentOf(story, inP.id), parentOf(story, x.id)]).toEqual([q.id, p.id, q.id]);
     const both = story.addGroup({ name: 'Both', members: [p.id, x.id] });
     expect([parentOf(story, both.id), parentOf(story, p.id), parentOf(story, x.id)]).toEqual([q.id, both.id, both.id]);
-  });
-
-  it('says why a group nobody named goes into an x/y box whole', () => {
-    const story = Story.create({ title: 'T' });
-    const a = story.addWorkObject({ name: 'A', x: 100, y: 100 });
-    story.addGroup({ name: 'G', members: [a.id] });
-    expect(() => story.addGroup({ name: 'Sub', members: [a.id], x: 2000, y: 0, width: 120, height: 120 })).toThrow(
-      /"G" goes into the new box whole, since everything in it is among the members/,
-    );
   });
 
   it('says so when the steps have no work object', () => {

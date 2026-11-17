@@ -1,7 +1,6 @@
-import { compareIds, groupAncestors, iconNameOf, isGroup, isActivity, isActor, isWorkObject, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { compareIds, iconNameOf, isActivity, isActor, isWorkObject, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { IconCatalog } from '../icons/catalog.js';
 import { autoLayout } from './layout.js';
-import { blockerIn, takeWholeGroups } from './membership.js';
 import { narrate } from './narrate.js';
 import { Story, StoryError } from './story.js';
 
@@ -102,20 +101,14 @@ export function buildStory(input: BuildStoryInput): Story {
     input.sentences.forEach((sentence, index) => {
       withContext(`sentence ${index + 1}`, () => addSentence(story, sentence));
     });
-    // A group that names a shared work object next to its steps goes first, so a group of the other
-    // steps finds it settled whatever the order of the list.
-    const groups = input.groups ?? [];
-    const settles = (group: (typeof groups)[number]) => Boolean(group.steps?.length && group.members?.length);
-    for (const group of [...groups.filter(settles), ...groups.filter((group) => !settles(group))]) {
+    for (const group of input.groups ?? []) {
       if (!group.members?.length && !group.steps?.length) {
         throw new StoryError(`The group "${group.name}" needs members or steps.`);
       }
       withContext(`group "${group.name}"`, () =>
         story.addGroup({
           name: group.name,
-          members: group.steps
-            ? ((named) => [...named, ...membersOfSteps(story, group.steps as number[], named)])(namedForSteps(story, group.members ?? [], group.steps))
-            : (group.members ?? []),
+          members: [...(group.members ?? []), ...(group.steps ? membersOfSteps(story, group.steps, Boolean(group.members?.length)) : [])],
           ...(group.color ? { color: group.color } : {}),
         }),
       );
@@ -216,125 +209,40 @@ function shapeInput(spec: ShapeSpec) {
 }
 
 /**
- * The members for a group made from the sentences with these step numbers:
- * their work objects, the second work object of a sentence included, but
- * never their actors, which usually take part in several subdomains. An
- * existing group made only of these (and of `named`, members given in the
- * same call) goes in whole, so inner groups may be drawn before outer ones.
+ * The members for a group made from the sentences with these step numbers
+ * (ADR 18): the work objects that first appear in them, the second work object
+ * of a sentence included, but never their actors, which usually take part in
+ * several subdomains. A work object that later sentences use too belongs to
+ * the step that drew it. Steps without such a work object are refused,
+ * unless the group has members besides.
  */
-export function membersOfSteps(story: Story, steps: number[], named: string[] = []): string[] {
+export function membersOfSteps(story: Story, steps: number[], withMembers = false): string[] {
   const doc = story.toDocument();
   const byId = new Map(doc.elements.map((element) => [element.id, element]));
   const narrative = narrate(doc);
-  const nameOf = (id: string) => (byId.get(id) as StoryElement).name || id;
-  // The steps each work object takes part in, onward arrows included.
-  const stepsOf = new Map<string, number[]>();
-  for (const step of narrative) {
+  for (const number of steps) {
+    if (!narrative.some((step) => step.number === number)) {
+      throw new StoryError(`There is no step ${number}; the story has steps ${narrative.map((step) => step.number).join(', ') || 'none'}.`);
+    }
+  }
+  // The step each work object first appears in, onward arrows included.
+  const firstStep = new Map<string, number>();
+  for (const step of [...narrative].sort((a, b) => a.number - b.number)) {
     for (const id of step.elementIds) {
       const element = byId.get(id);
-      if (element && isWorkObject(element) && !stepsOf.get(id)?.includes(step.number)) {
-        stepsOf.set(id, [...(stepsOf.get(id) ?? []), step.number]);
+      if (element && isWorkObject(element) && !firstStep.has(id)) {
+        firstStep.set(id, step.number);
       }
     }
   }
-  const ids: string[] = [];
-  const stepOf = new Map<string, number>();
-  for (const number of steps) {
-    const step = narrative.find((candidate) => candidate.number === number);
-    if (!step) {
-      throw new StoryError(`There is no step ${number}; the story has steps ${narrative.map((candidate) => candidate.number).join(', ') || 'none'}.`);
-    }
-    for (const id of step.elementIds) {
-      if (isWorkObject(byId.get(id) as StoryElement) && !ids.includes(id)) {
-        ids.push(id);
-        stepOf.set(id, number);
-      }
-    }
-  }
-  if (ids.length === 0 && named.length === 0) {
-    throw new StoryError(`${steps.length > 1 ? 'Steps' : 'Step'} ${steps.join(', ')} ${steps.length > 1 ? 'have' : 'has'} no work object, so there is nothing to group.`);
-  }
-  // A work object shared with a sentence outside these steps cannot be in two groups. Naming it in
-  // the same call decides that it belongs here. A group it already sits in decides too, unless that
-  // group is the one the new box nests in, or one around it, which holds its other sentences as well.
-  const plain = ids.filter((id) => (stepsOf.get(id) ?? []).every((number) => steps.includes(number)));
-  const chains = plain.map((id) => groupAncestors(byId.get(id), byId));
-  const around = chains[0]?.find((group) => chains.every((chain) => chain.includes(group)));
-  const aroundChain = around ? [around, ...groupAncestors(byId.get(around), byId)] : [];
-  const settled: string[] = [];
-  for (const id of ids.filter((candidate) => !plain.includes(candidate))) {
-    const home = groupAncestors(byId.get(id), byId)[0];
-    if (named.includes(id) || (home !== undefined && !aroundChain.includes(home))) {
-      ids.splice(ids.indexOf(id), 1);
-      settled.push(id);
-      continue;
-    }
-    const others = (stepsOf.get(id) ?? []).filter((number) => !steps.includes(number));
+  const ids = [...firstStep].filter(([, number]) => steps.includes(number)).map(([id]) => id);
+  if (ids.length === 0 && !withMembers) {
+    const several = steps.length > 1;
     throw new StoryError(
-      `"${nameOf(id)}" in step ${stepOf.get(id)} is used by ${others.length > 1 ? 'steps' : 'step'} ${others.join(', ')} too, so it cannot go into a group of these steps alone. Decide which group it belongs to: to put it in this one, pass "${nameOf(id)}" in members as well as the steps; grouping other steps later leaves it where it is.`,
+      `${several ? 'Steps' : 'Step'} ${steps.join(', ')} ${several ? 'have' : 'has'} no work object of ${several ? 'their' : 'its'} own, so there is nothing to group. A work object belongs to the step that first uses it; name it in members to put it here instead.`,
     );
   }
-  if (ids.length === 0 && named.length === 0) {
-    const examples = settled.map((id) => `"${nameOf(id)}" in "${nameOf(groupAncestors(byId.get(id), byId)[0] as string)}"`).join(', ');
-    throw new StoryError(
-      `Every work object of ${steps.length > 1 ? 'steps' : 'step'} ${steps.join(', ')} serves other steps too and already sits in a group (${examples}), so there is nothing left to group. To move one into this group, pass it in members as well as the steps.`,
-    );
-  }
-  // An existing group made only of these work objects goes in whole, outermost first.
-  const members = takeWholeGroups([...ids, ...named], doc.elements);
-  const only = members.length === 1 ? (members[0] as string) : undefined;
-  if (only && isGroup(byId.get(only) as StoryElement) && !named.includes(only)) {
-    throw new StoryError(
-      `${steps.length > 1 ? 'Steps' : 'Step'} ${steps.join(', ')} ${steps.length > 1 ? 'are' : 'is'} already the group "${nameOf(only)}"; leave out one of the two groups, or choose other steps.`,
-    );
-  }
-  // What is left must not cross other groups; all in one group is fine, which then holds the new group.
-  const homes = members.map((id) => groupAncestors(byId.get(id), byId)[0]);
-  const outside = members.find((id, index) => homes[index] === undefined && named.includes(id));
-  if (new Set(homes).size > 1 && outside !== undefined) {
-    const index = homes.findIndex((home) => home !== undefined);
-    throw new StoryError(
-      `"${nameOf(outside)}" is in no group while "${nameOf(members[index] as string)}" is in the group "${nameOf(homes[index] as string)}", so the new box would cross it. Leave "${nameOf(outside)}" out, or change or remove that group.`,
-    );
-  }
-  if (new Set(homes).size > 1) {
-    const index = homes.findIndex((home) => home !== undefined);
-    const id = members[index] as string;
-    const home = homes[index] as string;
-    const blocker = blockerIn(home, [...ids, ...named], doc.elements);
-    const kind = (element: StoryElement) => (isActor(element) ? 'the actor' : isWorkObject(element) ? 'the work object' : 'the note');
-    const holds = blocker
-      ? `which also holds ${kind(blocker)} "${blocker.name || (blocker['text'] as string | undefined) || blocker.id}"`
-      : 'while other work objects of these steps are in no group or another one';
-    throw new StoryError(
-      `"${nameOf(id)}"${stepOf.has(id) ? ` in step ${stepOf.get(id)}` : ''} is in the group "${nameOf(home)}", ${holds}, so the new box would cross it. Change or remove that group, or choose other steps.`,
-    );
-  }
-  return members;
-}
-
-/**
- * The ids that member references stand for next to these steps. A name that
- * several work objects share (one per sentence) means the copies these steps
- * use, so a shared work object can be named before the story has ids.
- */
-export function namedForSteps(story: Story, refs: string[], steps: number[]): string[] {
-  const inSteps = new Set(
-    narrate(story.toDocument())
-      .filter((step) => steps.includes(step.number))
-      .flatMap((step) => step.elementIds),
-  );
-  return refs.flatMap((ref) => {
-    const ids = story.idsOf(ref);
-    if (ids.length <= 1 || story.get(ref)) {
-      return ids;
-    }
-    const used = ids.filter((id) => inSteps.has(id));
-    if (used.length === 0) {
-      throw new StoryError(`"${ref}" names ${ids.length} elements and these steps use none of them; pass an id from get_story.`);
-    }
-    return used;
-  });
+  return ids;
 }
 
 function withContext<T>(context: string, action: () => T): T {

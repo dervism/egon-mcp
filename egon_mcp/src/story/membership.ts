@@ -1,4 +1,4 @@
-import { groupAncestors, isConnection, isEdge, isGroup, isTextAnnotation, type GroupElement, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { groupAncestors, isActor, isEdge, isGroup, isWorkObject, type GroupElement, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { boundsOf } from './geometry.js';
 
 /**
@@ -88,77 +88,37 @@ export function settleMembership(elements: StoryElement[]): void {
   }
 }
 
-/** Everything a group holds, nested groups and their contents included, but no arrows. */
-export function contentsOf(groupId: string, elements: StoryElement[]): string[] {
+/** The actors and work objects inside a group, at any depth. */
+function peopleAndThings(groupId: string, elements: StoryElement[]): string[] {
   return elements.flatMap((element) =>
-    element['parent'] !== groupId || isEdge(element) ? [] : isGroup(element) ? [element.id, ...contentsOf(element.id, elements)] : [element.id],
+    element['parent'] !== groupId ? [] : isGroup(element) ? peopleAndThings(element.id, elements) : isActor(element) || isWorkObject(element) ? [element.id] : [],
   );
 }
 
 /**
- * What counts as chosen when these ids become members: the ids, everything
- * inside a chosen group, and every note attached to a chosen element.
+ * Where a new group around these elements goes and what it holds (ADR 18).
+ * The host is the innermost group that holds every one of them. Inside it, a
+ * named group goes in with everything it holds, and so does any group whose
+ * actors and work objects are all named or inside a named group; every other
+ * element goes in by itself, leaving its old group.
  */
-function chosenWith(ids: string[], elements: StoryElement[]): Set<string> {
+export function membersFor(ids: string[], elements: StoryElement[]): { host: string | undefined; members: string[] } {
   const byId = new Map(elements.map((element) => [element.id, element]));
-  const chosen = new Set(ids.flatMap((id) => (isGroup(byId.get(id) as StoryElement) ? [id, ...contentsOf(id, elements)] : [id])));
-  for (const link of elements.filter(isConnection)) {
-    const target = byId.get(link.target);
-    if (target && isTextAnnotation(target) && chosen.has(link.source)) {
-      chosen.add(target.id);
-    }
-  }
-  return chosen;
-}
-
-/**
- * The first thing in the group that keeps it from going in whole with these
- * ids: an element that is not chosen. A note on the group itself, or on a
- * group inside it, belongs to the group and does not count.
- */
-export function blockerIn(groupId: string, ids: string[], elements: StoryElement[]): StoryElement | undefined {
-  const byId = new Map(elements.map((element) => [element.id, element]));
-  const chosen = chosenWith(ids, elements);
-  const inside = contentsOf(groupId, elements);
-  const groupsHere = new Set([groupId, ...inside.filter((id) => isGroup(byId.get(id) as StoryElement))]);
-  const notesOnGroups = new Set(
-    elements
-      .filter(isConnection)
-      .filter((link) => groupsHere.has(link.source) && isTextAnnotation(byId.get(link.target) ?? ({ type: '' } as StoryElement)))
-      .map((link) => link.target),
-  );
-  const blocker = inside.find((id) => !isGroup(byId.get(id) as StoryElement) && !chosen.has(id) && !notesOnGroups.has(id));
-  return blocker === undefined ? undefined : byId.get(blocker);
-}
-
-/**
- * The members for a new group, with every existing group whose contents are
- * all chosen taken in whole instead of one by one, outermost first, so no
- * group is left empty and inner groups may be drawn before outer ones. A group
- * that holds anything else, such as an actor of a subdomain, is not taken; its
- * chosen members move one by one. Groups in `keepOut` are never taken, such as
- * the group a box drawn with coordinates sits in.
- */
-export function takeWholeGroups(ids: string[], elements: StoryElement[], keepOut: string[] = []): string[] {
-  const byId = new Map(elements.map((element) => [element.id, element]));
-  const whole = (groupId: string) =>
-    !keepOut.includes(groupId) &&
-    contentsOf(groupId, elements).some((id) => !isGroup(byId.get(id) as StoryElement)) &&
-    blockerIn(groupId, ids, elements) === undefined;
+  const chains = ids.map((id) => groupAncestors(byId.get(id), byId));
+  const host = chains[0]?.find((group) => chains.every((chain) => chain.includes(group)));
+  const named = new Set(ids.flatMap((id) => (isGroup(byId.get(id) as StoryElement) ? [id, ...peopleAndThings(id, elements)] : [id])));
+  const whole = (groupId: string) => {
+    const inside = peopleAndThings(groupId, elements);
+    return inside.length > 0 && inside.every((id) => named.has(id));
+  };
   const picked: string[] = [];
-  for (const id of ids) {
-    const member = groupAncestors(byId.get(id), byId).filter(whole).at(-1) ?? id;
+  for (const [index, id] of ids.entries()) {
+    const below = (chains[index] as string[]).slice(0, host === undefined ? undefined : (chains[index] as string[]).indexOf(host));
+    const member = below.filter(whole).at(-1) ?? id;
     if (!picked.includes(member)) {
       picked.push(member);
     }
   }
-  // A member inside another member goes along with it.
-  const members = picked.filter((id) => !groupAncestors(byId.get(id), byId).some((ancestor) => picked.includes(ancestor)));
-  // When that leaves only the group around a named group, the caller means a box around what was
-  // named inside it: that group and the ones around it are not taken.
-  const only = members.length === 1 ? (members[0] as string) : undefined;
-  if (only && !ids.includes(only) && ids.some((id) => isGroup(byId.get(id) as StoryElement))) {
-    return takeWholeGroups(ids, elements, [...keepOut, only, ...groupAncestors(byId.get(only), byId)]);
-  }
-  return members;
+  // Whatever lies inside another member goes along with it.
+  return { host, members: picked.filter((id) => !groupAncestors(byId.get(id), byId).some((ancestor) => picked.includes(ancestor))) };
 }

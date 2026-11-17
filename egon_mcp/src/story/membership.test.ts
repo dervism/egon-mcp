@@ -5,7 +5,7 @@ import { toEgnJson } from '../egon/serialize.js';
 import type { ShapeElement, StoryElement } from '../egon/types.js';
 import { describeStory } from '../server/describe.js';
 import type { StoryEntry } from '../server/workspace.js';
-import { takeWholeGroups } from './membership.js';
+import { membersFor } from './membership.js';
 import { addSentence, buildStory } from './sentences.js';
 import { Story } from './story.js';
 import { validateStory } from './validate.js';
@@ -139,12 +139,6 @@ describe('group membership while editing', () => {
     expect(parentOf(story, inner.id)).toBe(first.id);
   });
 
-  it('refuses a member group that is not smaller than the box it should go into', () => {
-    const story = Story.create({ title: 'T' });
-    const big = story.addGroup({ name: 'Big', x: 0, y: 0, width: 800, height: 800 });
-    expect(() => story.addGroup({ name: 'Small', members: [big.id], x: 1000, y: 0, width: 300, height: 200 })).toThrow(/not smaller than the box/);
-  });
-
   it('wants both x and y for a box, or neither', () => {
     const story = Story.create({ title: 'T' });
     expect(() => story.addGroup({ name: 'G', x: 100 })).toThrow(/both x and y/);
@@ -193,10 +187,10 @@ describe('group membership while editing', () => {
     expect(() => story.addGroup({ name: 'Fitted', members: [far.id] })).toThrow(/billion/);
     expect(() => story.addAnnotation({ text: 'note', attachTo: story.addActor({ name: 'Edge', x: 1e9 - 10, y: 5000 }).id })).toThrow(/billion/);
     const member = story.addActor({ name: 'Member', x: 9e8, y: 5000 });
-    const box = story.addGroup({ name: 'G', x: 0, y: 4000, width: 300, height: 300, members: [member.id] });
-    expect(() => story.updateElement(box.id, { x: 5e8 })).toThrow(/billion/);
+    const box = story.addGroup({ name: 'G', members: [member.id] });
+    expect(() => story.updateElement(box.id, { x: 1e9 - 10 })).toThrow(/billion/);
     expect(story.get(member.id)?.['x']).toBe(9e8);
-    expect(story.get(box.id)?.['x']).toBe(0);
+    expect(story.get(box.id)?.['x']).toBe(9e8 - 40);
   });
 
   it('puts a shape added inside a group box into that group, as dropping it there in Egon does', () => {
@@ -263,7 +257,8 @@ describe('group membership while editing', () => {
     const story = Story.create({ title: 'T' });
     const a = story.addActor({ name: 'A', x: 150, y: 150 });
     const fitted = story.addGroup({ name: 'Fitted', members: [a.id] });
-    const other = story.addGroup({ name: 'Other', members: [story.addActor({ name: 'B', x: 600, y: 100 }).id], x: 50, y: 50, width: 900, height: 400 });
+    story.addActor({ name: 'B', x: 600, y: 100 });
+    const other = story.addGroup({ name: 'Other', x: 50, y: 50, width: 900, height: 400 });
     expect(parentOf(story, 'A')).toBe(fitted.id);
     story.removeElement(fitted.id);
     expect(parentOf(story, 'A')).toBe(other.id);
@@ -321,69 +316,50 @@ describe('group checks', () => {
   });
 });
 
-describe('taking groups in whole', () => {
+describe('what goes into a new group', () => {
   const doc = (elements: object[]) => opened(elements).elements();
+  const workObject = (id: string, x: number, y: number, parent?: string) => ({ type: 'domainStory:workObjectDocument', id, name: id.toUpperCase(), x, y, ...(parent ? { parent } : {}) });
 
-  it('takes the outermost group whose contents are all chosen', () => {
+  it('nests the new group in the innermost group that holds every member, and takes the groups inside it whole', () => {
     const elements = doc([
       group('outer', 0, 0, 2000, 2000),
       group('middle', 50, 50, 1500, 1500, 'outer'),
       group('inner', 100, 100, 500, 500, 'middle'),
-      { type: 'domainStory:workObjectDocument', id: 'a', name: 'A', x: 150, y: 150, parent: 'inner' },
-      { type: 'domainStory:workObjectDocument', id: 'b', name: 'B', x: 900, y: 900, parent: 'middle' },
+      workObject('a', 150, 150, 'inner'),
+      workObject('b', 900, 900, 'middle'),
     ]);
-    expect(takeWholeGroups(['a', 'b'], elements)).toEqual(['outer']);
-    expect(takeWholeGroups(['a'], elements)).toEqual(['inner']);
+    expect(membersFor(['a', 'b'], elements)).toEqual({ host: 'middle', members: ['inner', 'b'] });
+    expect(membersFor(['a'], elements)).toEqual({ host: 'inner', members: ['a'] });
   });
 
-  it('leaves a group with an actor that was not chosen, and takes an actor-only group that was', () => {
+  it('moves members out of a group that holds something else, and takes in a group whose actors and work objects are all named', () => {
     const elements = doc([
       group('workshop', 0, 0, 1000, 1000),
       actor('mechanic', 100, 100, 'workshop'),
-      { type: 'domainStory:workObjectDocument', id: 'estimate', name: 'Estimate', x: 300, y: 100, parent: 'workshop' },
+      workObject('estimate', 300, 100, 'workshop'),
       group('customers', 2000, 0, 300, 300),
       actor('customer', 2100, 100, 'customers'),
     ]);
-    expect(takeWholeGroups(['estimate'], elements)).toEqual(['estimate']);
-    expect(takeWholeGroups(['customer', 'estimate'], elements)).toEqual(['customers', 'estimate']);
+    expect(membersFor(['customer', 'estimate'], elements)).toEqual({ host: undefined, members: ['customers', 'estimate'] });
   });
 
-  it('counts a note on the group itself as part of it', () => {
+  it('leaves notes out when it decides whether a group goes in whole', () => {
     const elements = doc([
       group('intake', 0, 0, 1000, 1000),
-      { type: 'domainStory:workObjectDocument', id: 'a', name: 'A', x: 100, y: 100, parent: 'intake' },
+      workObject('a', 100, 100, 'intake'),
       { type: 'domainStory:textAnnotation', id: 'n', text: 'about intake', x: 300, y: 100, width: 100, height: 30, parent: 'intake' },
       { type: 'domainStory:connection', id: 'c', source: 'intake', target: 'n', waypoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }] },
+      group('notes only', 2000, 0, 300, 300),
+      { type: 'domainStory:textAnnotation', id: 'm', text: 'loose', x: 2100, y: 100, width: 100, height: 30, parent: 'notes only' },
+      workObject('x', 3000, 0),
     ]);
-    expect(takeWholeGroups(['a'], elements)).toEqual(['intake']);
+    expect(membersFor(['a', 'x'], elements)).toEqual({ host: undefined, members: ['intake', 'x'] });
+    expect(membersFor(['m', 'x'], elements)).toEqual({ host: undefined, members: ['m', 'x'] });
   });
 
-  it('ignores a link to a note that does not exist', () => {
-    const elements = doc([
-      group('g', 0, 0, 1000, 1000),
-      { type: 'domainStory:workObjectDocument', id: 'a', name: 'A', x: 100, y: 100, parent: 'g' },
-      { type: 'domainStory:connection', id: 'c', source: 'a', target: 'shape_404', waypoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }] },
-    ]);
-    expect(takeWholeGroups(['a'], elements)).toEqual(['g']);
-  });
-
-  it('keeps a group that was passed as it is, without taking its parent', () => {
-    const elements = doc([group('g2', 0, 0, 2000, 2000), group('g1', 100, 100, 500, 500, 'g2'), { type: 'domainStory:workObjectDocument', id: 'a', name: 'A', x: 150, y: 150, parent: 'g1' }]);
-    expect(takeWholeGroups(['g1'], elements)).toEqual(['g1']);
-  });
-
-  it('counts a chosen group and notes on chosen elements as chosen', () => {
-    const elements = doc([
-      group('outer', 0, 0, 2000, 2000),
-      group('inner', 100, 100, 500, 500, 'outer'),
-      { type: 'domainStory:workObjectDocument', id: 'a', name: 'A', x: 150, y: 150, parent: 'inner' },
-      { type: 'domainStory:workObjectDocument', id: 'b', name: 'B', x: 900, y: 900, parent: 'outer' },
-      { type: 'domainStory:textAnnotation', id: 'n', text: 'about B', x: 1000, y: 900, width: 100, height: 30, parent: 'outer' },
-      { type: 'domainStory:connection', id: 'c', source: 'b', target: 'n', waypoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }] },
-    ]);
-    // Everything in "outer" is chosen: "a" with its group, and "b" with its note.
-    expect(takeWholeGroups(['a', 'b'], elements)).toEqual(['outer']);
-    // A named group is not taken up into the group around it when that would be the only member.
-    expect(takeWholeGroups(['inner', 'b'], elements)).toEqual(['inner', 'b']);
+  it('takes a named group with everything in it, and what lies inside it along with it', () => {
+    const elements = doc([group('g2', 0, 0, 2000, 2000), group('g1', 100, 100, 500, 500, 'g2'), workObject('a', 150, 150, 'g1'), actor('b', 300, 300, 'g1')]);
+    expect(membersFor(['g1'], elements)).toEqual({ host: 'g2', members: ['g1'] });
+    expect(membersFor(['g1', 'a'], elements)).toEqual({ host: 'g2', members: ['g1'] });
   });
 });
