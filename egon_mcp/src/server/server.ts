@@ -75,6 +75,18 @@ const sentenceSchema = {
 };
 
 const shapeSpec = z.object({ name: z.string(), icon: iconName.optional(), color: color.optional() });
+const titleField = z.string().describe('Story title. Egon 3 reads the title from the file name, so saved files are named after it.');
+const descriptionField = z.string().describe('Text Egon shows under the title.');
+const nameField = z.string().describe('Name shown below the element, in the words of the domain.');
+const groupSpec = z.object({
+  name: z.string(),
+  members: z.array(z.string()).describe('Names of the actors and work objects inside the group.'),
+  color: color.optional(),
+});
+const annotationSpec = z.object({
+  text: z.string(),
+  attachTo: z.string().optional().describe('Name of the element the note belongs to.'),
+});
 
 export function createEgonServer(options: EgonServerOptions): EgonServer {
   const workspace = new Workspace(options.root, options.egonFormat ? { egonFormat: options.egonFormat } : {});
@@ -125,7 +137,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Create domain story',
       description: 'Creates a new, empty domain story with Egon\'s default icon set and returns its storyId. Use build_story instead to create a whole story from sentences in one call.',
-      inputSchema: { title: z.string(), description: z.string().optional(), scope: scopeSchema.optional() },
+      inputSchema: { title: titleField, description: descriptionField.optional(), scope: scopeSchema.optional() },
     },
     run(({ title, description, scope }) => {
       const entry = workspace.create({ title, ...(description !== undefined ? { description } : {}), ...(scope ? { scope } : {}) });
@@ -141,14 +153,14 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
       description:
         'Creates a complete domain story in one call from numbered sentences ("Customer tells Order to Clerk"), creating actors and work objects by name, then lays it out. Each sentence becomes one step. Returns the storyId, the narrative and any validation issues.',
       inputSchema: {
-        title: z.string(),
-        description: z.string().optional(),
+        title: titleField,
+        description: descriptionField.optional(),
         scope: scopeSchema.optional(),
         actors: z.array(shapeSpec).optional().describe('Actors to create first, to choose their icon or color.'),
         workObjects: z.array(shapeSpec).optional().describe('Work objects to create first, to choose their icon or color.'),
         sentences: z.array(z.object(sentenceSchema)).min(1).describe('The steps of the story in order.'),
-        groups: z.array(z.object({ name: z.string(), members: z.array(z.string()), color: color.optional() })).optional(),
-        annotations: z.array(z.object({ text: z.string(), attachTo: z.string().optional() })).optional(),
+        groups: z.array(groupSpec).optional().describe('Boxes around elements that belong together.'),
+        annotations: z.array(annotationSpec).optional().describe('Notes for variations, rules and open questions.'),
         layout: z.boolean().optional().describe('Arrange elements automatically (default true).'),
       },
     },
@@ -305,7 +317,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Set title, description or scope',
       description: 'Changes the title, description or scope of a story. Pass scope: null to clear it.',
-      inputSchema: { storyId, title: z.string().optional(), description: z.string().optional(), scope: scopeSchema.nullable().optional() },
+      inputSchema: { storyId, title: titleField.optional(), description: descriptionField.optional(), scope: scopeSchema.nullable().optional() },
     },
     run(({ storyId: id, title, description, scope }) =>
       json(
@@ -331,7 +343,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
         description: isActorKind
           ? 'Adds an actor: a person, group or system that does something. The default icon is Person; use Group or System for those, or search_icons for others.'
           : 'Adds a work object: something actors work with, such as a document, call, email or payment. The default icon is Document; search_icons finds others.',
-        inputSchema: { storyId, name: z.string(), icon: iconName.optional(), color: color.optional(), x: x.optional(), y: y.optional() },
+        inputSchema: { storyId, name: nameField, icon: iconName.optional(), color: color.optional(), x: x.optional(), y: y.optional() },
       },
       run(({ storyId: id, name, icon, color: picked, x: left, y: top }) => {
         const input = {
@@ -392,13 +404,13 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
       description: 'Draws a box around elements that belong together, such as a department or subdomain. With members the box fits around them; otherwise give x, y, width and height.',
       inputSchema: {
         storyId,
-        name: z.string(),
-        members: z.array(elementRef).optional(),
+        name: z.string().describe('Label in the top-left corner of the box.'),
+        members: z.array(elementRef).optional().describe('Elements to put inside; the box fits around them.'),
         color: color.optional(),
         x: x.optional(),
         y: y.optional(),
-        width: z.number().positive().optional(),
-        height: z.number().positive().optional(),
+        width: z.number().positive().optional().describe('Box width when no members are given.'),
+        height: z.number().positive().optional().describe('Box height when no members are given.'),
       },
     },
     run(({ storyId: id, name, members, color: picked, x: left, y: top, width, height }) =>
@@ -423,7 +435,13 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Add text annotation',
       description: 'Adds a note, optionally attached to an element with a dashed line. Use it for variations, business rules and open questions.',
-      inputSchema: { storyId, text: z.string(), attachTo: elementRef.optional(), x: x.optional(), y: y.optional() },
+      inputSchema: {
+        storyId,
+        text: z.string().describe('The note.'),
+        attachTo: elementRef.optional().describe('Element the note belongs to; omit for a free-standing note.'),
+        x: x.optional(),
+        y: y.optional(),
+      },
     },
     run(({ storyId: id, text, attachTo, x: left, y: top }) => {
       const result = edit(id, (entry) =>
@@ -447,15 +465,15 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
       inputSchema: {
         storyId,
         element: elementRef,
-        name: z.string().optional(),
+        name: z.string().optional().describe('New name or activity label.'),
         icon: iconName.optional(),
-        color: z.string().optional(),
-        x: z.number().optional(),
-        y: z.number().optional(),
-        width: z.number().positive().optional(),
-        height: z.number().positive().optional(),
-        number: z.number().int().positive().optional(),
-        text: z.string().optional(),
+        color: z.string().optional().describe('New color as hex, or "" to reset it.'),
+        x: z.number().optional().describe('New left edge (shapes only).'),
+        y: z.number().optional().describe('New top edge (shapes only).'),
+        width: z.number().positive().optional().describe('New width (groups and annotations).'),
+        height: z.number().positive().optional().describe('New height (groups and annotations).'),
+        number: z.number().int().positive().optional().describe('Activities from an actor: move to this step; later steps shift by one.'),
+        text: z.string().optional().describe('Text annotations: the new text.'),
       },
     },
     run(({ storyId: id, element, ...update }) => {
@@ -532,7 +550,10 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Search icons',
       description: 'Finds built-in Egon icons by name or keyword, for example "car", "invoice" or "phone". Use the returned name as icon in other tools.',
-      inputSchema: { query: z.string(), limit: z.number().int().positive().max(50).optional() },
+      inputSchema: {
+        query: z.string().describe('Words to look for, for example "invoice" or "delivery truck".'),
+        limit: z.number().int().positive().max(50).optional().describe('Maximum number of results (default 10).'),
+      },
       annotations: { readOnlyHint: true },
     },
     run(({ query, limit }) =>
@@ -567,7 +588,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
         'Returns the story as text without writing a file: egn (Egon JSON), egn.svg (image with embedded story), svg (image only) or markdown (narrative). Use save_story to write a file instead.',
       inputSchema: {
         storyId,
-        format: z.enum(['egn', 'egn.svg', 'svg', 'markdown']),
+        format: z.enum(['egn', 'egn.svg', 'svg', 'markdown']).describe('egn: Egon file. egn.svg: image Egon can import. svg: image only. markdown: numbered sentences.'),
         title: z.boolean().optional().describe('For svg: draw the title and description above the story (default true).'),
       },
       annotations: { readOnlyHint: true },

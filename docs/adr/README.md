@@ -9,3 +9,10 @@ Each file records one decision for egon-mcp. Fields hold one line each, two sent
 | [0003](0003-typescript-node-mcp-sdk.md) | TypeScript on Node with the official MCP SDK over stdio | Accepted |
 | [0004](0004-test-driven-with-vitest.md) | Test-driven development with Vitest | Accepted |
 | [0005](0005-generate-icons-from-submodule.md) | Generate built-in icon data from the egon.io submodule | Accepted |
+| [0006](0006-workspace-root-sandbox.md) | Confine file access to one workspace root | Accepted |
+| [0007](0007-write-egon-3-file-layout.md) | Write the Egon 3 file layout by default | Accepted |
+| [0008](0008-open-in-egon-through-local-link-server.md) | Open stories in Egon through a local link server | Accepted |
+| [0009](0009-render-svg-ourselves.md) | Render SVG previews ourselves | Accepted |
+| [0010](0010-sentence-level-tools.md) | Offer sentence-level tools next to element-level tools | Accepted |
+| [0011](0011-skill-lives-in-repo.md) | Keep the agent skill in this repository | Accepted |
+| [0012](0012-independent-reviewer-agent.md) | Review changes with an independent agent | Accepted |

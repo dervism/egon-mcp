@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "egon": {
+      "command": "node",
+      "args": ["egon_mcp/dist/index.js", "--root", "examples"]
+    }
+  }
+}
