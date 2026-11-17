@@ -12,7 +12,7 @@ The egon-mcp server: Node, TypeScript, the official MCP SDK over stdio, tested w
 | `npm run docs` | Builds, then regenerates the skill's [tool reference](../skills/egon-mcp-skill/references/tools.md) from the server. A test fails when the reference is out of date. |
 | `npm run generate:icons` | Writes `src/icons/generated/builtin-icons.json` (gitignored) from `modules/egon.io`. |
 
-Two tests run the built code in `dist/`, which `npm test` builds first: the stdio end-to-end test in `test/stdio.e2e.test.ts`, and the named pipe test in `src/server/workspace.test.ts`, which needs a separate process so a blocked read cannot hang the run. Without a complete build both fail with a hint, and both are skipped when `dist/` was not built from the current sources, for example in `npm run test:watch` after an edit. For that check the build records a hash of its inputs (sources, generated icons, `package.json` and both tsconfig files) in `dist/build-info.json`, written only once tsc and the asset copy have succeeded.
+Two tests run the built code in `dist/`, which `npm test` builds first: the stdio end-to-end test in `test/stdio.e2e.test.ts`, and the named pipe test in `src/server/workspace.test.ts`, which needs a separate process so a blocked read cannot hang the run. Without a complete build both fail with a hint, and both are skipped when `dist/` was not built from the current sources, for example in `npm run test:watch` after an edit. For that check the build records a hash of its inputs (sources, generated icons, `package.json`, `package-lock.json`, which pins the compiler, and both tsconfig files) in `dist/build-info.json`, written only once tsc and the asset copy have succeeded.
 
 ## Code map
 

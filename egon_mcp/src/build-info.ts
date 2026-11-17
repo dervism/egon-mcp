@@ -1,8 +1,8 @@
 // Node loads this file before tsc runs (scripts/record-sources.mjs, through type
 // stripping), so it must stay erasable TypeScript and import only node: modules.
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 
 /** File in dist/ that records which inputs a complete build was made from. */
 export const BUILD_INFO_FILE = 'build-info.json';
@@ -11,30 +11,38 @@ export const PENDING_BUILD_INFO_FILE = 'build-info.pending.json';
 /** Folders below src/ that the build copies into dist/ as they are. */
 export const ASSET_DIRS = ['icons/generated'];
 
-/** Package files that change what tsc emits. */
-const BUILD_SETTINGS = ['package.json', 'tsconfig.json', 'tsconfig.build.json'];
+/** Package files that change what tsc emits; the lockfile pins the compiler. A missing one counts as absent. */
+const BUILD_SETTINGS = ['package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.build.json'];
+/** Folders that tsc never picks sources from. */
+const PACKAGE_FOLDERS = new Set(['node_modules', 'bower_components', 'jspm_packages']);
 
 /**
  * The TypeScript files below `srcDir` that tsc compiles, without tests. Like
- * tsc it follows links to files and folders; it skips hidden files and folders
- * and dangling links, which editors leave behind (Emacs lock links, for
- * example). Relative paths with "/" separators, sorted.
+ * tsc it follows links to files and folders and skips package folders and
+ * folders it cannot read. It also skips hidden files and folders and dangling
+ * links, which editors leave behind (Emacs lock links, for example). Relative
+ * paths with "/" separators, sorted.
  */
 export function sourceFiles(srcDir: string): string[] {
   return walk(srcDir).filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'));
 }
 
 /**
- * A hash over every input of the build in `packageDir`: package.json, both
- * tsconfig files, the sources and the asset folders, each with its path and
- * content. The build records it, so a test can tell whether dist/ was built
- * from the inputs it sees.
+ * A hash over the inputs of the build in `packageDir`: package.json, the
+ * lockfile, both tsconfig files, the sources and the asset folders, each with
+ * its path and content. The build records it, so a test can tell whether
+ * dist/ was built from the inputs it sees.
  */
 export function sourceHash(packageDir: string): string {
   const hash = createHash('sha256');
   const add = (name: string, path: string) => hash.update(`${name}\0`).update(readFileSync(path)).update('\0');
   for (const name of BUILD_SETTINGS) {
-    add(name, join(packageDir, name));
+    const path = join(packageDir, name);
+    if (existsSync(path)) {
+      add(name, path);
+    } else {
+      hash.update(`${name}\0missing\0`);
+    }
   }
   const srcDir = join(packageDir, 'src');
   for (const file of sourceFiles(srcDir)) {
@@ -57,22 +65,46 @@ export function startBuildRecord(packageDir: string): void {
   writeFileSync(join(dist, PENDING_BUILD_INFO_FILE), `${JSON.stringify({ sourceHash: sourceHash(packageDir) }, null, 2)}\n`);
 }
 
+/**
+ * Copies the asset folders from src/ into dist/ exactly as sourceHash sees
+ * them: hidden files left out, links copied as the files they point to.
+ */
+export function copyAssets(packageDir: string): void {
+  for (const assets of ASSET_DIRS) {
+    cpSync(join(packageDir, 'src', assets), join(packageDir, 'dist', assets), {
+      recursive: true,
+      dereference: true,
+      filter: (source) => !basename(source).startsWith('.'),
+    });
+  }
+}
+
 /** Last build step, once tsc and the asset copy succeeded: the note becomes the record. */
 export function finishBuildRecord(packageDir: string): void {
   const dist = join(packageDir, 'dist');
   renameSync(join(dist, PENDING_BUILD_INFO_FILE), join(dist, BUILD_INFO_FILE));
 }
 
-/** Regular files below `dir`, following links, skipping hidden names, dangling links and loops. */
+/**
+ * Regular files below `dir`, following links. Skips hidden names, package
+ * folders, dangling links, unreadable folders and link loops.
+ */
 function walk(dir: string, prefix = '', visited = new Set<string>()): string[] {
-  const real = realpathSync(dir);
+  let real: string;
+  let names: string[];
+  try {
+    real = realpathSync(dir);
+    names = readdirSync(dir);
+  } catch {
+    return [];
+  }
   if (visited.has(real)) {
     return [];
   }
   visited.add(real);
   const files: string[] = [];
-  for (const name of readdirSync(dir).sort()) {
-    if (name.startsWith('.')) {
+  for (const name of names.sort()) {
+    if (name.startsWith('.') || PACKAGE_FOLDERS.has(name)) {
       continue;
     }
     const path = join(dir, name);

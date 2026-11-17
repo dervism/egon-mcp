@@ -1,12 +1,10 @@
-// Last build step, after tsc succeeded: copies the asset folders from src/ into
-// dist/, then marks the build complete (finishBuildRecord in src/build-info.ts).
-import { cpSync } from 'node:fs';
+// Last build step, after tsc succeeded: copies the asset folders into dist/,
+// then marks the build complete (see copyAssets and finishBuildRecord in
+// src/build-info.ts).
 import { fileURLToPath } from 'node:url';
-import { ASSET_DIRS, finishBuildRecord } from '../dist/build-info.js';
+import { copyAssets, finishBuildRecord } from '../dist/build-info.js';
 
 const packageDir = fileURLToPath(new URL('../', import.meta.url));
 
-for (const assets of ASSET_DIRS) {
-  cpSync(`${packageDir}src/${assets}/`, `${packageDir}dist/${assets}/`, { recursive: true });
-}
+copyAssets(packageDir);
 finishBuildRecord(packageDir);
