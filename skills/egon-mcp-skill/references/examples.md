@@ -38,35 +38,40 @@ User: "When a customer calls to order a pizza, the clerk writes the order on a s
 
 Steps 2 and 3 each get their own "Order slip", and steps 4 and 5 their own "Pizza". That is how Domain Storytelling draws stories, and it keeps "to Pizza baker" out of step 2. Add `"reuseWorkObject": true` to a sentence to continue with the previous object of the same name instead. The assumptions that keep the story on one path go into the description.
 
-## 2. The big picture: a coarse-grained story with subdomains
+## 2. The big picture: a coarse-grained story cut into subdomains
 
-The first story about a new domain is usually coarse-grained: the whole case from start to end in about ten sentences, without detail. Groups cut it into areas of the business, which are candidates for subdomains.
+The first story about a new domain is usually coarse-grained: the whole case from start to end in about ten sentences, without detail. To find subdomains, group the sentences that belong together from the actors' point of view. `steps` puts the work objects of those sentences into a group and keeps the actors outside, since the mechanic, for one, works in several of them.
 
 ```json
 {
   "title": "Repair a bicycle",
-  "description": "Coarse-grained, pure, as-is. Assumptions: happy path; the customer pays at the counter.",
+  "description": "Coarse-grained, pure, as-is. Assumptions: happy path; the part is not in stock; the customer pays at the counter.",
   "scope": { "granularity": "coarse-grained", "pointInTime": "as-is", "domainPurity": "pure" },
-  "actors": [{ "name": "Mechanic", "icon": "Person" }, { "name": "Supplier", "icon": "Business" }],
-  "workObjects": [{ "name": "Spare part", "icon": "Settings" }],
+  "actors": [{ "name": "Supplier", "icon": "Business" }],
   "sentences": [
     { "actor": "Customer", "activity": "brings", "workObject": "Bike", "workObjectIcon": "Bike", "to": [{ "activity": "to", "actor": "Mechanic" }] },
     { "actor": "Mechanic", "activity": "inspects", "workObject": "Bike", "workObjectIcon": "Bike" },
     { "actor": "Mechanic", "activity": "offers", "workObject": "Repair estimate", "workObjectIcon": "Receipt", "to": [{ "activity": "to", "actor": "Customer" }] },
     { "actor": "Customer", "activity": "gives", "workObject": "Approval", "workObjectIcon": "Thumb-up", "to": [{ "activity": "to", "actor": "Mechanic" }] },
-    { "actor": "Mechanic", "activity": "orders", "workObject": "Spare part", "to": [{ "activity": "from", "actor": "Supplier" }] },
-    { "actor": "Supplier", "activity": "delivers", "workObject": "Spare part", "to": [{ "activity": "to", "actor": "Mechanic" }] },
+    { "actor": "Mechanic", "activity": "notes", "workObject": "Part request", "workObjectIcon": "Assignment", "to": [{ "activity": "for", "actor": "Purchasing clerk" }] },
+    { "actor": "Purchasing clerk", "activity": "sends", "workObject": "Parts order", "workObjectIcon": "Shopping", "to": [{ "activity": "to", "actor": "Supplier" }] },
+    { "actor": "Supplier", "activity": "delivers", "workObject": "Spare parts", "workObjectIcon": "Settings", "to": [{ "activity": "to", "actor": "Purchasing clerk" }] },
+    { "actor": "Purchasing clerk", "activity": "hands out", "workObject": "Spare part", "workObjectIcon": "Settings", "to": [{ "activity": "to", "actor": "Mechanic" }] },
     { "actor": "Mechanic", "activity": "repairs", "workObject": "Bike", "workObjectIcon": "Bike" },
     { "actor": "Mechanic", "activity": "passes on", "workObject": "Repair report", "workObjectIcon": "Assignment", "to": [{ "activity": "to", "actor": "Cashier" }] },
     { "actor": "Customer", "activity": "pays", "workObject": "Repair price", "workObjectIcon": "Euro", "to": [{ "activity": "to", "actor": "Cashier" }] },
     { "actor": "Cashier", "activity": "hands over", "workObject": "Bike", "workObjectIcon": "Bike", "to": [{ "activity": "to", "actor": "Customer" }] }
   ],
   "groups": [
-    { "name": "Repair", "members": ["Repair estimate", "Approval"] },
-    { "name": "Purchasing", "members": ["Spare part", "Supplier"] },
-    { "name": "Billing", "members": ["Repair report", "Repair price"] }
+    { "name": "Repair intake", "steps": [1, 2, 3, 4] },
+    { "name": "Parts purchasing", "steps": [5, 6, 7, 8] },
+    { "name": "Repairing", "steps": [9, 10] },
+    { "name": "Checkout", "steps": [11, 12] }
   ],
-  "annotations": [{ "text": "Ordered parts usually arrive the next working day", "attachTo": "Spare part" }]
+  "annotations": [
+    { "text": "Every Friday, for all open part requests", "attachTo": "Parts order" },
+    { "text": "The clerk orders by article number; the mechanic asks for 'brake pads for this bike'", "attachTo": "Part request" }
+  ]
 }
 ```
 
@@ -75,19 +80,21 @@ The first story about a new domain is usually coarse-grained: the whole case fro
 2. Mechanic inspects Bike.
 3. Mechanic offers Repair estimate to Customer.
 4. Customer gives Approval to Mechanic.
-5. Mechanic orders Spare part from Supplier.
-6. Supplier delivers Spare part to Mechanic.
-7. Mechanic repairs Bike.
-8. Mechanic passes on Repair report to Cashier.
-9. Customer pays Repair price to Cashier.
-10. Cashier hands over Bike to Customer.
+5. Mechanic notes Part request for Purchasing clerk.
+6. Purchasing clerk sends Parts order to Supplier.
+7. Supplier delivers Spare parts to Purchasing clerk.
+8. Purchasing clerk hands out Spare part to Mechanic.
+9. Mechanic repairs Bike.
+10. Mechanic passes on Repair report to Cashier.
+11. Customer pays Repair price to Cashier.
+12. Cashier hands over Bike to Customer.
 ```
 
-The declared `Supplier` gets a building icon and the declared `Spare part` the gear icon; every sentence that names them reuses those choices. A group named after an area of the business ("Purchasing") shows a subdomain, not yet a bounded context; see `ddd.md`.
+Why these groups: the purchasing clerk finishes the parts order alone, and on a schedule (every Friday) while the rest starts when a customer walks in; the clerk also speaks of article numbers where the mechanic speaks of parts for a bike. The bike appears in three groups, which marks where those subdomains touch. Each group is named after the work done in it. A grouped coarse story shows subdomains, not yet bounded contexts; `bounded-contexts.md` goes on from here. `auto_layout` puts each actor beside the group it works in most, outside the box.
 
 ## 3. Zooming in: a fine-grained story with two work objects per sentence
 
-A fine-grained story shows how one part of the coarse story works, step by step. Sentences now often need a second work object ("writes Defects on Repair slip"). `build_story` cannot express that, so build the story call by call and connect the second work object with `add_activity`.
+A fine-grained story shows how one part of the coarse story works, step by step; this one zooms into the subdomain Repair intake from example 2. Sentences now often need a second work object ("writes Defects on Repair slip"). `build_story` cannot express that, so build the story call by call and connect the second work object with `add_activity`.
 
 ```json
 { "tool": "create_story", "arguments": { "title": "Estimate a bicycle repair", "description": "Fine-grained, pure, as-is. Assumption: one defect, parts in stock.", "scope": { "granularity": "fine-grained", "pointInTime": "as-is", "domainPurity": "pure" } } }
@@ -317,44 +324,44 @@ A new copy of a work object takes the color of the previous one with the same na
 
 ## 11. Messages between bounded contexts
 
-The message-flow variant (after Nick Tune's Domain Message Flow Modeling) shows how bounded contexts talk to each other. Users, bounded contexts and other systems are actors; commands, events and queries are work objects; the arrows stay unlabeled, because the message already says what is meant; message contents go into annotations. `validate_story` warns about each unlabeled arrow and `narrate_story` shows a placeholder, both expected in this variant.
+The message-flow variant (after Nick Tune's Domain Message Flow Modeling) shows how bounded contexts talk to each other in one scenario. Here the bicycle shop has decided on the contexts Workshop, Purchasing and Checkout (see `bounded-contexts.md`). People, bounded contexts and other systems are actors; commands, events and queries are work objects; the arrows stay unlabeled, because the message already says what is meant; message contents go into annotations. `validate_story` warns about each unlabeled arrow and `narrate_story` shows a placeholder, both expected in this variant.
 
 ```json
 {
-  "title": "Place an order - message flow",
-  "description": "Fine-grained, digitalized, to-be. Messages between bounded contexts, all items in stock. Cloud: bounded context; gear: system that is not a bounded context; envelope: command; flag: event.",
+  "title": "Order a spare part - message flow",
+  "description": "Fine-grained, digitalized, to-be. Messages between the bounded contexts Workshop, Purchasing and Checkout of the bicycle shop; the part is not in stock. Cloud: bounded context; gear: system the shop does not control; envelope: command; flag: event.",
   "scope": { "granularity": "fine-grained", "pointInTime": "to-be", "domainPurity": "digitalized" },
   "actors": [
-    { "name": "Shopper", "icon": "Person" },
-    { "name": "Web shop", "icon": "Settings" },
-    { "name": "Sales", "icon": "Cloud" },
-    { "name": "Billing", "icon": "Cloud" },
-    { "name": "Notifications", "icon": "Cloud" },
-    { "name": "Payment provider", "icon": "Settings" }
+    { "name": "Mechanic", "icon": "Person" },
+    { "name": "Workshop", "icon": "Cloud" },
+    { "name": "Purchasing", "icon": "Cloud" },
+    { "name": "Checkout", "icon": "Cloud" },
+    { "name": "Supplier portal", "icon": "Settings" }
   ],
   "sentences": [
-    { "actor": "Shopper", "activity": "", "workObject": "Place order", "workObjectIcon": "Email", "to": [{ "actor": "Web shop" }] },
-    { "actor": "Web shop", "activity": "", "workObject": "Place order", "workObjectIcon": "Email", "to": [{ "actor": "Sales" }] },
-    { "actor": "Sales", "activity": "", "workObject": "Order placed", "workObjectIcon": "Flag", "to": [{ "actor": "Billing" }] },
-    { "actor": "Billing", "activity": "", "workObject": "Charge card", "workObjectIcon": "Email", "to": [{ "actor": "Payment provider" }] },
-    { "actor": "Billing", "activity": "", "workObject": "Payment collected", "workObjectIcon": "Flag", "to": [{ "actor": "Sales" }, { "actor": "Notifications" }] }
+    { "actor": "Mechanic", "activity": "", "workObject": "Request part", "workObjectIcon": "Email", "to": [{ "actor": "Workshop" }] },
+    { "actor": "Workshop", "activity": "", "workObject": "Part requested", "workObjectIcon": "Flag", "to": [{ "actor": "Purchasing" }] },
+    { "actor": "Purchasing", "activity": "", "workObject": "Order articles", "workObjectIcon": "Email", "to": [{ "actor": "Supplier portal" }] },
+    { "actor": "Supplier portal", "activity": "", "workObject": "Articles shipped", "workObjectIcon": "Flag", "to": [{ "actor": "Purchasing" }] },
+    { "actor": "Purchasing", "activity": "", "workObject": "Part received", "workObjectIcon": "Flag", "to": [{ "actor": "Workshop" }, { "actor": "Checkout" }] }
   ],
   "annotations": [
-    { "text": "Order id, items, payment method, address", "attachTo": "Order placed" },
-    { "text": "Customer id, card id, amount", "attachTo": "Charge card" }
+    { "text": "Repair id, what the part does, which bike it is for", "attachTo": "Part requested" },
+    { "text": "Article number, quantity, delivery address", "attachTo": "Order articles" },
+    { "text": "Repair id, article number, purchase price", "attachTo": "Part received" }
   ]
 }
 ```
 
 ```text
-1. Shopper [unlabeled activity] Place order [unlabeled activity] Web shop.
-2. Web shop [unlabeled activity] Place order [unlabeled activity] Sales.
-3. Sales [unlabeled activity] Order placed [unlabeled activity] Billing.
-4. Billing [unlabeled activity] Charge card [unlabeled activity] Payment provider.
-5. Billing [unlabeled activity] Payment collected [unlabeled activity] Sales and [unlabeled activity] Notifications.
+1. Mechanic [unlabeled activity] Request part [unlabeled activity] Workshop.
+2. Workshop [unlabeled activity] Part requested [unlabeled activity] Purchasing.
+3. Purchasing [unlabeled activity] Order articles [unlabeled activity] Supplier portal.
+4. Supplier portal [unlabeled activity] Articles shipped [unlabeled activity] Purchasing.
+5. Purchasing [unlabeled activity] Part received [unlabeled activity] Workshop and [unlabeled activity] Checkout.
 ```
 
-Modeling bounded contexts as actors, not as systems, keeps the decision open whether they become separate services.
+The annotations show the translation between languages: the workshop asks for a part by what it does and which bike it is for, and purchasing orders articles by number. Modeling bounded contexts as actors, not as systems, keeps the decision open whether they become separate services.
 
 ## 12. Interview step by step
 

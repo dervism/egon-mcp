@@ -201,6 +201,31 @@ describe('buildStory', () => {
     expect(target(reopened)).toBe(target(story));
   });
 
+  it('groups the work objects of numbered sentences and leaves their actors outside', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [
+        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'offers', workObject: 'Repair estimate', to: [{ activity: 'to', actor: 'Customer' }] },
+        { actor: 'Mechanic', activity: 'repairs', workObject: 'Bike' },
+        { actor: 'Customer', activity: 'pays', workObject: 'Repair price', to: [{ activity: 'to', actor: 'Cashier' }] },
+      ],
+      groups: [
+        { name: 'Repair acceptance', steps: [1, 2] },
+        { name: 'Payment', steps: [4], members: ['Cashier'] },
+      ],
+    });
+    const byGroup = (name: string) => {
+      const group = story.elements().find((element) => element.type === 'domainStory:group' && element.name === name)!;
+      return story.elements().filter((element) => element['parent'] === group.id).map((element) => element.name).sort();
+    };
+    expect(byGroup('Repair acceptance')).toEqual(['Bike', 'Repair estimate']);
+    expect(byGroup('Payment')).toEqual(['Cashier', 'Repair price']);
+    // The Bike of step 3 is a copy of its own and stays out of the group.
+    expect(story.elements().filter((element) => element.name === 'Bike' && element['parent'] === undefined)).toHaveLength(1);
+    expect(() => buildStory({ title: 'T', sentences: [{ actor: 'A', activity: 'does', workObject: 'W' }], groups: [{ name: 'G', steps: [7] }] })).toThrow(/no step 7/);
+  });
+
   it('puts every instance of a name into a group and attaches annotations to the first one', () => {
     const story = buildStory({
       title: 'T',

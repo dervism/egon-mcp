@@ -1,4 +1,4 @@
-import { compareIds, groupAncestors, isActor, isConnection, isGroup, isTextAnnotation, isWorkObject, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { compareIds, groupAncestors, isActivity, isActor, isConnection, isGroup, isTextAnnotation, isWorkObject, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { boundsOf, type Bounds } from './geometry.js';
 import { narrate } from './narrate.js';
 import { StoryError, type Story } from './story.js';
@@ -90,40 +90,7 @@ function layOut(story: Story): void {
   const nextRow = () => Math.max(-1, ...[...placed].map(([id, cell]) => cell.row + span(id).rows - 1)) + 1;
 
   const steps = narrate(doc);
-  for (const step of steps) {
-    let previous: Cell | undefined;
-    for (const id of step.elementIds.filter((candidate) => nodeIds.has(candidate))) {
-      const existing = placed.get(id);
-      if (existing) {
-        previous = existing;
-        continue;
-      }
-      const cell = previous ? findFree(occupied, previous.col + 1, previous.row) : findFree(occupied, 0, nextRow());
-      take(id, cell);
-      previous = cell;
-    }
-  }
-
-  // Elements that take part in no step, and notes that belong to no element, go on rows of their
-  // own at the end, in the order they are drawn, since the order of elements in a file means nothing.
   const anchors = noteAnchors(doc.elements);
-  const freeNotes = doc.elements.filter((element) => isTextAnnotation(element) && !isNode(anchors.get(element.id)) && !inGroup(element));
-  const leftovers = inReadingOrder([...nodes.filter((node) => !placed.has(node.id) && !inGroup(node)), ...freeNotes] as ShapeElement[]);
-  let leftoverRow = nextRow();
-  let leftoverCol = 0;
-  let rowHeight = 1;
-  for (const element of leftovers) {
-    const { cols, rows } = span(element.id);
-    if (leftoverCol > 0 && leftoverCol + cols > MAX_COLUMNS) {
-      leftoverRow += rowHeight;
-      leftoverCol = 0;
-      rowHeight = 1;
-    }
-    take(element.id, { col: leftoverCol, row: leftoverRow });
-    leftoverCol += cols;
-    rowHeight = Math.max(rowHeight, rows);
-  }
-
   // Reading order decides the order inside group blocks; an annotation follows its element.
   const readingOrder = new Map<string, number>();
   for (const step of steps) {
@@ -151,11 +118,67 @@ function layOut(story: Story): void {
     );
   };
 
+  // An actor outside every group whose arrows all lead into groups, as when a coarse story is cut
+  // into subdomains, goes beside the outermost group it works with most, outside the box.
+  const outermostOf = (id: string) => groupAncestors(byId.get(id), byId).at(-1);
+  const beside = new Map<string, string>();
+  for (const actor of nodes.filter((node) => isActor(node) && !inGroup(node))) {
+    const ends = doc.elements
+      .filter(isActivity)
+      .filter((activity) => activity.source === actor.id || activity.target === actor.id)
+      .map((activity) => outermostOf(activity.source === actor.id ? activity.target : activity.source));
+    if (ends.length === 0 || ends.some((group) => group === undefined)) {
+      continue;
+    }
+    const counts = new Map<string, number>();
+    for (const group of ends as string[]) {
+      counts.set(group, (counts.get(group) ?? 0) + 1);
+    }
+    const [chosen] = [...counts].sort((a, b) => b[1] - a[1] || firstRank(a[0]) - firstRank(b[0]) || compareIds(a[0], b[0]))[0] as [string, number];
+    beside.set(actor.id, chosen);
+  }
+  for (const id of beside.keys()) {
+    nodeIds.delete(id);
+  }
+
+  for (const step of steps) {
+    let previous: Cell | undefined;
+    for (const id of step.elementIds.filter((candidate) => nodeIds.has(candidate))) {
+      const existing = placed.get(id);
+      if (existing) {
+        previous = existing;
+        continue;
+      }
+      const cell = previous ? findFree(occupied, previous.col + 1, previous.row) : findFree(occupied, 0, nextRow());
+      take(id, cell);
+      previous = cell;
+    }
+  }
+
+  // Elements that take part in no step, and notes that belong to no element, go on rows of their
+  // own at the end, in the order they are drawn, since the order of elements in a file means nothing.
+  const freeNotes = doc.elements.filter((element) => isTextAnnotation(element) && !isNode(anchors.get(element.id)) && !inGroup(element));
+  const leftovers = inReadingOrder([...nodes.filter((node) => !placed.has(node.id) && !inGroup(node) && !beside.has(node.id)), ...freeNotes] as ShapeElement[]);
+  let leftoverRow = nextRow();
+  let leftoverCol = 0;
+  let rowHeight = 1;
+  for (const element of leftovers) {
+    const { cols, rows } = span(element.id);
+    if (leftoverCol > 0 && leftoverCol + cols > MAX_COLUMNS) {
+      leftoverRow += rowHeight;
+      leftoverCol = 0;
+      rowHeight = 1;
+    }
+    take(element.id, { col: leftoverCol, row: leftoverRow });
+    leftoverCol += cols;
+    rowHeight = Math.max(rowHeight, rows);
+  }
+
   const gap: BlockRow = { ids: [], height: 1 };
 
   // The rows of a group's block: its own members first, then each nested group on rows of its
   // own followed by an empty row, so the nested box and the padding around it fit.
-  const blockRows = (groupId: string, seen: Set<string>): BlockRow[] => {
+  const blockRows = (groupId: string, seen: Set<string>, capacity = MAX_COLUMNS): BlockRow[] => {
     if (seen.has(groupId)) {
       return [];
     }
@@ -175,7 +198,7 @@ function layOut(story: Story): void {
       used = 0;
     };
     for (const id of own) {
-      if (row.length > 0 && used + span(id).cols > MAX_COLUMNS) {
+      if (row.length > 0 && used + span(id).cols > capacity) {
         closeRow();
       }
       row.push(id);
@@ -186,15 +209,15 @@ function layOut(story: Story): void {
       .filter(isGroup)
       .sort((a, b) => firstRank(a.id) - firstRank(b.id) || a.id.localeCompare(b.id));
     for (const group of nested) {
-      const inner = blockRows(group.id, seen);
+      const inner = blockRows(group.id, seen, capacity);
       rows.push(...(inner.length > 0 ? inner : [{ ids: [group.id], height: span(group.id).rows }]), gap);
     }
     return rows;
   };
-  const placeRows = (rows: BlockRow[], firstRow: number): number => {
+  const placeRows = (rows: BlockRow[], firstRow: number, firstCol = 0): number => {
     let at = firstRow;
     for (const { ids, height } of rows) {
-      let col = 0;
+      let col = firstCol;
       for (const id of ids) {
         take(id, { col, row: at });
         col += span(id).cols;
@@ -211,12 +234,17 @@ function layOut(story: Story): void {
   let blockRow = nextRow();
   const emptyGroups: string[] = [];
   for (const group of outermost) {
-    const rows = blockRows(group.id, new Set());
+    // Actors placed beside this group take the first column, outside the box.
+    const actors = [...beside].filter(([, home]) => home === group.id).map(([id]) => id).sort((a, b) => rank(a) - rank(b) || compareIds(a, b));
+    const rows = blockRows(group.id, new Set(), actors.length > 0 ? MAX_COLUMNS - 1 : MAX_COLUMNS);
     if (rows.every((row) => row.ids.length === 0)) {
       emptyGroups.push(group.id);
       continue;
     }
-    blockRow = placeRows(rows, blockRow) + (rows.at(-1)?.ids.length === 0 ? 0 : 1);
+    actors.forEach((id, index) => take(id, { col: 0, row: blockRow + index }));
+    const end = placeRows(rows, blockRow, actors.length > 0 ? 1 : 0);
+    const bottom = Math.max(end, blockRow + actors.length);
+    blockRow = bottom + (bottom === end && rows.at(-1)?.ids.length === 0 ? 0 : 1);
   }
   // Groups without members get rows of their own at the very end.
   for (const id of emptyGroups) {

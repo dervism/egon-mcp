@@ -184,7 +184,7 @@ On a whiteboard, icons go on sticky notes and arrows directly on the board, so t
 ## What the method is used for
 
 - Learning the domain language: when you are new to a domain, when experts from several departments should cross boundaries and challenge assumptions, when software does not use the real terms, or when no shared language exists yet.
-- Finding boundaries: to split a monolith, design microservices or self-contained systems, find bounded contexts in Domain-Driven Design, or organize the work of several teams. See `ddd.md`.
+- Finding boundaries: to split a monolith, design microservices or self-contained systems, find bounded contexts in Domain-Driven Design, or organize the work of several teams. See `bounded-contexts.md`.
 - Working with requirements: find out what the software should do, derive user stories and use cases, and keep the context of each requirement. See `ddd.md`.
 - Modeling in code: take the terms and concepts of the stories into an object-oriented or functional domain model.
 - Supporting organizational change: design how work should be done, optimize processes, discuss and promote a change, and roll out new software. Digitalizing a bad manual process does not make it better.

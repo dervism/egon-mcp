@@ -9,7 +9,7 @@ Domain Storytelling is a workshop method: domain experts tell how they work, and
 - Work object: the thing actors work with, such as a document, a phone call, an email or money. Draw it with a work object icon.
 - Activity: an arrow labeled with a verb. An activity from an actor to a work object gets a step number.
 - Recipient: an unnumbered arrow from a work object to another actor completes the sentence ("Customer tells Order to Clerk").
-- Group: a box around elements that belong together, such as a department or a subdomain.
+- Group: a box around elements that belong together. For a subdomain, group the work objects of the sentences that belong together and keep the actors outside (add_group with steps); a department or a location may hold actors too.
 - Text annotation: a note attached to an element, for variations, rules or open questions.
 
 ## Sentences

@@ -25,7 +25,8 @@ Tool names below are the server's own. Your client may prefix them, for example 
 | To tell the story step by step | Use the `domain_story_interview` prompt, or `create_story` plus one `add_sentence` per answer, read back after each. |
 | To understand a whole new domain | Start with one coarse-grained, pure, as-is story of the most common case. Then zoom into its parts with fine-grained stories, and tell important variants as stories of their own. |
 | To design new software or a new process | Agree on the as-is stories first, then tell to-be stories, pure or digitalized, and color what changes. |
-| Subdomains, bounded contexts, a ubiquitous language | Group a coarse story into areas of the business and read `references/ddd.md`. |
+| Subdomains, bounded contexts, a context map | Tell a coarse-grained, pure story, then use the `find_subdomains` prompt, or group the sentences that belong together with `add_group` and `steps` yourself; then follow `references/bounded-contexts.md`. |
+| A ubiquitous language or a glossary | Collect the terms of each story or subdomain from `get_story` and define unclear ones in annotations; see `references/ddd.md`. |
 | Requirements or user stories | Tell digitalized to-be stories and derive user stories from the sentences in which the software takes part; see `references/ddd.md`. |
 | To compare candidate products, or find shadow IT | Tell digitalized stories: one to-be story per candidate, or an as-is story with every tool people really use. |
 | To change an existing file | `list_story_files`, `open_story`, `get_story`, then the edit tools, `validate_story`, `save_story`. |
@@ -137,7 +138,7 @@ When the user knows the domain but has no description yet, you are the moderator
 
 ## Beyond one story
 
-- Domain-Driven Design: the labels of a story are the start of the ubiquitous language; groups in a coarse story mark subdomains, which are candidates for bounded contexts; message flows between bounded contexts can be modeled as a story variant. See `references/ddd.md`.
+- Domain-Driven Design: the labels of a story are the start of the ubiquitous language (`references/ddd.md`). To find boundaries, group the sentences of a coarse, pure story that belong together from the actors' point of view: `add_group` with `steps` puts their work objects in and keeps the actors outside. Name each group after the work done in it, never after a work object, and look for several indicators, such as an actor who finishes a result alone, a one-way flow, a different trigger or a change of language. Such a story shows subdomains; bounded contexts, glossaries per context, the context map and the message-flow variant come after. `references/bounded-contexts.md` walks through all of it.
 - Requirements: a sentence of a digitalized to-be story in which the software takes part can become a user story (actor as role, activity and work object as want, the step it enables as benefit). This is a heuristic; see `references/ddd.md`.
 - Change: as-is and to-be stories with the changes in color show people how their work will change; one to-be story per candidate product compares off-the-shelf systems.
 
@@ -183,6 +184,7 @@ Tool errors explain the problem and usually the fix:
 - `references/examples.md`: tested tool calls, from a first story to a family of stories about one business.
 - `references/modeling-patterns.md`: sentence structures and modeling patterns, each with the tool calls that build it.
 - `references/domain-storytelling.md`: the method: notation, scenarios, scope, style, workshops and what the method is used for.
-- `references/ddd.md`: Domain-Driven Design and requirements: ubiquitous language, subdomains, bounded contexts, message flows, user stories.
+- `references/bounded-contexts.md`: from a coarse story to subdomains, bounded contexts, glossaries per context, the Bounded Context Canvas, a context map and message flows.
+- `references/ddd.md`: Domain-Driven Design and requirements: ubiquitous language, stories to code, user stories.
 - `references/egon-file-format.md`: the `.egn` layouts, element types and what Egon requires, for reading or repairing files by hand.
 - `references/tools.md`: every tool with its parameters, generated from the server.

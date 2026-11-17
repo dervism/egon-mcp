@@ -124,6 +124,20 @@ describe('group membership while editing', () => {
     expect(parentOf(reopened(story), 'W')).toBe(box.id);
   });
 
+  it('nests a box fitted around members only in a group that holds all of them, wherever its corner lands', () => {
+    const story = Story.create({ title: 'T' });
+    // Shapes spread over two rows, as before a layout: the first box covers the corner of the second.
+    const a = story.addWorkObject({ name: 'A', x: 0, y: 0 });
+    const b = story.addWorkObject({ name: 'B', x: 650, y: 350 });
+    const c = story.addWorkObject({ name: 'C', x: 100, y: 100 });
+    const d = story.addWorkObject({ name: 'D', x: 700, y: 400 });
+    const first = story.addGroup({ name: 'First', members: [a.id, b.id] });
+    const second = story.addGroup({ name: 'Second', members: [c.id, d.id] });
+    expect(parentOf(story, second.id)).toBeUndefined();
+    const inner = story.addGroup({ name: 'Inner', members: [a.id] });
+    expect(parentOf(story, inner.id)).toBe(first.id);
+  });
+
   it('refuses a member group that is not smaller than the box it should go into', () => {
     const story = Story.create({ title: 'T' });
     const big = story.addGroup({ name: 'Big', x: 0, y: 0, width: 800, height: 800 });

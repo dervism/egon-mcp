@@ -280,16 +280,25 @@ export class Story {
         );
       }
     }
+    // A box fitted around members goes into the innermost group that holds all of them, not into
+    // whatever group its corner happens to land in before a layout.
+    const byId = new Map(this.doc.elements.map((element) => [element.id, element]));
+    const chains = members.map((member) => groupAncestors(member, byId));
+    const shared = chains[0]?.find((id) => chains.every((chain) => chain.includes(id)));
     // Groups go first so Egon draws them underneath the elements they contain.
     this.doc.elements.unshift(group);
     // Egon records group membership on each member (domainStoryUpdater).
     for (const member of members) {
       member['parent'] = group.id;
     }
-    joinGroupAt(group, this.doc.elements);
-    // A box drawn with coordinates takes in what it covers, as in Egon; a box
-    // fitted around members holds only them.
-    if (!fitted) {
+    if (fitted) {
+      const around = shared ? boundsOf(byId.get(shared) as ShapeElement) : undefined;
+      if (shared && around && around.width * around.height > bounds.width * bounds.height) {
+        group['parent'] = shared;
+      }
+    } else {
+      // A box drawn with coordinates goes where it lies and takes in what it covers, as in Egon.
+      joinGroupAt(group, this.doc.elements);
       takeIn(group, this.doc.elements);
     }
     return structuredClone(group);

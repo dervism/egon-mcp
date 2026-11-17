@@ -67,7 +67,7 @@ ln -s /path/to/egon-mcp/skills/egon-mcp-skill ~/.claude/skills/egon-mcp-skill
 
 - 27 tools to create, open, edit, validate, narrate, lay out, export and save stories, and to open them in Egon. See the [tool reference](skills/egon-mcp-skill/references/tools.md).
 - Resources: every open story as `.egn`, Markdown narrative and SVG, the icon catalog, and a notation guide.
-- Prompts: `model_domain_story`, `review_domain_story` and `domain_story_interview`.
+- Prompts: `model_domain_story`, `review_domain_story`, `domain_story_interview` and `find_subdomains`.
 
 Server options:
 

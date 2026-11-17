@@ -17,6 +17,7 @@ let root: string;
 let egon: EgonServer;
 let client: Client;
 let toolNames: string[];
+let promptNames: string[];
 
 beforeAll(async () => {
   root = mkdtempSync(join(tmpdir(), 'egon-skill-'));
@@ -25,6 +26,7 @@ beforeAll(async () => {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([egon.server.connect(serverTransport), client.connect(clientTransport)]);
   toolNames = (await client.listTools()).tools.map((tool) => tool.name);
+  promptNames = (await client.listPrompts()).prompts.map((prompt) => prompt.name);
 });
 
 afterAll(async () => {
@@ -134,13 +136,13 @@ describe('egon-mcp-skill', () => {
     expect(skill).toMatch(/^---\nname: egon-mcp-skill\ndescription: .{50,}\n---\n/);
   });
 
-  it('only mentions tools that the server offers', () => {
+  it('only mentions tools and prompts that the server offers', () => {
     const files = skillFiles().map((file) => readFileSync(file, 'utf8'));
     const mentioned = new Set(files.flatMap((text) => [...text.matchAll(/`([a-z]+(?:_[a-z]+)+)`/g)].map((m) => m[1] as string)));
     const notTools = new Set(['egon_mcp', 'list_story', 'pointInTime']);
     for (const name of mentioned) {
-      if (!notTools.has(name) && !name.includes('domain_story_interview') && !name.includes('review_domain_story')) {
-        expect(toolNames, `skill mentions ${name}`).toContain(name);
+      if (!notTools.has(name)) {
+        expect([...toolNames, ...promptNames], `skill mentions ${name}`).toContain(name);
       }
     }
   });

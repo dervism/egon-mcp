@@ -419,6 +419,42 @@ describe('autoLayout', () => {
     expect(() => autoLayout(story)).toThrow(/"Tall A" is too large/);
   });
 
+  it('puts an actor beside the group it works in most, outside the box, when a story is cut into subdomains', () => {
+    const story = buildStory({
+      title: 'Subdomains',
+      sentences: [
+        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'offers', workObject: 'Repair estimate', to: [{ activity: 'to', actor: 'Customer' }] },
+        { actor: 'Mechanic', activity: 'notes', workObject: 'Part request', to: [{ activity: 'for', actor: 'Storekeeper' }] },
+        { actor: 'Storekeeper', activity: 'orders', workObject: 'Parts order', to: [{ activity: 'from', actor: 'Supplier' }] },
+        { actor: 'Supplier', activity: 'delivers', workObject: 'Spare part', to: [{ activity: 'to', actor: 'Storekeeper' }] },
+        { actor: 'Customer', activity: 'pays', workObject: 'Repair price', to: [{ activity: 'to', actor: 'Cashier' }] },
+      ],
+      groups: [
+        { name: 'Repair intake', steps: [1, 2] },
+        { name: 'Parts purchasing', steps: [3, 4, 5] },
+        { name: 'Checkout', steps: [6] },
+      ],
+    });
+    const find = (name: string) => story.elements().find((element) => element.name === name) as ShapeElement;
+    const box = boundsOf(find('Parts purchasing'));
+    const checkout = boundsOf(find('Checkout'));
+    // Beside the group's box, from its top down to the next group.
+    for (const name of ['Storekeeper', 'Supplier']) {
+      const actor = boundsOf(find(name));
+      expect(actor.x + actor.width, name).toBeLessThan(box.x);
+      expect(actor.y, name).toBeGreaterThanOrEqual(box.y);
+      expect(actor.y + actor.height, name).toBeLessThan(checkout.y);
+    }
+    expect(boundsOf(find('Cashier')).y).toBeGreaterThanOrEqual(checkout.y);
+    expect(groupIssues(story)).toEqual([]);
+    expect(story.elements().filter((element) => element.type.startsWith('domainStory:actor') && element['parent'] !== undefined)).toEqual([]);
+    const before = JSON.stringify(story.toDocument());
+    autoLayout(story);
+    expect(JSON.stringify(story.toDocument())).toBe(before);
+    expectStableAfterReopening(story);
+  });
+
   it('lays out a file whose groups named each other as parent', () => {
     const text = JSON.stringify({
       domain: { name: 'default', actors: {}, workObjects: {} },

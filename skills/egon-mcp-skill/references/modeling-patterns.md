@@ -155,7 +155,7 @@ Tell them as stories of their own, named after what differs ("Repair a bicycle -
 
 ### Subdomains, organizational boundaries and locations
 
-Draw labeled groups (`add_group`) around the work objects, and if useful the actors, of each area. In a coarse story, these groups are candidates for subdomains. (2) See `ddd.md`.
+To mark subdomains in a coarse story, group the sentences that belong together: `add_group` with `steps` (or `steps` in `build_story` groups) puts their work objects in and leaves the actors outside, since an actor usually works in several areas. Name the group after the work done in it ("Parts purchasing"), never after a work object. Groups for an organizational boundary or a location may hold actors too. (2) See `bounded-contexts.md`.
 
 ### What a to-be story changes
 
@@ -180,7 +180,7 @@ Name each story after its case and put the scope into its description. Egon 3 ta
 
 ### Messages between bounded contexts
 
-To show how bounded contexts communicate, use the message-flow variant: users, bounded contexts and systems as actors, commands, events and queries as work objects, arrows without labels, message contents in annotations. (11) See `ddd.md`.
+To show how bounded contexts communicate, use the message-flow variant: users, bounded contexts and systems as actors, commands, events and queries as work objects, arrows without labels, message contents in annotations. (11) See `bounded-contexts.md`.
 
 ## Annotations worth adding
 

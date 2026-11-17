@@ -26,7 +26,7 @@ Creates a complete domain story in one call from numbered sentences ("Customer t
 | `actors` | array of object {name, icon?, color?} | no | Actors to create first, to choose their icon or color. |
 | `workObjects` | array of object {name, icon?, color?} | no | Work objects to create first, to choose their icon or color. The first sentence that names one uses it, and a workObjectIcon on that sentence replaces its icon; later sentences draw new ones with the same icon and color. |
 | `sentences` | array of object {actor, actorIcon?, activity, workObject, workObjectIcon?, reuseWorkObject?, to?, number?} | yes | The steps of the story in order. |
-| `groups` | array of object {name, members, color?} | no | Boxes around elements that belong together. |
+| `groups` | array of object {name, members?, steps?, color?} | no | Boxes around elements that belong together. |
 | `annotations` | array of object {text, attachTo?} | no | Notes for variations, rules and open questions. |
 | `layout` | boolean | no | Arrange elements automatically (default true). |
 
@@ -173,13 +173,14 @@ Adds one domain story sentence as a new step: actor, verb, work object and optio
 
 ## add_group
 
-Draws a box around elements that belong together, such as a department or subdomain. With members and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put those in no group into the smallest group box over their top-left corner when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.
+Draws a box around elements that belong together, such as a department or subdomain. To mark a subdomain on a coarse story, pass the step numbers of its sentences as steps: their work objects go in and their actors stay outside, since an actor often takes part in several subdomains. With members or steps and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put those in no group into the smallest group box over their top-left corner when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `storyId` | string | yes | Id of an open story, as returned by create_story, build_story, open_story or list_stories. |
 | `name` | string | yes | Label in the top-left corner of the box. |
 | `members` | array of string | no | Elements to put in the group, even outside the box. Without x and y the box fits around them. |
+| `steps` | array of integer | no | Step numbers of whole sentences: their work objects go into the group and their actors stay outside, the usual way to mark a subdomain. |
 | `color` | string | no | Color as hex, for example #1E88E5. |
 | `x` | number | no | Left edge of the box, at most a billion pixels either way. Give x and y together; without them the box fits around the members, or goes below the story when there are none. |
 | `y` | number | no | Top edge of the box, at most a billion pixels either way. Give x and y together. |
@@ -235,7 +236,7 @@ Closes gaps in the step numbers (1, 2, 3 ...) while keeping their order and para
 
 ## auto_layout
 
-Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, refits the group boxes, moves other annotations next to their element and moves groups without members to the end. A note goes into the group of the element it is attached to, a note on a group into that group, and notes on nothing go after the story, so the story reopens with the same groups. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.
+Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, puts an actor whose arrows all lead into groups beside the group it works in most (outside the box), refits the group boxes, moves other annotations next to their element and moves groups without members to the end. A note goes into the group of the element it is attached to, a note on a group into that group, and notes on nothing go after the story, so the story reopens with the same groups. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

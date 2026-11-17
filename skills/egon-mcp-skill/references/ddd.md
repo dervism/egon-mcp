@@ -1,6 +1,6 @@
 # Domain-Driven Design and requirements
 
-Domain-Driven Design (DDD) is an approach to building business software around a model of the domain, worked out by domain experts and developers together. It does not prescribe a modeling method; Domain Storytelling is one that fits it well, on the strategic level (language, boundaries) and the tactical level (code). This reference shows how to use domain stories for both, and how to turn them into requirements. Points marked as heuristics are common practice, not rules of the method.
+Domain-Driven Design (DDD) is an approach to building business software around a model of the domain, worked out by domain experts and developers together. It does not prescribe a modeling method; Domain Storytelling is one that fits it well, on the strategic level (language, boundaries) and the tactical level (code). This reference covers language, code and requirements; `bounded-contexts.md` covers boundaries. Points marked as heuristics are common practice, not rules of the method.
 
 ## Ubiquitous language
 
@@ -12,38 +12,11 @@ With egon-mcp:
 
 - Use the experts' terms in every label, and keep one name per thing within a story.
 - Collect the terms from `get_story` (actors, work objects, activities) into a glossary, and attach definitions of unclear terms as annotations.
-- Watch for the same word with different meanings in different parts of a story, and for different words for the same thing. Both are heuristics for a boundary between two languages, and so between two bounded contexts.
+- Watch for the same word with different meanings in different parts of a story, and for different words for the same thing. Both point to a boundary between two languages, and so between two bounded contexts; keep one glossary per bounded context (`bounded-contexts.md`).
 
-## Subdomains and bounded contexts
+## Subdomains, bounded contexts and message flows
 
-A domain is usually too large to model as a whole. DDD splits it into subdomains, areas of the business, and designs bounded contexts, each with its own model and language, as the software's answer to them. Domain Storytelling helps find the boundaries.
-
-1. Tell a coarse-grained, pure, as-is story of a typical case from start to end.
-2. Look for places where the story changes its character. Heuristics: a work object changes its meaning or name; the work moves to another department or another purpose; a different vocabulary starts; one part could happen without the other.
-3. Draw a labeled group around each area with `add_group`. A grouped story shows subdomains, not yet bounded contexts.
-4. Tell fine-grained stories for the subdomains that matter, to see what happens inside them.
-5. Decide on bounded contexts. Arrows that cross a group boundary, where a work object goes from one area to another, are the relationships a context map will show.
-
-Example 2 in `examples.md` is a coarse story grouped into Repair, Purchasing and Billing.
-
-Uses of the boundaries: splitting a monolith, designing microservices or self-contained systems, and organizing teams around parts of the domain.
-
-## Messages between bounded contexts
-
-Domain Message Flow Modeling, introduced by Nick Tune and inspired partly by Domain Storytelling, shows how commands, events and queries flow between bounded contexts. It helps check new boundaries for coupling, find hidden complexity before building, and analyze an IT landscape by domain instead of by existing systems. It maps onto the picture language:
-
-| Message flow | Domain story element | Suggested icon |
-|---|---|---|
-| User (persona, role) | Actor | `Person` |
-| Bounded context | Actor | `Cloud` |
-| System that is not a bounded context | Actor | `Settings` |
-| Command | Work object | `Email` |
-| Event | Work object | `Flag` |
-| Query or view | Work object | `Search` |
-
-The arrows carry no verbs, because the intention is already in the message; message contents go into annotations on the messages. Like any domain story, one picture shows one scenario, so a variant (one item out of stock) gets its own picture. Keep bounded contexts and other systems apart: the organization decides the name and borders of a bounded context, but not of an external or legacy system. Modeling contexts as actors also avoids deciding too early whether each becomes its own service.
-
-Example 11 in `examples.md` builds such a model. `validate_story` warns about the unlabeled arrows and `narrate_story` shows placeholders; both are expected here.
+Finding subdomains in a coarse story, designing bounded contexts from them, glossaries per context, the Bounded Context Canvas, context maps and the message-flow variant are covered step by step in `bounded-contexts.md`.
 
 ## From stories to code
 

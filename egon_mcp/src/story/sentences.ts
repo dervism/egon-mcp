@@ -1,6 +1,7 @@
 import { compareIds, iconNameOf, isActivity, isActor, isWorkObject, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { IconCatalog } from '../icons/catalog.js';
 import { autoLayout } from './layout.js';
+import { narrate } from './narrate.js';
 import { Story, StoryError } from './story.js';
 
 export interface SentenceInput {
@@ -46,7 +47,8 @@ export interface BuildStoryInput {
   /** Work objects to create up front, to set their icon or color. */
   workObjects?: ShapeSpec[];
   sentences: SentenceInput[];
-  groups?: { name: string; members: string[]; color?: string }[];
+  /** Members by name or id, and the work objects of whole sentences by step number. */
+  groups?: { name: string; members?: string[]; steps?: number[]; color?: string }[];
   annotations?: { text: string; attachTo?: string }[];
   /** Arrange the elements on a grid afterwards (default true). */
   layout?: boolean;
@@ -103,7 +105,7 @@ export function buildStory(input: BuildStoryInput): Story {
       withContext(`group "${group.name}"`, () =>
         story.addGroup({
           name: group.name,
-          members: group.members,
+          members: [...(group.members ?? []), ...workObjectsOfSteps(story, group.steps ?? [])],
           ...(group.color ? { color: group.color } : {}),
         }),
       );
@@ -201,6 +203,30 @@ function create(
 
 function shapeInput(spec: ShapeSpec) {
   return { name: spec.name, ...(spec.icon ? { icon: spec.icon } : {}), ...(spec.color ? { color: spec.color } : {}) };
+}
+
+/**
+ * The ids of the work objects in the sentences with these step numbers, the
+ * second work object of a sentence included. Grouping these and not the
+ * actors is how a coarse story is cut into subdomains: an actor often takes
+ * part in several of them.
+ */
+export function workObjectsOfSteps(story: Story, steps: number[]): string[] {
+  const narrative = narrate(story.toDocument());
+  const ids: string[] = [];
+  for (const number of steps) {
+    const step = narrative.find((candidate) => candidate.number === number);
+    if (!step) {
+      throw new StoryError(`There is no step ${number}; the story has steps ${narrative.map((candidate) => candidate.number).join(', ') || 'none'}.`);
+    }
+    for (const id of step.elementIds) {
+      const element = story.get(id);
+      if (element && isWorkObject(element) && !ids.includes(id)) {
+        ids.push(id);
+      }
+    }
+  }
+  return ids;
 }
 
 function withContext<T>(context: string, action: () => T): T {

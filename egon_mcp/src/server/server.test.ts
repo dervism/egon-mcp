@@ -252,6 +252,7 @@ describe('egon-mcp server', () => {
     const { tools } = await client.listTools();
     const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';
     expect(describe('auto_layout')).toMatch(/keeps the members of each group together/);
+    expect(describe('auto_layout')).toMatch(/beside the group it works in most/);
     expect(describe('validate_story')).toMatch(/group boxes that enclose shapes outside the group/);
     expect(describe('auto_layout')).toMatch(/A note goes into the group of the element it is attached to/);
   });
@@ -303,6 +304,14 @@ describe('egon-mcp server', () => {
     await ok('create_story', { title: 'Huge', description: 'x'.repeat(21 * 1024 * 1024) });
     const saved = await ok('save_story', { storyId: 'huge', path: 'huge.egn' });
     expect(saved['reopenError']).toMatch(/larger than 20 MB/);
+  });
+
+  it('groups the work objects of numbered sentences with add_group', async () => {
+    await ok('build_story', pizza);
+    const group = await ok('add_group', { storyId: 'order-pizza', name: 'Ordering', steps: [1] });
+    const story = await ok('get_story', { storyId: 'order-pizza' });
+    const ordering = (story['groups'] as { id: string; members: string[] }[]).find((candidate) => candidate.id === group['id']);
+    expect(ordering?.members).toEqual(['Order']);
   });
 
   it('tells agents how shapes get into a group', async () => {
@@ -385,5 +394,14 @@ describe('egon-mcp server', () => {
     const message = prompt.messages[0]?.content as { text: string };
     expect(message.text).toContain('Ordering pizza by phone');
     expect(message.text).toContain('build_story');
+  });
+
+  it('offers a prompt that cuts a coarse story into subdomains', async () => {
+    const prompt = await client.getPrompt({ name: 'find_subdomains', arguments: { storyId: 'repair-a-bicycle' } });
+    const text = (prompt.messages[0]?.content as { text: string }).text;
+    expect(text).toContain('repair-a-bicycle');
+    expect(text).toMatch(/add_group with steps/);
+    expect(text).toMatch(/flows one way/);
+    expect(text).toMatch(/subdomains, not bounded contexts/);
   });
 });

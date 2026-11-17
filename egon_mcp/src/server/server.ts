@@ -7,7 +7,7 @@ import { IconCatalog } from '../icons/catalog.js';
 import { renderStorySvg } from '../render/svg.js';
 import { autoLayout } from '../story/layout.js';
 import { narrate, narrativeMarkdown } from '../story/narrate.js';
-import { addSentence, buildStory } from '../story/sentences.js';
+import { addSentence, buildStory, workObjectsOfSteps } from '../story/sentences.js';
 import { Story, StoryError } from '../story/story.js';
 import { validateStory } from '../story/validate.js';
 import { describeStory, summarizeEntry } from './describe.js';
@@ -81,9 +81,13 @@ const shapeSpec = z.object({ name: z.string(), icon: iconName.optional(), color:
 const titleField = z.string().describe('Story title. Egon 3 reads the title from the file name, so saved files are named after it.');
 const descriptionField = z.string().describe('Text Egon shows under the title.');
 const nameField = z.string().describe('Name shown below the element, in the words of the domain.');
+const steps = z
+  .array(z.number().int().positive())
+  .describe('Step numbers of whole sentences: their work objects go into the group and their actors stay outside, the usual way to mark a subdomain.');
 const groupSpec = z.object({
   name: z.string(),
-  members: z.array(z.string()).describe('Names of the actors and work objects inside the group.'),
+  members: z.array(z.string()).optional().describe('Names or ids of the actors and work objects inside the group.'),
+  steps: steps.optional(),
   color: color.optional(),
 });
 const annotationSpec = z.object({
@@ -418,11 +422,12 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Add group',
       description:
-        'Draws a box around elements that belong together, such as a department or subdomain. With members and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put those in no group into the smallest group box over their top-left corner when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.',
+        'Draws a box around elements that belong together, such as a department or subdomain. To mark a subdomain on a coarse story, pass the step numbers of its sentences as steps: their work objects go in and their actors stay outside, since an actor often takes part in several subdomains. With members or steps and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put those in no group into the smallest group box over their top-left corner when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.',
       inputSchema: {
         storyId,
         name: z.string().describe('Label in the top-left corner of the box.'),
         members: z.array(elementRef).optional().describe('Elements to put in the group, even outside the box. Without x and y the box fits around them.'),
+        steps: steps.optional(),
         color: color.optional(),
         x: z.number().optional().describe('Left edge of the box, at most a billion pixels either way. Give x and y together; without them the box fits around the members, or goes below the story when there are none.'),
         y: z.number().optional().describe('Top edge of the box, at most a billion pixels either way. Give x and y together.'),
@@ -430,12 +435,12 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
         height: z.number().positive().optional().describe('Box height with x and y, at most a billion pixels; default 200.'),
       },
     },
-    run(({ storyId: id, name, members, color: picked, x: left, y: top, width, height }) =>
+    run(({ storyId: id, name, members, steps: numbers, color: picked, x: left, y: top, width, height }) =>
       json({
         ...edit(id, (entry) =>
           entry.story.addGroup({
             name,
-            ...(members ? { members } : {}),
+            ...(members || numbers ? { members: [...(members ?? []), ...workObjectsOfSteps(entry.story, numbers ?? [])] } : {}),
             ...(picked ? { color: picked } : {}),
             ...(left !== undefined ? { x: left } : {}),
             ...(top !== undefined ? { y: top } : {}),
@@ -531,7 +536,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     'auto_layout',
     {
       title: 'Auto layout',
-      description: 'Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, refits the group boxes, moves other annotations next to their element and moves groups without members to the end. A note goes into the group of the element it is attached to, a note on a group into that group, and notes on nothing go after the story, so the story reopens with the same groups. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.',
+      description: 'Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, puts an actor whose arrows all lead into groups beside the group it works in most (outside the box), refits the group boxes, moves other annotations next to their element and moves groups without members to the end. A note goes into the group of the element it is attached to, a note on a group into that group, and notes on nothing go after the story, so the story reopens with the same groups. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.',
       inputSchema: { storyId },
       annotations: { idempotentHint: true },
     },
