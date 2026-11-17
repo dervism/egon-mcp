@@ -85,7 +85,7 @@ const steps = z
   .array(z.number().int().positive())
   .min(1)
   .describe(
-    'Step numbers as narrate_story shows them (parallel sentences share one): the work objects that first appear in those sentences go into the group and their actors stay outside, the usual way to mark a subdomain. A work object that later sentences use too belongs to the step that drew it; name it in members to move it here (next to steps, a name means the copies these steps use, or every copy when they use none). The group goes into the innermost group around these work objects, and takes them from there; one that sits in any other group stays there, unless all of that group comes along, and the result lists it in leftInOtherGroups. When the new group takes all the group around it held, the result carries a hint: name that group in members to put it inside instead. Refused when nothing is left to group, and together with x, y, width or height.',
+    'Step numbers as narrate_story shows them (parallel sentences share one): the work objects that first appear in those sentences go into the group and their actors stay outside, the usual way to mark a subdomain. A work object that later sentences use too belongs to the step that drew it; name it in members to move it here (next to steps, a name means the copies these steps use, or every copy when they use none). The group goes into the innermost group around these work objects, and takes them from there; one that sits in any other group stays there, unless all of that group comes along, and the result lists it in leftInOtherGroups. Refused when nothing is left to group, and together with x, y, width or height.',
   );
 const groupSpec = z.object({
   name: z.string().describe('Label of the box; every group needs members or steps.'),
@@ -173,7 +173,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
         actors: z.array(shapeSpec).optional().describe('Actors to create first, to choose their icon or color.'),
         workObjects: z.array(shapeSpec).optional().describe('Work objects to create first, to choose their icon or color. The first sentence that names one uses it, and a workObjectIcon on that sentence replaces its icon; later sentences draw new ones with the same icon and color.'),
         sentences: z.array(z.object(sentenceSchema)).min(1).describe('The steps of the story in order.'),
-        groups: z.array(groupSpec).optional().describe('Boxes around elements that belong together, by members or by steps as add_group takes them, in any order. Groups by steps go first, fewer steps before more, then by step numbers and name, and a group named in another group\'s members is added before it. A group by steps takes in every group by steps whose steps are all among its own, unless another group names that group in members or it already sits in a group.'),
+        groups: z.array(groupSpec).optional().describe('Boxes around elements that belong together, by members or by steps as add_group takes them. Groups by steps come out the same in any order: fewer steps go before more, and a group by steps takes in every group by steps whose steps are all among its own, unless another group names that group in members or it already sits in a group. Groups by members follow in the order of the list, so a later one takes a member from an earlier one. A group named in another group\'s members is added before it.'),
         annotations: z.array(annotationSpec).optional().describe('Notes for variations, rules and open questions.'),
         layout: z.boolean().optional().describe('Arrange elements automatically (default true).'),
       },
@@ -434,8 +434,8 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
         color: color.optional(),
         x: z.number().optional().describe('Left edge of the box, at most a billion pixels either way. Give x and y together, and not with members or steps.'),
         y: z.number().optional().describe('Top edge of the box, at most a billion pixels either way. Give x and y together.'),
-        width: z.number().positive().optional().describe('Box width with x and y, at most a billion pixels; default 300.'),
-        height: z.number().positive().optional().describe('Box height with x and y, at most a billion pixels; default 200.'),
+        width: z.number().positive().optional().describe('Box width with x and y, at most a billion pixels; default 300. Not with members or steps, whose box fits around them.'),
+        height: z.number().positive().optional().describe('Box height with x and y, at most a billion pixels; default 200. Not with members or steps.'),
       },
     },
     run(({ storyId: id, name, members, steps: numbers, color: picked, x: left, y: top, width, height }) => {
@@ -457,8 +457,8 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
               'The steps fit the box around their work objects, and a box drawn with x and y would take in their actors too. Leave out x, y, width and height, or pass members instead of steps.',
             );
           }
-          const { group, left: stayed, hint } = groupBySteps(entry.story, { name, steps: numbers, members, color: picked });
-          return { ...group, ...(stayed.length > 0 ? { leftInOtherGroups: stayed } : {}), ...(hint ? { hint } : {}) };
+          const { group, left: stayed } = groupBySteps(entry.story, { name, steps: numbers, members, color: picked });
+          return { ...group, ...(stayed.length > 0 ? { leftInOtherGroups: stayed } : {}) };
         }),
       });
     }),

@@ -249,10 +249,17 @@ export class Story {
 
   private applyAddGroup(input: GroupInput): GroupElement {
     const given = this.givenPosition(input);
-    if ((given || input.width !== undefined || input.height !== undefined) && (input.members?.length || input.fromSteps)) {
-      throw new StoryError(
-        'Give members to fit the box around them, or x and y to draw it where it should go and take in what it covers, as in Egon; not both.',
-      );
+    if (input.members?.length || input.fromSteps) {
+      if (given) {
+        throw new StoryError(
+          'Give members to fit the box around them, or x and y to draw it where it should go and take in what it covers, as in Egon; not both.',
+        );
+      }
+      if (input.width !== undefined || input.height !== undefined) {
+        throw new StoryError(
+          'A box fitted around members has the size they need, so a width or height does not go with them. Leave the size out, or draw the box with x, y, width and height and no members.',
+        );
+      }
     }
     // A name shared by several elements (work objects repeat per sentence) groups all of them.
     const resolved = (input.members ?? []).flatMap((ref) => this.resolveShapes(ref));

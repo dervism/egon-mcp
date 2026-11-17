@@ -348,7 +348,7 @@ describe('egon-mcp server', () => {
     const again = await ok('add_group', { storyId: 'shared', name: 'Front', steps: [1, 2, 3] });
     expect(again['leftInOtherGroups']).toEqual([expect.objectContaining({ workObject: 'Bike', group: 'Stock' })]);
     const members = await call('add_group', { storyId: 'shared', name: 'Sized', members: ['Bike'], height: 900 });
-    expect(members.content[0]?.text).toMatch(/not both/);
+    expect(members.content[0]?.text).toMatch(/width or height/);
   });
 
   it('reports a refused grouping by steps as an error', async () => {

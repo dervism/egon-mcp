@@ -26,7 +26,7 @@ Creates a complete domain story in one call from numbered sentences ("Customer t
 | `actors` | array of object {name, icon?, color?} | no | Actors to create first, to choose their icon or color. |
 | `workObjects` | array of object {name, icon?, color?} | no | Work objects to create first, to choose their icon or color. The first sentence that names one uses it, and a workObjectIcon on that sentence replaces its icon; later sentences draw new ones with the same icon and color. |
 | `sentences` | array of object {actor, actorIcon?, activity, workObject, workObjectIcon?, reuseWorkObject?, to?, number?} | yes | The steps of the story in order. |
-| `groups` | array of object {name, members?, steps?, color?} | no | Boxes around elements that belong together, by members or by steps as add_group takes them, in any order. Groups by steps go first, fewer steps before more, then by step numbers and name, and a group named in another group's members is added before it. A group by steps takes in every group by steps whose steps are all among its own, unless another group names that group in members or it already sits in a group. |
+| `groups` | array of object {name, members?, steps?, color?} | no | Boxes around elements that belong together, by members or by steps as add_group takes them. Groups by steps come out the same in any order: fewer steps go before more, and a group by steps takes in every group by steps whose steps are all among its own, unless another group names that group in members or it already sits in a group. Groups by members follow in the order of the list, so a later one takes a member from an earlier one. A group named in another group's members is added before it. |
 | `annotations` | array of object {text, attachTo?} | no | Notes for variations, rules and open questions. |
 | `layout` | boolean | no | Arrange elements automatically (default true). |
 
@@ -180,12 +180,12 @@ Draws a box around elements that belong together, such as a department or subdom
 | `storyId` | string | yes | Id of an open story, as returned by create_story, build_story, open_story or list_stories. |
 | `name` | string | yes | Label in the top-left corner of the box. |
 | `members` | array of string | no | Elements to put in the group; a name means every element with that name. The box fits around them. |
-| `steps` | array of integer | no | Step numbers as narrate_story shows them (parallel sentences share one): the work objects that first appear in those sentences go into the group and their actors stay outside, the usual way to mark a subdomain. A work object that later sentences use too belongs to the step that drew it; name it in members to move it here (next to steps, a name means the copies these steps use, or every copy when they use none). The group goes into the innermost group around these work objects, and takes them from there; one that sits in any other group stays there, unless all of that group comes along, and the result lists it in leftInOtherGroups. When the new group takes all the group around it held, the result carries a hint: name that group in members to put it inside instead. Refused when nothing is left to group, and together with x, y, width or height. |
+| `steps` | array of integer | no | Step numbers as narrate_story shows them (parallel sentences share one): the work objects that first appear in those sentences go into the group and their actors stay outside, the usual way to mark a subdomain. A work object that later sentences use too belongs to the step that drew it; name it in members to move it here (next to steps, a name means the copies these steps use, or every copy when they use none). The group goes into the innermost group around these work objects, and takes them from there; one that sits in any other group stays there, unless all of that group comes along, and the result lists it in leftInOtherGroups. Refused when nothing is left to group, and together with x, y, width or height. |
 | `color` | string | no | Color as hex, for example #1E88E5. |
 | `x` | number | no | Left edge of the box, at most a billion pixels either way. Give x and y together, and not with members or steps. |
 | `y` | number | no | Top edge of the box, at most a billion pixels either way. Give x and y together. |
-| `width` | number | no | Box width with x and y, at most a billion pixels; default 300. |
-| `height` | number | no | Box height with x and y, at most a billion pixels; default 200. |
+| `width` | number | no | Box width with x and y, at most a billion pixels; default 300. Not with members or steps, whose box fits around them. |
+| `height` | number | no | Box height with x and y, at most a billion pixels; default 200. Not with members or steps. |
 
 ## add_annotation
 

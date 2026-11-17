@@ -572,6 +572,8 @@ describe('groups hold what you name', () => {
       { name: 'Y', members: ['X', 'Estimate'] },
     ];
     expect(() => buildStory({ title: 'T', sentences: shop, groups })).toThrow(/"X" and "Y" name each other in members/);
+    // A group that only waits for the cycle is not part of it.
+    expect(() => buildStory({ title: 'T', sentences: shop, groups: [...groups, { name: 'Z', members: ['X', 'Customer'] }] })).toThrow(/^(?![\s\S]*"Z")[\s\S]*"X" and "Y" name each other/);
     // A member that names an actor or work object is no group to wait for, even when a group has that name.
     const clash = buildStory({ title: 'T', sentences: shop, groups: [{ name: 'Bike', members: ['Office'] }, { name: 'Office', members: ['Bike', 'Mechanic'] }] });
     expect(groupsOf(clash)).toBe('Bike[Office[Bike Mechanic]]');
@@ -583,17 +585,49 @@ describe('groups hold what you name', () => {
     expect(groupsOf(story)).toBe('Intake[Estimate] Repair[Bike]');
   });
 
-  it('gives a hint when a group by steps takes all its host holds', () => {
-    const later = [...shop, { actor: 'Mechanic', activity: 'returns', workObject: 'Bike', reuseWorkObject: true, to: [{ activity: 'to', actor: 'Customer' }] }];
-    const story = buildStory({ title: 'T', sentences: later, groups: [{ name: 'Intake', steps: [1, 2] }] });
-    const { hint } = groupBySteps(story, { name: 'Workshop', steps: [1, 2, 3] });
-    expect(hint).toMatch(/"Workshop" took everything "Intake" held.*name "Intake" in members/);
-    expect(groupBySteps(story, { name: 'Again', steps: [1, 2], members: ['Workshop'] }).hint).toBeUndefined();
+  it('nests an inner group drawn after its outer group inside it, without a hint', () => {
+    const story = buildStory({ title: 'T', sentences: shop, groups: [{ name: 'Workshop', steps: [1, 2, 3] }] });
+    const result = groupBySteps(story, { name: 'Intake', steps: [1, 2] });
+    expect(result).not.toHaveProperty('hint');
+    expect(groupsOf(story)).toBe('Workshop[Intake[Bike Estimate]]');
   });
+
+  it('lets an explicit name win over a larger group by steps', () => {
+    const groups = [
+      { name: 'I', steps: [1] },
+      { name: 'O', steps: [1, 2] },
+      { name: 'M', members: ['I'] },
+    ];
+    expect(groupsOf(buildStory({ title: 'T', sentences: shop, groups }))).toBe('M[I[Bike]] O[Estimate]');
+  });
+
+  it('finds a group named in members whatever its case and spacing', () => {
+    const desk = [...shop, { actor: 'Cashier', activity: 'writes', workObject: 'Invoice' }];
+    for (const groups of both({ name: 'Billing', members: ['Invoice'] }, { name: 'Back office', members: [' billing', 'Cashier'] })) {
+      expect(groupsOf(buildStory({ title: 'T', sentences: desk, groups }))).toBe('Back office[Billing[Invoice] Cashier]');
+    }
+  });
+
+  it('adds groups by members in the order of the list, after the groups by steps', () => {
+    const first = buildStory({ title: 'T', sentences: shop, groups: [{ name: 'Zeta', members: ['Bike', 'Estimate'] }, { name: 'Alpha', members: ['Estimate', 'Customer'] }] });
+    expect(groupsOf(first)).toBe('Alpha[Customer Estimate] Zeta[Bike]');
+    const second = buildStory({ title: 'T', sentences: shop, groups: [{ name: 'Alpha', members: ['Estimate', 'Customer'] }, { name: 'Zeta', members: ['Bike', 'Estimate'] }] });
+    expect(groupsOf(second)).toBe('Alpha[Customer] Zeta[Bike Estimate]');
+  });
+
+  it('reads steps as a set when it orders the groups', () => {
+    for (const groups of both({ name: 'A', steps: [2, 1] }, { name: 'B', steps: [1, 2, 2] })) {
+      expect(groupsOf(buildStory({ title: 'T', sentences: shop, groups }))).toBe('B[A[Bike Estimate]]');
+    }
+    for (const groups of both({ name: 'A', steps: [2, 1] }, { name: 'B', steps: [1, 2] })) {
+      expect(groupsOf(buildStory({ title: 'T', sentences: shop, groups }))).toBe('B[A[Bike Estimate]]');
+    }
+  });
+
 
   it('refuses members together with a size, since the box fits around them', () => {
     const story = buildStory({ title: 'T', sentences: shop });
-    expect(() => story.addGroup({ name: 'G', members: ['Estimate'], width: 5000 })).toThrow(/not both/);
+    expect(() => story.addGroup({ name: 'G', members: ['Estimate'], width: 5000 })).toThrow(/width or height/);
   });
 
   it('puts a group whose picks all stay in other groups into the group around them', () => {

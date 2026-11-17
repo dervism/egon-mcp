@@ -102,46 +102,63 @@ export function buildStory(input: BuildStoryInput): Story {
     input.sentences.forEach((sentence, index) => {
       withContext(`sentence ${index + 1}`, () => addSentence(story, sentence));
     });
-    // The order of the list does not matter. Groups by steps come first, fewer steps before more,
-    // then by their step numbers and names, and a group named in another group's members is added
-    // before it. A group by steps takes in the groups by steps added before it whose steps are all
-    // among its own, unless another group names them in members or they already sit in a group.
+    // Groups by steps come out the same in any order: they go first, fewer steps before more, then
+    // by their step numbers and names, and each takes in the groups by steps added before it whose
+    // steps are all among its own, unless another group names them in members or they already sit
+    // in a group. Groups by members follow in the order of the list. A group named in another
+    // group's members is added before it. Names compare as resolve() does: trimmed, any case.
+    const key = (name: string) => name.trim().toLowerCase();
     const groups = input.groups ?? [];
-    const names = new Set(groups.map((group) => group.name));
-    const namedByOthers = new Set(groups.flatMap((group) => (group.members ?? []).filter((ref) => ref !== group.name)));
+    const stepSet = (group: (typeof groups)[number]) => [...new Set(group.steps ?? [])].sort((a, b) => a - b);
+    const names = new Set(groups.map((group) => key(group.name)));
+    const namedByOthers = new Set(groups.flatMap((group) => (group.members ?? []).map(key).filter((ref) => ref !== key(group.name))));
     // A member that names an actor or work object is no group to wait for.
-    const isThing = (ref: string) => story.elements().some((element) => (element.name === ref || element.id === ref) && (isActor(element) || isWorkObject(element)));
+    const things = new Set(
+      story
+        .elements()
+        .filter((element) => isActor(element) || isWorkObject(element))
+        .flatMap((element) => [key(element.name), element.id]),
+    );
     const order = (a: (typeof groups)[number], b: (typeof groups)[number]) => {
-      const steps = (group: (typeof groups)[number]) => group.steps ?? [];
-      const size = (group: (typeof groups)[number]) => (group.steps?.length ? group.steps.length : Number.POSITIVE_INFINITY);
-      const byNumbers = steps(a).findIndex((number, index) => number !== steps(b)[index]);
-      return (
-        size(a) - size(b) ||
-        (byNumbers === -1 ? 0 : (steps(a)[byNumbers] as number) - (steps(b)[byNumbers] ?? Number.POSITIVE_INFINITY)) ||
-        a.name.localeCompare(b.name)
-      );
+      const [stepsA, stepsB] = [stepSet(a), stepSet(b)];
+      if (stepsA.length === 0 || stepsB.length === 0) {
+        return (stepsA.length === 0 ? 1 : 0) - (stepsB.length === 0 ? 1 : 0);
+      }
+      const differs = stepsA.findIndex((number, index) => number !== stepsB[index]);
+      const byNumbers = differs === -1 ? 0 : (stepsA[differs] as number) - (stepsB[differs] ?? Number.POSITIVE_INFINITY);
+      return stepsA.length - stepsB.length || byNumbers || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
     };
     const pending = [...groups].sort(order);
     const added: { name: string; steps: number[] | undefined; id: string }[] = [];
+    const waitsFor = (group: (typeof groups)[number]) =>
+      (group.members ?? [])
+        .map(key)
+        .filter((ref) => ref !== key(group.name) && names.has(ref) && !things.has(ref) && !added.some((other) => key(other.name) === ref));
     while (pending.length > 0) {
-      const waitsFor = (group: (typeof groups)[number]) =>
-        (group.members ?? []).filter((ref) => ref !== group.name && names.has(ref) && !isThing(ref) && !added.some((other) => other.name === ref));
       const ready = pending.findIndex((group) => waitsFor(group).length === 0);
       if (ready === -1) {
-        const stuck = pending.map((group) => `"${group.name}"`);
+        // Follow the names from the first group until one repeats: those groups form the cycle.
+        const path: (typeof groups)[number][] = [];
+        let current = pending[0];
+        while (current && !path.includes(current)) {
+          path.push(current);
+          const next: string | undefined = waitsFor(current)[0];
+          current = pending.find((group) => key(group.name) === next);
+        }
+        const cycle = (current ? path.slice(path.indexOf(current)) : path).map((group) => `"${group.name}"`);
         throw new StoryError(
-          `The groups ${stuck.slice(0, -1).join(', ')} and ${stuck.at(-1) as string} name each other in members, so none of them can be added first. Leave one of the names out.`,
+          `The groups ${cycle.slice(0, -1).join(', ')} and ${cycle.at(-1) as string} name each other in members, so none of them can be added first. Leave one of the names out.`,
         );
       }
       const [group] = pending.splice(ready, 1) as [(typeof groups)[number]];
-      const steps = group.steps?.length ? group.steps : undefined;
+      const steps = group.steps?.length ? stepSet(group) : undefined;
       if (!group.members?.length && !steps) {
         throw new StoryError(`The group "${group.name}" needs members or steps.`);
       }
       const inner = steps
         ? added
             .filter((other) => other.steps?.every((number) => steps.includes(number)))
-            .filter((other) => !namedByOthers.has(other.name) && story.get(other.id)?.['parent'] === undefined)
+            .filter((other) => !namedByOthers.has(key(other.name)) && story.get(other.id)?.['parent'] === undefined)
             .map((other) => other.id)
         : [];
       const created = withContext(`group "${group.name}"`, () =>
@@ -319,12 +336,12 @@ export interface LeftWorkObject {
 /**
  * add_group with steps: their work objects, as stepPicks finds them, and any
  * members named besides. Also returns the picked work objects that stayed in
- * other groups, and a hint when the new group took all its host holds.
+ * other groups.
  */
 export function groupBySteps(
   story: Story,
   input: { name: string; steps: number[]; members?: string[] | undefined; color?: string | undefined },
-): { group: GroupElement; left: LeftWorkObject[]; hint?: string } {
+): { group: GroupElement; left: LeftWorkObject[] } {
   return story.transaction(() => {
     const named = namedForSteps(story, input.members ?? [], input.steps);
     const { picked, only, reached } = stepPicks(story, input.steps);
@@ -341,16 +358,7 @@ export function groupBySteps(
         const home = byId.get(id)?.['parent'] as string;
         return { workObject: nameOf(id), id, group: nameOf(home), groupId: home };
       });
-    // The new group sits in a group that now holds nothing else: the agent may have meant it the other way round.
-    const host = group['parent'];
-    const elsewhere =
-      typeof host === 'string' &&
-      elements.some((element) => (isActor(element) || isWorkObject(element)) && groupAncestors(element, byId).includes(host) && !groupAncestors(element, byId).includes(group.id));
-    const hint =
-      typeof host === 'string' && !elsewhere
-        ? `"${input.name}" took everything "${nameOf(host)}" held, so it sits inside it. To put "${nameOf(host)}" inside "${input.name}" instead, name "${nameOf(host)}" in members.`
-        : undefined;
-    return { group, left, ...(hint ? { hint } : {}) };
+    return { group, left };
   });
 }
 
