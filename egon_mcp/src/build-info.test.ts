@@ -1,30 +1,42 @@
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, type Dirent, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { BUILD_INFO_FILE, copyAssets, finishBuildRecord, PENDING_BUILD_INFO_FILE, sourceFiles, sourceHash, startBuildRecord } from './build-info.js';
+import {
+  BUILD_INFO_FILE,
+  copyAssets,
+  finishBuildRecord,
+  PENDING_BUILD_INFO_FILE,
+  sourceFiles,
+  sourceHash,
+  startBuildRecord,
+} from './build-info.js';
 
-// Creating links on Windows needs extra rights, so the link tests run elsewhere only.
+// Creating links on Windows needs extra rights, so the link checks run elsewhere only.
 const links = process.platform !== 'win32';
 
 let packageDir: string;
 let src: string;
+let generated: string;
 let outside: string;
 
 beforeEach(() => {
   packageDir = mkdtempSync(join(tmpdir(), 'egon-hash-'));
   outside = mkdtempSync(join(tmpdir(), 'egon-hash-outside-'));
   src = join(packageDir, 'src');
+  generated = join(src, 'icons', 'generated');
   mkdirSync(join(src, 'sub'), { recursive: true });
-  mkdirSync(join(src, 'icons', 'generated'), { recursive: true });
+  mkdirSync(generated, { recursive: true });
+  mkdirSync(join(packageDir, 'node_modules', 'typescript'), { recursive: true });
   writeFileSync(join(packageDir, 'package.json'), '{ "type": "module" }');
   writeFileSync(join(packageDir, 'tsconfig.json'), '{}');
   writeFileSync(join(packageDir, 'tsconfig.build.json'), '{}');
+  writeFileSync(join(packageDir, 'node_modules', 'typescript', 'package.json'), '{ "version": "7.0.2" }');
   writeFileSync(join(src, 'a.ts'), 'export const a = 1;');
   writeFileSync(join(src, 'sub', 'b.ts'), 'export const b = 2;');
   writeFileSync(join(src, 'a.test.ts'), 'test');
   writeFileSync(join(src, 'notes.md'), 'notes');
-  writeFileSync(join(src, 'icons', 'generated', 'builtin-icons.json'), '[]');
+  writeFileSync(join(generated, 'builtin-icons.json'), '[]');
 });
 
 afterEach(() => {
@@ -33,13 +45,16 @@ afterEach(() => {
 });
 
 describe('sourceFiles', () => {
-  it.runIf(links)('lists the TypeScript files tsc compiles, leaving out tests, hidden files and dangling links', () => {
-    // Editors leave hidden files and dangling links, such as Emacs lock links.
-    symlinkSync(join(src, 'missing.ts'), join(src, 'sub', '.#b.ts'));
-    symlinkSync(join(src, 'missing.ts'), join(src, 'broken.ts'));
+  it('lists the TypeScript files tsc compiles, leaving out tests and hidden files', () => {
     mkdirSync(join(src, '.cache'));
     writeFileSync(join(src, '.cache', 'c.ts'), 'hidden');
     writeFileSync(join(src, '.d.ts'), 'hidden');
+    expect(sourceFiles(src)).toEqual(['a.ts', 'sub/b.ts']);
+  });
+
+  it.runIf(links)('leaves out dangling links, such as Emacs lock links', () => {
+    symlinkSync(join(src, 'missing.ts'), join(src, 'sub', '.#b.ts'));
+    symlinkSync(join(src, 'missing.ts'), join(src, 'broken.ts'));
     expect(sourceFiles(src)).toEqual(['a.ts', 'sub/b.ts']);
   });
 
@@ -62,7 +77,7 @@ describe('sourceFiles', () => {
     expect(sourceFiles(src)).toEqual(['a.ts', 'sub/b.ts']);
   });
 
-  it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)('skips folders it cannot read, as tsc does', () => {
+  it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)('skips folders below it that it cannot read, as tsc does', () => {
     mkdirSync(join(src, 'locked'));
     writeFileSync(join(src, 'locked', 'secret.ts'), 'export const s = 1;');
     chmodSync(join(src, 'locked'), 0o000);
@@ -72,14 +87,25 @@ describe('sourceFiles', () => {
       chmodSync(join(src, 'locked'), 0o755);
     }
   });
+
+  it('fails for a source folder that does not exist', () => {
+    expect(() => sourceFiles(join(packageDir, 'nope'))).toThrow(/ENOENT/);
+  });
 });
 
 describe('sourceHash', () => {
-  it.runIf(links)('ignores tests, hidden files and other files', () => {
+  it('ignores tests, hidden files and other files', () => {
     const before = sourceHash(packageDir);
     writeFileSync(join(src, 'a.test.ts'), 'changed test');
     writeFileSync(join(src, 'notes.md'), 'changed notes');
+    writeFileSync(join(src, '.hidden.ts'), 'hidden');
+    expect(sourceHash(packageDir)).toBe(before);
+  });
+
+  it.runIf(links)('ignores dangling links', () => {
+    const before = sourceHash(packageDir);
     symlinkSync(join(src, 'missing.ts'), join(src, '.#a.ts'));
+    symlinkSync(join(src, 'missing.ts'), join(src, 'broken.ts'));
     expect(sourceHash(packageDir)).toBe(before);
   });
 
@@ -92,19 +118,27 @@ describe('sourceHash', () => {
     expect(sourceHash(packageDir)).not.toBe(edited);
   });
 
-  it('changes with every other build input: both tsconfig files, package.json, the lockfile and the generated icons', () => {
+  it('changes with every other build input: settings, the installed compiler and the assets', () => {
     const edits: [string, string][] = [
       ['tsconfig.json', '{ "compilerOptions": { "strict": false } }'],
       ['tsconfig.build.json', '{ "compilerOptions": { "target": "ES2020" } }'],
       ['package.json', '{ "type": "commonjs" }'],
-      // The lockfile pins the TypeScript compiler.
-      ['package-lock.json', '{ "packages": { "node_modules/typescript": { "version": "7.1.0" } } }'],
+      [join('node_modules', 'typescript', 'package.json'), '{ "version": "7.1.0" }'],
       [join('src', 'icons', 'generated', 'builtin-icons.json'), '[{ "name": "New" }]'],
     ];
     for (const [file, content] of edits) {
       const before = sourceHash(packageDir);
       writeFileSync(join(packageDir, file), content);
       expect(sourceHash(packageDir), file).not.toBe(before);
+    }
+  });
+
+  it('tells a missing settings file apart from any content', () => {
+    rmSync(join(packageDir, 'package.json'));
+    const missing = sourceHash(packageDir);
+    for (const content of ['', 'missing', '-', '\0']) {
+      writeFileSync(join(packageDir, 'package.json'), content);
+      expect(sourceHash(packageDir), JSON.stringify(content)).not.toBe(missing);
     }
   });
 
@@ -118,16 +152,26 @@ describe('sourceHash', () => {
 });
 
 describe('copyAssets', () => {
-  it.runIf(links)('copies the asset folders as they are hashed: hidden files left out, links as files', () => {
-    const generated = join(src, 'icons', 'generated');
+  const copied = () => join(packageDir, 'dist', 'icons', 'generated');
+  const copiedFiles = () => readdirRecursive(copied());
+
+  it('copies exactly the asset files the hash covers, into a cleared folder', () => {
     writeFileSync(join(generated, '.DS_Store'), 'finder');
+    mkdirSync(join(generated, 'node_modules'));
+    writeFileSync(join(generated, 'node_modules', 'x.json'), '{}');
+    mkdirSync(join(packageDir, 'dist', 'icons', 'generated'), { recursive: true });
+    writeFileSync(join(copied(), 'old.json'), 'left from an earlier build');
+    copyAssets(packageDir);
+    expect(copiedFiles()).toEqual(['builtin-icons.json']);
+  });
+
+  it.runIf(links)('copies links as the files they point to and skips dangling ones', () => {
     writeFileSync(join(outside, 'extra.json'), '{}');
     symlinkSync(join(outside, 'extra.json'), join(generated, 'extra.json'));
+    symlinkSync(join(outside, 'missing.json'), join(generated, 'broken.json'));
     copyAssets(packageDir);
-    const copied = join(packageDir, 'dist', 'icons', 'generated');
-    expect(existsSync(join(copied, 'builtin-icons.json'))).toBe(true);
-    expect(existsSync(join(copied, '.DS_Store'))).toBe(false);
-    expect(lstatSync(join(copied, 'extra.json')).isSymbolicLink()).toBe(false);
+    expect(copiedFiles()).toEqual(['builtin-icons.json', 'extra.json']);
+    expect(lstatSync(join(copied(), 'extra.json')).isSymbolicLink()).toBe(false);
   });
 });
 
@@ -135,7 +179,7 @@ describe('build record', () => {
   const dist = () => join(packageDir, 'dist');
   const record = () => join(dist(), BUILD_INFO_FILE);
 
-  it('only exists once a build finished, and then names the sources it started from', () => {
+  it('only exists once a build finished, and then names the inputs it started from', () => {
     startBuildRecord(packageDir);
     expect(existsSync(record())).toBe(false);
     expect(existsSync(join(dist(), PENDING_BUILD_INFO_FILE))).toBe(true);
@@ -147,11 +191,14 @@ describe('build record', () => {
     expect(existsSync(join(dist(), PENDING_BUILD_INFO_FILE))).toBe(false);
   });
 
-  it('forgets the last record when a new build starts, so a failed build leaves none', () => {
+  it('forgets the last record and the copied assets when a new build starts', () => {
     startBuildRecord(packageDir);
+    copyAssets(packageDir);
     finishBuildRecord(packageDir);
     startBuildRecord(packageDir);
     expect(existsSync(record())).toBe(false);
+    // So a build that never copies the assets cannot pass on an earlier copy.
+    expect(existsSync(join(dist(), 'icons', 'generated'))).toBe(false);
   });
 
   it('refuses to finish a build that was never started', () => {
@@ -160,3 +207,10 @@ describe('build record', () => {
     expect(existsSync(record())).toBe(false);
   });
 });
+
+function readdirRecursive(dir: string): string[] {
+  return (readdirSync(dir, { recursive: true, withFileTypes: true }) as Dirent[])
+    .filter((entry) => !entry.isDirectory())
+    .map((entry) => relative(dir, join(entry.parentPath, entry.name)).split(sep).join('/'))
+    .sort();
+}

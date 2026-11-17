@@ -1,8 +1,8 @@
 // Node loads this file before tsc runs (scripts/record-sources.mjs, through type
 // stripping), so it must stay erasable TypeScript and import only node: modules.
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 /** File in dist/ that records which inputs a complete build was made from. */
 export const BUILD_INFO_FILE = 'build-info.json';
@@ -11,8 +11,12 @@ export const PENDING_BUILD_INFO_FILE = 'build-info.pending.json';
 /** Folders below src/ that the build copies into dist/ as they are. */
 export const ASSET_DIRS = ['icons/generated'];
 
-/** Package files that change what tsc emits; the lockfile pins the compiler. A missing one counts as absent. */
-const BUILD_SETTINGS = ['package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.build.json'];
+/**
+ * Files that change what tsc emits: the package and compiler settings, and the
+ * package file of the TypeScript compiler that is installed and so actually
+ * runs (the lockfile only says which one should be). A missing one counts as absent.
+ */
+const BUILD_SETTINGS = ['package.json', 'tsconfig.json', 'tsconfig.build.json', 'node_modules/typescript/package.json'];
 /** Folders that tsc never picks sources from. */
 const PACKAGE_FOLDERS = new Set(['node_modules', 'bower_components', 'jspm_packages']);
 
@@ -28,21 +32,26 @@ export function sourceFiles(srcDir: string): string[] {
 }
 
 /**
- * A hash over the inputs of the build in `packageDir`: package.json, the
- * lockfile, both tsconfig files, the sources and the asset folders, each with
- * its path and content. The build records it, so a test can tell whether
- * dist/ was built from the inputs it sees.
+ * A hash over the inputs of the build in `packageDir`: package.json, both
+ * tsconfig files, the installed compiler's package file, the sources and the
+ * asset folders, each with its path and content. The build records it, so a
+ * test can tell whether dist/ was built from the inputs it sees.
  */
 export function sourceHash(packageDir: string): string {
   const hash = createHash('sha256');
-  const add = (name: string, path: string) => hash.update(`${name}\0`).update(readFileSync(path)).update('\0');
-  for (const name of BUILD_SETTINGS) {
-    const path = join(packageDir, name);
+  // Each entry is its name, then "-" for a missing file or "+", the length and
+  // the content, so no content can look like another file or a missing one.
+  const add = (name: string, path: string) => {
+    hash.update(`${name}\0`);
     if (existsSync(path)) {
-      add(name, path);
+      const content = readFileSync(path);
+      hash.update(`+${content.length}\0`).update(content);
     } else {
-      hash.update(`${name}\0missing\0`);
+      hash.update('-');
     }
+  };
+  for (const name of BUILD_SETTINGS) {
+    add(name, join(packageDir, name));
   }
   const srcDir = join(packageDir, 'src');
   for (const file of sourceFiles(srcDir)) {
@@ -57,25 +66,35 @@ export function sourceHash(packageDir: string): string {
   return hash.digest('hex');
 }
 
-/** First build step: forgets the last record and notes the inputs this build starts from. */
+/**
+ * First build step: forgets the last record and the copied assets, so a build
+ * that fails or skips the copy cannot pass on an earlier one, and notes the
+ * inputs this build starts from.
+ */
 export function startBuildRecord(packageDir: string): void {
   const dist = join(packageDir, 'dist');
   rmSync(join(dist, BUILD_INFO_FILE), { force: true });
+  for (const assets of ASSET_DIRS) {
+    rmSync(join(dist, assets), { recursive: true, force: true });
+  }
   mkdirSync(dist, { recursive: true });
   writeFileSync(join(dist, PENDING_BUILD_INFO_FILE), `${JSON.stringify({ sourceHash: sourceHash(packageDir) }, null, 2)}\n`);
 }
 
 /**
- * Copies the asset folders from src/ into dist/ exactly as sourceHash sees
- * them: hidden files left out, links copied as the files they point to.
+ * Copies the asset folders from src/ into cleared folders in dist/, file by
+ * file from the same walk sourceHash uses, so dist/ holds exactly what was
+ * hashed: links copied as the files they point to, nothing hidden or stale.
  */
 export function copyAssets(packageDir: string): void {
   for (const assets of ASSET_DIRS) {
-    cpSync(join(packageDir, 'src', assets), join(packageDir, 'dist', assets), {
-      recursive: true,
-      dereference: true,
-      filter: (source) => !basename(source).startsWith('.'),
-    });
+    const from = join(packageDir, 'src', assets);
+    const to = join(packageDir, 'dist', assets);
+    rmSync(to, { recursive: true, force: true });
+    for (const file of existsSync(from) ? walk(from) : []) {
+      mkdirSync(dirname(join(to, file)), { recursive: true });
+      copyFileSync(join(from, file), join(to, file));
+    }
   }
 }
 
@@ -87,7 +106,8 @@ export function finishBuildRecord(packageDir: string): void {
 
 /**
  * Regular files below `dir`, following links. Skips hidden names, package
- * folders, dangling links, unreadable folders and link loops.
+ * folders, dangling links, link loops and, below `dir`, unreadable folders;
+ * `dir` itself must be readable.
  */
 function walk(dir: string, prefix = '', visited = new Set<string>()): string[] {
   let real: string;
@@ -95,7 +115,10 @@ function walk(dir: string, prefix = '', visited = new Set<string>()): string[] {
   try {
     real = realpathSync(dir);
     names = readdirSync(dir);
-  } catch {
+  } catch (error) {
+    if (prefix === '') {
+      throw error;
+    }
     return [];
   }
   if (visited.has(real)) {
