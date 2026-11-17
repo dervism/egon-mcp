@@ -11,6 +11,7 @@ beforeEach(() => {
   packageDir = mkdtempSync(join(tmpdir(), 'egon-dist-'));
   mkdirSync(join(packageDir, 'src'));
   mkdirSync(join(packageDir, 'dist'));
+  writeFileSync(join(packageDir, 'package.json'), '{}');
   writeFileSync(join(packageDir, 'tsconfig.json'), '{}');
   writeFileSync(join(packageDir, 'tsconfig.build.json'), '{}');
   writeFileSync(join(packageDir, 'src', 'a.ts'), 'export const a = 1;');

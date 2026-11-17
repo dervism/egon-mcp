@@ -1,11 +1,12 @@
-// Runs after tsc succeeded: copies non-TypeScript runtime assets from src/ into
-// dist/ and turns the note from record-sources.mjs into the build record.
-import { cpSync, renameSync } from 'node:fs';
+// Last build step, after tsc succeeded: copies the asset folders from src/ into
+// dist/, then marks the build complete (finishBuildRecord in src/build-info.ts).
+import { cpSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { BUILD_INFO_FILE, PENDING_BUILD_INFO_FILE } from '../dist/build-info.js';
+import { ASSET_DIRS, finishBuildRecord } from '../dist/build-info.js';
 
-const src = fileURLToPath(new URL('../src/', import.meta.url));
-const dist = fileURLToPath(new URL('../dist/', import.meta.url));
+const packageDir = fileURLToPath(new URL('../', import.meta.url));
 
-cpSync(`${src}icons/generated/`, `${dist}icons/generated/`, { recursive: true });
-renameSync(`${dist}${PENDING_BUILD_INFO_FILE}`, `${dist}${BUILD_INFO_FILE}`);
+for (const assets of ASSET_DIRS) {
+  cpSync(`${packageDir}src/${assets}/`, `${packageDir}dist/${assets}/`, { recursive: true });
+}
+finishBuildRecord(packageDir);
