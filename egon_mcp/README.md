@@ -12,7 +12,7 @@ The egon-mcp server: Node, TypeScript, the official MCP SDK over stdio, tested w
 | `npm run docs` | Builds, then regenerates the skill's [tool reference](../skills/egon-mcp-skill/references/tools.md) from the server. A test fails when the reference is out of date. |
 | `npm run generate:icons` | Writes `src/icons/generated/builtin-icons.json` (gitignored) from `modules/egon.io`. |
 
-The stdio end-to-end test in `test/stdio.e2e.test.ts` starts `dist/index.js`, which `npm test` builds first. Running Vitest directly without a build makes that test fail with a hint.
+Two tests run the built code in `dist/`, which `npm test` builds first: the stdio end-to-end test in `test/stdio.e2e.test.ts`, and the named pipe test in `src/server/workspace.test.ts`, which needs a separate process so a blocked read cannot hang the run. Running Vitest directly without a build makes them fail with a hint, and the pipe test is skipped while `dist` is older than the source.
 
 ## Code map
 

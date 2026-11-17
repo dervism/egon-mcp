@@ -83,12 +83,22 @@ describe('egon-mcp-skill', () => {
 
   it('explains only error messages the server can produce', () => {
     const section = skill.slice(skill.indexOf('## When something fails'), skill.indexOf('## References'));
-    const keys = [...section.matchAll(/^\| (`[^|]+`) \|/gm)].flatMap((row) => [...(row[1] as string).matchAll(/`([^`]+)`/g)].map((match) => match[1] as string));
-    expect(keys.length).toBeGreaterThan(5);
+    const rows = section.split('\n').filter((line) => line.startsWith('| ') && !line.startsWith('| Message contains'));
+    expect(rows.length).toBeGreaterThan(5);
+    const keys = rows.flatMap((row) => {
+      const found = [...(row.split('|')[1] ?? '').matchAll(/`([^`]+)`/g)].map((match) => match[1] as string);
+      expect(found.length, `row without a message key: ${row}`).toBeGreaterThan(0);
+      return found;
+    });
     const srcDir = fileURLToPath(new URL('../src/', import.meta.url));
+    // Comments do not count: only text the server can actually send.
     const sources = (readdirSync(srcDir, { recursive: true }) as string[])
       .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
-      .map((file) => readFileSync(join(srcDir, file), 'utf8'))
+      .map((file) =>
+        readFileSync(join(srcDir, file), 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/(^|\s)\/\/\s.*$/gm, '$1'),
+      )
       .join('\n');
     for (const key of keys) {
       expect(sources.includes(key), `no server message contains "${key}"`).toBe(true);

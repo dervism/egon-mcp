@@ -14,6 +14,7 @@ let workspace: Workspace;
 
 // The pipe test runs the built workspace in a child process; `npm test` builds first.
 const builtWorkspace = fileURLToPath(new URL('../../dist/server/workspace.js', import.meta.url));
+const sourceWorkspace = fileURLToPath(new URL('./workspace.ts', import.meta.url));
 
 const caseInsensitive = (() => {
   const dir = mkdtempSync(join(tmpdir(), 'egon-case-'));
@@ -289,8 +290,21 @@ describe('Workspace', () => {
     }
   });
 
-  it.runIf(process.platform !== 'win32')('refuses targets that are not regular files, such as named pipes', () => {
+  it('refuses targets that are not regular files, such as folders', () => {
+    mkdirSync(join(root, 'folder.egn'));
+    mkdirSync(join(root, 'folder.md'));
+    const entry = workspace.create({ title: 'T' });
+    expect(() => workspace.open('folder.egn')).toThrow(/not a regular file/);
+    expect(() => workspace.save(entry.id, { path: 'folder.md' })).toThrow(/not a regular file/);
+    expect(() => workspace.save(entry.id, { path: 'folder.md', overwrite: true })).toThrow(/not a regular file/);
+  });
+
+  it.runIf(process.platform !== 'win32')('refuses named pipes without blocking (built code)', (context) => {
     expect(existsSync(builtWorkspace), 'dist is missing; run "npm run build" or "npm test"').toBe(true);
+    if (statSync(builtWorkspace).mtimeMs < statSync(sourceWorkspace).mtimeMs) {
+      // `npm test` always builds first; a watch run after editing the source does not.
+      context.skip('dist is older than src/server/workspace.ts; run "npm run build"');
+    }
     for (const name of ['pipe.md', 'pipe.egn']) {
       execFileSync('mkfifo', [join(root, name)]);
     }
@@ -315,6 +329,7 @@ describe('Workspace', () => {
       ]));`;
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', script, root], { encoding: 'utf8', timeout: 10_000 });
     expect(result.signal, 'the workspace blocked on a named pipe').toBeNull();
+    expect(result.status, result.stderr).toBe(0);
     const messages = JSON.parse(result.stdout) as string[];
     expect(messages).toHaveLength(3);
     for (const message of messages) {

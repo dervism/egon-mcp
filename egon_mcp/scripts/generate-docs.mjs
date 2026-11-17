@@ -8,16 +8,18 @@ import { TOOL_REFERENCE_PATH, toolReferenceMarkdown } from '../dist/docs/tool-re
 import { createEgonServer } from '../dist/server/server.js';
 
 const root = mkdtempSync(join(tmpdir(), 'egon-docs-'));
-const egon = createEgonServer({ root });
-const client = new Client({ name: 'docs', version: '1.0.0' });
 let tools;
 try {
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await Promise.all([egon.server.connect(serverTransport), client.connect(clientTransport)]);
-  ({ tools } = await client.listTools());
+  const egon = createEgonServer({ root });
+  const client = new Client({ name: 'docs', version: '1.0.0' });
+  try {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([egon.server.connect(serverTransport), client.connect(clientTransport)]);
+    ({ tools } = await client.listTools());
+  } finally {
+    await Promise.allSettled([client.close(), egon.close()]);
+  }
 } finally {
-  await client.close();
-  await egon.close();
   rmSync(root, { recursive: true, force: true });
 }
 
