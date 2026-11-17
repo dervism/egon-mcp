@@ -542,6 +542,60 @@ describe('groups hold what you name', () => {
     expect(groupsOf(same)).toBe('Outer[Inner[Bike Estimate]]');
   });
 
+  it('lets a group named in members win over a group whose steps would take it in', () => {
+    const four = [...shop.slice(0, 2), { actor: 'Clerk', activity: 'orders', workObject: 'Part' }, { actor: 'Cashier', activity: 'writes', workObject: 'Invoice' }];
+    for (const groups of both({ name: 'M', steps: [3], members: ['I'] }, { name: 'O', steps: [1, 2] })) {
+      expect(groupsOf(buildStory({ title: 'T', sentences: four, groups: [{ name: 'I', steps: [1] }, ...groups] }))).toBe('M[I[Bike] Part] O[Estimate]');
+    }
+    expect(groupsOf(buildStory({ title: 'T', sentences: four, groups: [{ name: 'I', steps: [1] }, { name: 'O', steps: [1, 2] }, { name: 'M', members: ['I', 'Part'] }] }))).toBe(
+      'M[I[Bike] Part] O[Estimate]',
+    );
+  });
+
+  it('gives groups with equal or overlapping steps the same result in any order', () => {
+    const three = [...shop.slice(0, 2), { actor: 'Clerk', activity: 'orders', workObject: 'Part' }];
+    for (const groups of both({ name: 'One', steps: [1, 2] }, { name: 'Two', steps: [1, 2] })) {
+      expect(groupsOf(buildStory({ title: 'T', sentences: three, groups }))).toBe('Two[One[Bike Estimate]]');
+    }
+    for (const groups of both({ name: 'A', steps: [1, 2] }, { name: 'B', steps: [2, 3] })) {
+      expect(groupsOf(buildStory({ title: 'T', sentences: three, groups }))).toBe('A[Bike Estimate] B[Part]');
+    }
+    // I fits into both P and O; it stays in the first one, which takes it.
+    for (const groups of both({ name: 'P', steps: [1, 2] }, { name: 'O', steps: [1, 3] })) {
+      expect(groupsOf(buildStory({ title: 'T', sentences: three, groups: [{ name: 'I', steps: [1] }, ...groups] }))).toBe('O[Part] P[Estimate I[Bike]]');
+    }
+  });
+
+  it('says so when groups name each other in members', () => {
+    const groups = [
+      { name: 'X', members: ['Y', 'Bike'] },
+      { name: 'Y', members: ['X', 'Estimate'] },
+    ];
+    expect(() => buildStory({ title: 'T', sentences: shop, groups })).toThrow(/"X" and "Y" name each other in members/);
+    // A member that names an actor or work object is no group to wait for, even when a group has that name.
+    const clash = buildStory({ title: 'T', sentences: shop, groups: [{ name: 'Bike', members: ['Office'] }, { name: 'Office', members: ['Bike', 'Mechanic'] }] });
+    expect(groupsOf(clash)).toBe('Bike[Office[Bike Mechanic]]');
+  });
+
+  it('puts a group whose steps pick nothing at the top level, also when the inner group was drawn first', () => {
+    const story = buildStory({ title: 'T', sentences: shop, groups: [{ name: 'Intake', steps: [1, 2] }] });
+    groupBySteps(story, { name: 'Repair', steps: [3], members: ['Bike'] });
+    expect(groupsOf(story)).toBe('Intake[Estimate] Repair[Bike]');
+  });
+
+  it('gives a hint when a group by steps takes all its host holds', () => {
+    const later = [...shop, { actor: 'Mechanic', activity: 'returns', workObject: 'Bike', reuseWorkObject: true, to: [{ activity: 'to', actor: 'Customer' }] }];
+    const story = buildStory({ title: 'T', sentences: later, groups: [{ name: 'Intake', steps: [1, 2] }] });
+    const { hint } = groupBySteps(story, { name: 'Workshop', steps: [1, 2, 3] });
+    expect(hint).toMatch(/"Workshop" took everything "Intake" held.*name "Intake" in members/);
+    expect(groupBySteps(story, { name: 'Again', steps: [1, 2], members: ['Workshop'] }).hint).toBeUndefined();
+  });
+
+  it('refuses members together with a size, since the box fits around them', () => {
+    const story = buildStory({ title: 'T', sentences: shop });
+    expect(() => story.addGroup({ name: 'G', members: ['Estimate'], width: 5000 })).toThrow(/not both/);
+  });
+
   it('puts a group whose picks all stay in other groups into the group around them', () => {
     const story = buildStory({
       title: 'T',
@@ -560,10 +614,12 @@ describe('groups hold what you name', () => {
     });
     const { left } = groupBySteps(story, { name: 'New', steps: [1, 2], members: ['Invoice'] });
     expect(groupsOf(story)).toBe('W[A[Bike Part] B[Estimate Receipt] New[Invoice]]');
-    expect(left).toEqual([
-      { workObject: 'Bike', group: 'A' },
-      { workObject: 'Estimate', group: 'B' },
+    expect(left.map(({ workObject, group }) => [workObject, group])).toEqual([
+      ['Bike', 'A'],
+      ['Estimate', 'B'],
     ]);
+    const bike = story.elements().find((element) => element.name === 'Bike')!;
+    expect(left[0]).toEqual({ workObject: 'Bike', id: bike.id, group: 'A', groupId: bike['parent'] });
   });
 
   it('reads a name next to steps that use none of its copies as every copy', () => {
@@ -592,7 +648,7 @@ describe('groups hold what you name', () => {
     // The same with add_group, the receiving group drawn first.
     const story = buildStory({ title: 'T', sentences: parts, groups: [{ name: 'Purchasing', steps: [3, 4], members: ['Part request'] }] });
     // The result says what the steps left in other groups.
-    expect(groupBySteps(story, { name: 'Intake', steps: [1, 2] }).left).toEqual([{ workObject: 'Part request', group: 'Purchasing' }]);
+    expect(groupBySteps(story, { name: 'Intake', steps: [1, 2] }).left.map(({ workObject, group }) => [workObject, group])).toEqual([['Part request', 'Purchasing']]);
     expect(groupsOf(story)).toBe('Intake[Bike] Purchasing[Part Part request]');
   });
 

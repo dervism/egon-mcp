@@ -102,24 +102,48 @@ export function buildStory(input: BuildStoryInput): Story {
     input.sentences.forEach((sentence, index) => {
       withContext(`sentence ${index + 1}`, () => addSentence(story, sentence));
     });
-    // The order of the list does not matter. A group named in another group's members is added
-    // before it; otherwise groups by steps come first, fewer steps before more, and each takes in
-    // the groups by steps added before it whose steps are all among its own.
+    // The order of the list does not matter. Groups by steps come first, fewer steps before more,
+    // then by their step numbers and names, and a group named in another group's members is added
+    // before it. A group by steps takes in the groups by steps added before it whose steps are all
+    // among its own, unless another group names them in members or they already sit in a group.
     const groups = input.groups ?? [];
     const names = new Set(groups.map((group) => group.name));
-    const size = (group: (typeof groups)[number]) => group.steps?.length ?? Number.POSITIVE_INFINITY;
-    const pending = [...groups].sort((a, b) => size(a) - size(b));
+    const namedByOthers = new Set(groups.flatMap((group) => (group.members ?? []).filter((ref) => ref !== group.name)));
+    // A member that names an actor or work object is no group to wait for.
+    const isThing = (ref: string) => story.elements().some((element) => (element.name === ref || element.id === ref) && (isActor(element) || isWorkObject(element)));
+    const order = (a: (typeof groups)[number], b: (typeof groups)[number]) => {
+      const steps = (group: (typeof groups)[number]) => group.steps ?? [];
+      const size = (group: (typeof groups)[number]) => (group.steps?.length ? group.steps.length : Number.POSITIVE_INFINITY);
+      const byNumbers = steps(a).findIndex((number, index) => number !== steps(b)[index]);
+      return (
+        size(a) - size(b) ||
+        (byNumbers === -1 ? 0 : (steps(a)[byNumbers] as number) - (steps(b)[byNumbers] ?? Number.POSITIVE_INFINITY)) ||
+        a.name.localeCompare(b.name)
+      );
+    };
+    const pending = [...groups].sort(order);
     const added: { name: string; steps: number[] | undefined; id: string }[] = [];
     while (pending.length > 0) {
-      const ready = pending.findIndex((group) =>
-        (group.members ?? []).every((ref) => ref === group.name || !names.has(ref) || added.some((other) => other.name === ref)),
-      );
-      const [group] = pending.splice(Math.max(ready, 0), 1) as [(typeof groups)[number]];
+      const waitsFor = (group: (typeof groups)[number]) =>
+        (group.members ?? []).filter((ref) => ref !== group.name && names.has(ref) && !isThing(ref) && !added.some((other) => other.name === ref));
+      const ready = pending.findIndex((group) => waitsFor(group).length === 0);
+      if (ready === -1) {
+        const stuck = pending.map((group) => `"${group.name}"`);
+        throw new StoryError(
+          `The groups ${stuck.slice(0, -1).join(', ')} and ${stuck.at(-1) as string} name each other in members, so none of them can be added first. Leave one of the names out.`,
+        );
+      }
+      const [group] = pending.splice(ready, 1) as [(typeof groups)[number]];
       const steps = group.steps?.length ? group.steps : undefined;
       if (!group.members?.length && !steps) {
         throw new StoryError(`The group "${group.name}" needs members or steps.`);
       }
-      const inner = steps ? added.filter((other) => other.steps?.every((number) => steps.includes(number))).map((other) => other.id) : [];
+      const inner = steps
+        ? added
+            .filter((other) => other.steps?.every((number) => steps.includes(number)))
+            .filter((other) => !namedByOthers.has(other.name) && story.get(other.id)?.['parent'] === undefined)
+            .map((other) => other.id)
+        : [];
       const created = withContext(`group "${group.name}"`, () =>
         steps
           ? groupBySteps(story, { name: group.name, steps, members: [...(group.members ?? []), ...inner], color: group.color }).group
@@ -284,21 +308,23 @@ function namedForSteps(story: Story, refs: string[], steps: number[]): string[] 
   });
 }
 
-/** A work object that steps picked but left in another group, by name. */
+/** A work object that steps picked but left in another group. */
 export interface LeftWorkObject {
   workObject: string;
+  id: string;
   group: string;
+  groupId: string;
 }
 
 /**
  * add_group with steps: their work objects, as stepPicks finds them, and any
  * members named besides. Also returns the picked work objects that stayed in
- * other groups.
+ * other groups, and a hint when the new group took all its host holds.
  */
 export function groupBySteps(
   story: Story,
   input: { name: string; steps: number[]; members?: string[] | undefined; color?: string | undefined },
-): { group: GroupElement; left: LeftWorkObject[] } {
+): { group: GroupElement; left: LeftWorkObject[]; hint?: string } {
   return story.transaction(() => {
     const named = namedForSteps(story, input.members ?? [], input.steps);
     const { picked, only, reached } = stepPicks(story, input.steps);
@@ -308,14 +334,23 @@ export function groupBySteps(
     const group = story.addGroup({ name: input.name, members: named, fromSteps: { picked, only }, ...(input.color ? { color: input.color } : {}) });
     const elements = story.elements();
     const byId = new Map(elements.map((element) => [element.id, element]));
-    const nameOf = (id: unknown) => {
-      const element = typeof id === 'string' ? byId.get(id) : undefined;
-      return element?.name || String(id);
-    };
+    const nameOf = (id: string) => byId.get(id)?.name || id;
     const left = picked
       .filter((id) => !groupAncestors(byId.get(id), byId).includes(group.id))
-      .map((id) => ({ workObject: nameOf(id), group: nameOf(byId.get(id)?.['parent']) }));
-    return { group, left };
+      .map((id) => {
+        const home = byId.get(id)?.['parent'] as string;
+        return { workObject: nameOf(id), id, group: nameOf(home), groupId: home };
+      });
+    // The new group sits in a group that now holds nothing else: the agent may have meant it the other way round.
+    const host = group['parent'];
+    const elsewhere =
+      typeof host === 'string' &&
+      elements.some((element) => (isActor(element) || isWorkObject(element)) && groupAncestors(element, byId).includes(host) && !groupAncestors(element, byId).includes(group.id));
+    const hint =
+      typeof host === 'string' && !elsewhere
+        ? `"${input.name}" took everything "${nameOf(host)}" held, so it sits inside it. To put "${nameOf(host)}" inside "${input.name}" instead, name "${nameOf(host)}" in members.`
+        : undefined;
+    return { group, left, ...(hint ? { hint } : {}) };
   });
 }
 

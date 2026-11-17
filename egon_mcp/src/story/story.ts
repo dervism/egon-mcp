@@ -249,7 +249,7 @@ export class Story {
 
   private applyAddGroup(input: GroupInput): GroupElement {
     const given = this.givenPosition(input);
-    if (given && (input.members?.length || input.fromSteps)) {
+    if ((given || input.width !== undefined || input.height !== undefined) && (input.members?.length || input.fromSteps)) {
       throw new StoryError(
         'Give members to fit the box around them, or x and y to draw it where it should go and take in what it covers, as in Egon; not both.',
       );

@@ -336,12 +336,19 @@ describe('egon-mcp server', () => {
         { actor: 'Clerk', activity: 'reads', workObject: 'Part request', reuseWorkObject: true },
       ],
     });
-    await ok('add_group', { storyId: 'shared', name: 'Intake', steps: [1, 2] });
+    const added = await ok('add_group', { storyId: 'shared', name: 'Intake', steps: [1, 2] });
+    expect(added['leftInOtherGroups']).toBeUndefined();
     const purchasing = await call('add_group', { storyId: 'shared', name: 'Purchasing', steps: [3] });
     expect(purchasing.content[0]?.text).toMatch(/Step 3 has no work object of its own/);
     const story = await ok('get_story', { storyId: 'shared' });
     const intake = (story['groups'] as { name: string; members: string[] }[]).find((group) => group.name === 'Intake');
     expect(intake?.members.sort()).toEqual(['Bike', 'Part request']);
+    // Bike moves to Stock with Mechanic; grouping steps 1 to 3 takes Intake whole and leaves Bike in Stock.
+    await ok('add_group', { storyId: 'shared', name: 'Stock', members: ['Bike', 'Mechanic'] });
+    const again = await ok('add_group', { storyId: 'shared', name: 'Front', steps: [1, 2, 3] });
+    expect(again['leftInOtherGroups']).toEqual([expect.objectContaining({ workObject: 'Bike', group: 'Stock' })]);
+    const members = await call('add_group', { storyId: 'shared', name: 'Sized', members: ['Bike'], height: 900 });
+    expect(members.content[0]?.text).toMatch(/not both/);
   });
 
   it('reports a refused grouping by steps as an error', async () => {
