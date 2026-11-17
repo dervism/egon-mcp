@@ -485,6 +485,39 @@ describe('autoLayout', () => {
     expectStableAfterReopening(story);
   });
 
+  it('gives the notes of an actor beside a nested group rows of their own', () => {
+    const long = 'Comes in twice a year with the whole family fleet, always asks for the same mechanic, and pays by invoice at the end of the month.';
+    const story = buildStory({
+      title: 'Nested',
+      sentences: [
+        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'offers', workObject: 'Estimate', to: [{ activity: 'to', actor: 'Customer' }] },
+        { actor: 'Apprentice', activity: 'cleans', workObject: 'Bike' },
+      ],
+      groups: [
+        { name: 'Workshop', steps: [1, 2, 3] },
+        { name: 'Intake', steps: [1, 2] },
+      ],
+      annotations: [
+        { text: long, attachTo: 'Customer' },
+        { text: 'Regular since 2019', attachTo: 'Customer' },
+      ],
+    });
+    const elements = story.elements();
+    const notes = elements.filter((element) => element.type === 'domainStory:textAnnotation').map((note) => boundsOf(note as ShapeElement));
+    const others = elements.filter((element) => element.type !== 'domainStory:textAnnotation' && typeof element['x'] === 'number').map((element) => boundsOf(element as ShapeElement));
+    for (const note of notes) {
+      for (const other of others) {
+        expect(overlaps(note, other), JSON.stringify([note, other])).toBe(false);
+      }
+    }
+    expect(overlaps(notes[0] as Bounds, notes[1] as Bounds)).toBe(false);
+    const before = JSON.stringify(story.toDocument());
+    autoLayout(story);
+    expect(JSON.stringify(story.toDocument())).toBe(before);
+    expectStableAfterReopening(story);
+  });
+
   it('lays out a file whose groups named each other as parent', () => {
     const text = JSON.stringify({
       domain: { name: 'default', actors: {}, workObjects: {} },

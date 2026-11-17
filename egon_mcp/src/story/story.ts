@@ -291,12 +291,15 @@ export class Story {
     for (const member of members) {
       member['parent'] = group.id;
     }
-    if (fitted) {
-      const around = shared ? boundsOf(byId.get(shared) as ShapeElement) : undefined;
-      if (shared && around && around.width * around.height > bounds.width * bounds.height) {
-        group['parent'] = shared;
+    if (fitted && shared) {
+      const around = boundsOf(byId.get(shared) as ShapeElement);
+      if (around.width * around.height <= bounds.width * bounds.height) {
+        throw new StoryError(
+          `The new group would take all members of "${byId.get(shared)?.name || shared}" without fitting inside it. Pass "${byId.get(shared)?.name || shared}" itself as a member, or rename that group.`,
+        );
       }
-    } else {
+      group['parent'] = shared;
+    } else if (!fitted) {
       // A box drawn with coordinates goes where it lies and takes in what it covers, as in Egon.
       joinGroupAt(group, this.doc.elements);
       takeIn(group, this.doc.elements);

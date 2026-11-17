@@ -236,7 +236,7 @@ Closes gaps in the step numbers (1, 2, 3 ...) while keeping their order and para
 
 ## auto_layout
 
-Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, puts an actor whose arrows all lead into groups beside the group it works in most (outside the box), refits the group boxes, moves other annotations next to their element and moves groups without members to the end. A note goes into the group of the element it is attached to, a note on a group into that group, and notes on nothing go after the story, so the story reopens with the same groups. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.
+Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, puts an actor whose arrows all lead into groups beside the group it works in most (outside the box, its notes below it, narrowed to fit), refits the group boxes, moves other annotations next to their element and moves groups without members to the end. A note goes into the group of the element it is attached to, a note on a group into that group, and notes on nothing go after the story, so the story reopens with the same groups. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

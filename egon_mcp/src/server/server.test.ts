@@ -314,6 +314,13 @@ describe('egon-mcp server', () => {
     expect(ordering?.members).toEqual(['Order']);
   });
 
+  it('reports a refused grouping by steps as an error', async () => {
+    await ok('build_story', pizza);
+    const refused = await call('add_group', { storyId: 'order-pizza', name: 'Nowhere', steps: [9] });
+    expect(refused.isError).toBe(true);
+    expect(refused.content[0]?.text).toMatch(/no step 9/);
+  });
+
   it('tells agents how shapes get into a group', async () => {
     const { tools } = await client.listTools();
     const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';

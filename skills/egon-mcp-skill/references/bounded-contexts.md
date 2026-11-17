@@ -45,7 +45,7 @@ Questions that bring the indicators out in a workshop:
 
 ## Step 3: draw the subdomains in Egon
 
-- Mark each subdomain with `add_group` and `steps`: the step numbers of its sentences, as `narrate_story` shows them. Their work objects go into the group and their actors stay outside, because an actor usually takes part in several subdomains (the mechanic in intake, purchasing and repairing). `build_story` takes `steps` in `groups` too. Every sentence needs a work object of its own for this, which `add_sentence` and `build_story` draw anyway; a work object that also serves a sentence outside the steps is refused, so tell that sentence again without `reuseWorkObject`.
+- Mark each subdomain with `add_group` and `steps`: the step numbers of its sentences, as `narrate_story` shows them. Their work objects go into the group and their actors stay outside, because an actor usually takes part in several subdomains (the mechanic in intake, purchasing and repairing). `build_story` takes `steps` in `groups` too. This needs a work object of its own in every sentence, which stories told with egon-mcp have. A work object that also serves a sentence outside the steps, as in some stories drawn in Egon, is refused: group that part by `members` (ids from `get_story`) and decide which group the shared work object belongs to. Inner and outer groups may come in any order; a group whose work objects all belong to the new steps goes into the new group whole.
 - Name a group after the work done in it, with a noun made from a verb: "Repair intake", "Parts purchasing", "Repairing", "Checkout", "Risk assessment". Do not name it after a work object or an actor ("Bike", "Mechanic").
 - Write the indicators you relied on as annotations on the work objects where they show ("Every Friday, for all open part requests" on the parts order shows a different trigger).
 - Run `auto_layout`. It draws one block per group. An actor outside every group whose arrows all lead into groups stands beside the group it works in most, outside the box; other actors stay in the rows above. It is a first arrangement: when long arrows cross other shapes, tidy the picture in Egon.
@@ -116,12 +116,11 @@ The map for the bicycle shop, as text next to the stories:
 
 | Upstream | Downstream | Relationship | Why |
 |---|---|---|---|
-| Purchasing | Workshop | Customer/supplier | The workshop depends on what purchasing decides. As the supplier, purchasing takes part requests in the workshop's terms and translates them into articles itself (example 11). |
-| Supplier portal (external) | Purchasing | Anticorruption layer | Purchasing cannot change the portal; it translates the supplier's catalogue so its own model stays clean. |
+| Purchasing | Workshop | Customer/supplier | The workshop depends on what purchasing decides. As the supplier, purchasing takes part requests in the workshop's terms ("brake pads for this bike") and works out the articles itself. |
+| Supplier (external) | Purchasing | Anticorruption layer | Purchasing cannot change the supplier's catalogue; it translates article numbers and prices so its own model stays clean. |
 | Workshop | Checkout | Customer/supplier | Checkout bills what the repair report says, and the workshop keeps checkout's needs in mind. |
-| Purchasing | Checkout | Conformist | Checkout takes the purchase price of a part as purchasing reports it (example 11). |
 
-That is the map today, with checkout built in-house. In the target map checkout is a bought product: the shop cannot change it, so it becomes upstream of the workshop and purchasing, and both put an anticorruption layer in front of it, so the product's terms stay out of their models.
+That is the map of example 2, the shop as it works today. In the target design of example 11, purchasing also reports the purchase price of each part to checkout, and checkout is a bought product. The shop cannot change that product, so it becomes upstream of the workshop and purchasing, and both put an anticorruption layer in front of it, so the product's terms stay out of their models.
 
 Draw the map as it is today first, then the map you aim for, and compare them. Keep each map small and focused on one question.
 

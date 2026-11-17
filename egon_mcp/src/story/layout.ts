@@ -143,6 +143,13 @@ function layOut(story: Story): void {
   for (const id of beside.keys()) {
     nodeIds.delete(id);
   }
+  // Notes on those actors go below them in the same column, a row each.
+  const besideNotes = new Map<string, string[]>();
+  for (const [noteId, anchor] of [...anchors].sort((a, b) => compareIds(a[0], b[0]))) {
+    if (beside.has(anchor.id) && !inGroup(byId.get(noteId) as StoryElement)) {
+      besideNotes.set(anchor.id, [...(besideNotes.get(anchor.id) ?? []), noteId]);
+    }
+  }
 
   for (const step of steps) {
     let previous: Cell | undefined;
@@ -246,14 +253,18 @@ function layOut(story: Story): void {
       emptyGroups.push(group.id);
       continue;
     }
-    actors.forEach((id, index) => take(id, { col: 0, row: blockRow + index }));
+    let besideRow = blockRow;
+    for (const id of [...actors.flatMap((actor) => [actor, ...(besideNotes.get(actor) ?? [])])]) {
+      take(id, { col: 0, row: besideRow });
+      besideRow += 1;
+    }
     const end = placeRows(rows, blockRow, firstCol);
-    const bottom = Math.max(end, blockRow + actors.length);
+    const bottom = Math.max(end, besideRow);
     blockRow = bottom + (bottom === end && rows.at(-1)?.ids.length === 0 ? 0 : 1);
   }
   // Groups without members get rows of their own at the very end.
   for (const id of emptyGroups) {
-    blockRow = placeRows([{ ids: [id], height: span(id).rows }, gap], blockRow);
+    blockRow = placeRows([{ ids: [id], height: span(id).rows }, gap], blockRow, beside.size > 0 ? 1 : 0);
   }
 
   for (const [id, cell] of placed) {
@@ -273,8 +284,19 @@ function layOut(story: Story): void {
     }
   }
 
-  placeAnnotations(story, new Set(beside.keys()));
+  const notesBeside = new Set([...besideNotes.values()].flat());
+  placeAnnotations(story, notesBeside);
   refitGroups(story);
+  // Narrow the notes beside a group to the room left of its box, now that the box has its size.
+  for (const [actor, notes] of besideNotes) {
+    const box = boundsOf(story.get(beside.get(actor) as string) as ShapeElement);
+    for (const noteId of notes) {
+      const note = story.get(noteId) as ShapeElement;
+      const width = Math.max(80, Math.min(boundsOf(note).width, box.x - 20 - note.x));
+      const lines = wrap(String(note['text'] ?? ''), Math.max(10, Math.floor(width / 6.5))).length;
+      story.setBounds(noteId, { width, height: Math.max(30, 14 + lines * 17) });
+    }
+  }
   story.rerouteAllEdges();
 }
 
@@ -293,11 +315,10 @@ function refitGroups(story: Story): void {
 }
 
 /**
- * Puts notes next to the actor or work object they are attached to. Next to an
- * actor that stands beside a group there is no room before the box, so its
- * notes go below the actor, narrowed to the column, and their text wraps.
+ * Puts notes next to the actor or work object they are attached to. Notes of
+ * an actor that stands beside a group have rows of their own and are skipped.
  */
-function placeAnnotations(story: Story, besideGroup: Set<string>): void {
+function placeAnnotations(story: Story, skip: Set<string>): void {
   const elements = story.elements();
   const byId = new Map(elements.map((element) => [element.id, element]));
   for (const [noteId, anchor] of noteAnchors(elements)) {
@@ -309,13 +330,10 @@ function placeAnnotations(story: Story, besideGroup: Set<string>): void {
     if (groupAncestors(annotation, byId).length > 0) {
       continue;
     }
-    const bounds = boundsOf(anchor as unknown as ShapeElement);
-    if (besideGroup.has(anchor.id)) {
-      const width = Math.min(boundsOf(annotation as ShapeElement).width, CELL_WIDTH - 60);
-      const lines = wrap(String(annotation['text'] ?? ''), Math.max(10, Math.floor(width / 6.5))).length;
-      story.setBounds(annotation.id, { x: bounds.x - 10, y: bounds.y + bounds.height + 30, width, height: Math.max(30, 14 + lines * 17) });
+    if (skip.has(noteId)) {
       continue;
     }
+    const bounds = boundsOf(anchor as unknown as ShapeElement);
     story.setBounds(annotation.id, { x: bounds.x + bounds.width + 20, y: Math.max(0, bounds.y - 45) });
   }
 }

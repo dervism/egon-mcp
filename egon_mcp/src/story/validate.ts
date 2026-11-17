@@ -94,7 +94,8 @@ function checkGroups(doc: StoryDocument, byId: Map<string, StoryElement>, add: A
       }
     }
   }
-  // A smaller group whose corner lies in a larger group's box goes into it when the file is opened.
+  // A smaller group whose corner lies in a larger group's box looks like part of it, and goes into it
+  // when the file is opened unless it already sits in another larger group.
   const area = (group: ShapeElement) => boundsOf(group).width * boundsOf(group).height;
   for (const group of groups) {
     for (const other of groups) {

@@ -348,7 +348,7 @@ The message-flow variant (after Nick Tune's Domain Message Flow Modeling) shows 
   "annotations": [
     { "text": "Repair id, what the part does, which bike it is for", "attachTo": "Part requested" },
     { "text": "Article number, quantity, delivery address", "attachTo": "Order articles" },
-    { "text": "Repair id, article number, purchase price", "attachTo": "Part received" }
+    { "text": "Repair id, the part as the workshop asked for it, purchase price", "attachTo": "Part received" }
   ]
 }
 ```

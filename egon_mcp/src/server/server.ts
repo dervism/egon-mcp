@@ -7,7 +7,7 @@ import { IconCatalog } from '../icons/catalog.js';
 import { renderStorySvg } from '../render/svg.js';
 import { autoLayout } from '../story/layout.js';
 import { narrate, narrativeMarkdown } from '../story/narrate.js';
-import { addSentence, buildStory, workObjectsOfSteps } from '../story/sentences.js';
+import { addSentence, buildStory, membersOfSteps } from '../story/sentences.js';
 import { Story, StoryError } from '../story/story.js';
 import { validateStory } from '../story/validate.js';
 import { describeStory, summarizeEntry } from './describe.js';
@@ -88,7 +88,7 @@ const steps = z
     'Step numbers as narrate_story shows them (parallel sentences share one): the work objects of those sentences go into the group and their actors stay outside, the usual way to mark a subdomain. A work object that also serves a sentence outside these steps is refused.',
   );
 const groupSpec = z.object({
-  name: z.string(),
+  name: z.string().describe('Label of the box; every group needs members or steps.'),
   members: z.array(z.string()).optional().describe('Names or ids of the actors and work objects inside the group.'),
   steps: steps.optional(),
   color: color.optional(),
@@ -443,7 +443,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
         ...edit(id, (entry) =>
           entry.story.addGroup({
             name,
-            ...(members || numbers ? { members: [...(members ?? []), ...workObjectsOfSteps(entry.story, numbers ?? [])] } : {}),
+            ...(members || numbers ? { members: [...(members ?? []), ...(numbers ? membersOfSteps(entry.story, numbers) : [])] } : {}),
             ...(picked ? { color: picked } : {}),
             ...(left !== undefined ? { x: left } : {}),
             ...(top !== undefined ? { y: top } : {}),
@@ -539,7 +539,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     'auto_layout',
     {
       title: 'Auto layout',
-      description: 'Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, puts an actor whose arrows all lead into groups beside the group it works in most (outside the box), refits the group boxes, moves other annotations next to their element and moves groups without members to the end. A note goes into the group of the element it is attached to, a note on a group into that group, and notes on nothing go after the story, so the story reopens with the same groups. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.',
+      description: 'Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, puts an actor whose arrows all lead into groups beside the group it works in most (outside the box, its notes below it, narrowed to fit), refits the group boxes, moves other annotations next to their element and moves groups without members to the end. A note goes into the group of the element it is attached to, a note on a group into that group, and notes on nothing go after the story, so the story reopens with the same groups. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.',
       inputSchema: { storyId },
       annotations: { idempotentHint: true },
     },

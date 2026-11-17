@@ -1,4 +1,4 @@
-import { compareIds, groupAncestors, iconNameOf, isActivity, isActor, isWorkObject, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { compareIds, groupAncestors, iconNameOf, isGroup, isActivity, isActor, isWorkObject, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { IconCatalog } from '../icons/catalog.js';
 import { autoLayout } from './layout.js';
 import { narrate } from './narrate.js';
@@ -108,7 +108,7 @@ export function buildStory(input: BuildStoryInput): Story {
       withContext(`group "${group.name}"`, () =>
         story.addGroup({
           name: group.name,
-          members: [...(group.members ?? []), ...(group.steps ? workObjectsOfSteps(story, group.steps) : [])],
+          members: [...(group.members ?? []), ...(group.steps ? membersOfSteps(story, group.steps) : [])],
           ...(group.color ? { color: group.color } : {}),
         }),
       );
@@ -209,15 +209,17 @@ function shapeInput(spec: ShapeSpec) {
 }
 
 /**
- * The ids of the work objects in the sentences with these step numbers, the
- * second work object of a sentence included. Grouping these and not the
- * actors is how a coarse story is cut into subdomains: an actor often takes
- * part in several of them.
+ * The members for a group made from the sentences with these step numbers:
+ * their work objects, the second work object of a sentence included, but
+ * never their actors, which usually take part in several subdomains. A group
+ * whose work objects all belong to these steps goes in whole, so inner groups
+ * may be drawn before outer ones.
  */
-export function workObjectsOfSteps(story: Story, steps: number[]): string[] {
+export function membersOfSteps(story: Story, steps: number[]): string[] {
   const doc = story.toDocument();
   const byId = new Map(doc.elements.map((element) => [element.id, element]));
   const narrative = narrate(doc);
+  const nameOf = (id: string) => (byId.get(id) as StoryElement).name || id;
   // The steps each work object takes part in, onward arrows included.
   const stepsOf = new Map<string, number[]>();
   for (const step of narrative) {
@@ -242,26 +244,45 @@ export function workObjectsOfSteps(story: Story, steps: number[]): string[] {
       }
     }
   }
-  const nameOf = (id: string) => (byId.get(id) as StoryElement).name;
   // A work object shared with a sentence outside these steps cannot be in two groups.
   for (const id of ids) {
     const others = (stepsOf.get(id) ?? []).filter((number) => !steps.includes(number));
     if (others.length > 0) {
       throw new StoryError(
-        `"${nameOf(id)}" in step ${stepOf.get(id)} also belongs to step ${others.join(', ')}, so it cannot go into a group of these steps alone. Give each sentence a work object of its own (add the sentence without reuseWorkObject), or use members.`,
+        `"${nameOf(id)}" in step ${stepOf.get(id)} is used by ${others.length > 1 ? 'steps' : 'step'} ${others.join(', ')} too, so it cannot go into a group of these steps alone. Group by members (ids from get_story) and choose the group it belongs to.`,
       );
     }
   }
-  // Work objects already in a group: fine when all of them are in the same one, which then holds the new group.
-  const homes = ids.map((id) => groupAncestors(byId.get(id), byId)[0]);
-  if (new Set(homes).size > 1) {
-    const index = homes.findIndex((home) => home !== undefined);
-    const id = ids[index] as string;
+  // An existing group whose work objects all belong to these steps goes in whole, outermost first.
+  const workObjectsIn = (groupId: string): string[] =>
+    doc.elements.flatMap((element) =>
+      element['parent'] !== groupId ? [] : isGroup(element) ? workObjectsIn(element.id) : isWorkObject(element) ? [element.id] : [],
+    );
+  const members: string[] = [];
+  for (const id of ids) {
+    const whole = groupAncestors(byId.get(id), byId)
+      .filter((groupId) => workObjectsIn(groupId).every((inside) => ids.includes(inside)))
+      .at(-1);
+    const member = whole ?? id;
+    if (!members.includes(member)) {
+      members.push(member);
+    }
+  }
+  if (members.length === 1 && isGroup(byId.get(members[0] as string) as StoryElement)) {
     throw new StoryError(
-      `"${nameOf(id)}" in step ${stepOf.get(id)} is already in the group "${nameOf(homes[index] as string)}". Group by members instead, or remove that group first.`,
+      `${steps.length > 1 ? 'Steps' : 'Step'} ${steps.join(', ')} ${steps.length > 1 ? 'are' : 'is'} already the group "${nameOf(members[0] as string)}". Rename it with update_element, or choose other steps.`,
     );
   }
-  return ids;
+  // What is left must not be spread over other groups; all in one group is fine, which then holds the new group.
+  const homes = members.map((id) => groupAncestors(byId.get(id), byId)[0]);
+  if (new Set(homes).size > 1) {
+    const index = homes.findIndex((home) => home !== undefined);
+    const id = members[index] as string;
+    throw new StoryError(
+      `"${nameOf(id)}"${stepOf.has(id) ? ` in step ${stepOf.get(id)}` : ''} is already in the group "${nameOf(homes[index] as string)}". Add the outer group first, or group by members instead.`,
+    );
+  }
+  return members;
 }
 
 function withContext<T>(context: string, action: () => T): T {
