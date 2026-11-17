@@ -30,32 +30,31 @@ export function readErrorReason(error: unknown): string {
 }
 
 /**
- * Whether an error comes from the file system rather than from a programming
- * mistake. System errors name the system call they came from (EACCES, ELOOP,
- * and UNKNOWN for Windows errors libuv has no name for); argument errors such
- * as ERR_INVALID_ARG_VALUE do not.
+ * Whether an error is a mistake in the call itself, such as a NUL in a path
+ * (ERR_INVALID_ARG_VALUE), which no change to the files can fix. Node throws
+ * those as TypeErrors; file system, data and environment problems (ENOENT,
+ * ERR_STRING_TOO_LONG, ERR_ACCESS_DENIED under --permission) are plain Errors.
  */
-export function isFileSystemError(error: unknown): boolean {
-  const { code, syscall } = (error ?? {}) as NodeJS.ErrnoException;
-  return typeof syscall === 'string' && !String(code).startsWith('ERR_');
+export function isArgumentError(error: unknown): boolean {
+  return error instanceof TypeError;
 }
 
-/** Like statSync, but undefined for file system errors (a missing or unreadable path); other errors pass on. */
+/** Like statSync, but undefined for a path it cannot look at; argument errors pass on. */
 function statIfPossible(path: string) {
   try {
     return statSync(path, { throwIfNoEntry: false });
   } catch (error) {
-    if (isFileSystemError(error)) {
-      return undefined;
+    if (isArgumentError(error)) {
+      throw error;
     }
-    throw error;
+    return undefined;
   }
 }
 
 /**
  * The closest existing ancestor of `path` if it is a file instead of a folder.
- * A folder it cannot look into counts as no file in the way. Errors that are
- * not file system errors, such as a NUL in the path, pass on.
+ * A folder it cannot look into counts as no file in the way. Argument errors,
+ * such as a NUL in the path, pass on.
  */
 export function blockingAncestor(path: string): string | undefined {
   for (let dir = dirname(path); dir !== dirname(dir); dir = dirname(dir)) {
@@ -71,8 +70,8 @@ const ICON_DATA_FIX = `${ICON_FIX} in egon_mcp (needs the egon.io submodule).`;
 
 /**
  * The error to report when the icon data at `path` could not be read. A file
- * standing where a folder should be shows as ENOTDIR on POSIX and as a missing
- * path on Windows; both get the same message, which names it.
+ * standing where a folder above it should be shows as ENOTDIR on POSIX and as
+ * a missing path on Windows; both get the same message, which names that file.
  */
 export function iconReadError(path: string, error: unknown): Error {
   const { code } = (error ?? {}) as NodeJS.ErrnoException;
@@ -116,8 +115,8 @@ export class IconCatalog {
     try {
       content = readFileSync(file, 'utf8');
     } catch (error) {
-      // A programming error, such as a NUL in the path, is not a data problem: pass it on.
-      throw isFileSystemError(error) ? iconReadError(path, error) : error;
+      // An argument error, such as a NUL in the path, is not a data problem: pass it on.
+      throw isArgumentError(error) ? error : iconReadError(path, error);
     }
     if (!isIconList(content)) {
       throw new Error(`Built-in icon data ${path} is not usable; ${ICON_DATA_FIX}`);

@@ -1,9 +1,16 @@
+import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { getSystemErrorMap } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { blockingAncestor, DEFAULT_ICON_NAMES, IconCatalog, iconReadError, isFileSystemError, readErrorReason } from './catalog.js';
+import { BUILD_HINT, distState } from '../../test/dist-check.js';
+import { blockingAncestor, DEFAULT_ICON_NAMES, IconCatalog, iconReadError, isArgumentError, readErrorReason } from './catalog.js';
+
+// The permission test runs the built module in a child process; `npm test` builds first.
+const distDir = fileURLToPath(new URL('../../dist/', import.meta.url));
+const builtCatalog = join(distDir, 'icons', 'catalog.js');
 
 describe('IconCatalog', () => {
   const catalog = IconCatalog.builtIn();
@@ -98,21 +105,52 @@ describe('IconCatalog.fromFile', () => {
     );
   });
 
-  it.runIf(process.platform !== 'win32')('never calls an existing file missing when it is read as a folder', () => {
+  it.runIf(process.platform !== 'win32')('reports ENOTDIR, not missing, for an existing file read as a folder (POSIX)', () => {
     const file = join(dir, 'builtin-icons.json');
     writeFileSync(file, '[]');
     expect(() => IconCatalog.fromFile(new URL(`${pathToFileURL(file).href}/`))).toThrow(unreadable('ENOTDIR', 'not a directory'));
   });
 
-  it('passes on programming errors, such as a NUL in the path, unchanged', () => {
+  it('passes on argument errors, such as a NUL in the path, unchanged', () => {
     const url = new URL(`${pathToFileURL(join(dir, 'a')).href}%00b/builtin-icons.json`);
-    let thrown: unknown;
-    try {
-      IconCatalog.fromFile(url);
-    } catch (error) {
-      thrown = error;
+    expect(() => IconCatalog.fromFile(url)).toThrow(TypeError);
+    expect(() => IconCatalog.fromFile(url)).toThrow(expect.objectContaining({ code: 'ERR_INVALID_ARG_VALUE' }));
+  });
+
+  it('reports files the permission model hides with the path and the fix (built code)', (context) => {
+    const dist = distState();
+    expect(dist, `dist/ has no complete build; ${BUILD_HINT}`).not.toBe('missing');
+    if (dist === 'stale') {
+      context.skip(`dist/ was not built from the current sources; ${BUILD_HINT}`);
     }
-    expect((thrown as NodeJS.ErrnoException).code).toBe('ERR_INVALID_ARG_VALUE');
+    const hidden = join(dir, 'hidden', 'builtin-icons.json');
+    mkdirSync(join(dir, 'hidden'));
+    writeFileSync(hidden, '[]');
+    const allowedButMissing = join(dir, 'open', 'builtin-icons.json');
+    // Node's permission model: only dist/ and one missing file may be read.
+    const script = `
+      const { IconCatalog } = await import(${JSON.stringify(pathToFileURL(builtCatalog).href)});
+      const attempt = (path) => {
+        try {
+          IconCatalog.fromFile(new URL('file://' + path));
+          return 'no error';
+        } catch (error) {
+          return error.message;
+        }
+      };
+      console.log(JSON.stringify([attempt(${JSON.stringify(hidden)}), attempt(${JSON.stringify(allowedButMissing)})]));`;
+    const result = spawnSync(
+      process.execPath,
+      ['--permission', `--allow-fs-read=${distDir}`, `--allow-fs-read=${allowedButMissing}`, '--input-type=module', '-e', script],
+      { encoding: 'utf8', timeout: 20_000 },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    const [denied, missing] = JSON.parse(result.stdout) as string[];
+    expect(denied).toMatch(new RegExp(`^Built-in icon data .*builtin-icons\\.json cannot be read \\(Access to this API has been restricted`));
+    // The folder above may not be looked into either; that must not hide the "missing" advice.
+    expect(missing).toBe(
+      `Built-in icon data ${allowedButMissing} is missing; run "npm run generate:icons", then "npm run build" in egon_mcp (needs the egon.io submodule).`,
+    );
   });
 
   it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)('does not call an unreadable folder a missing file', () => {
@@ -228,11 +266,19 @@ describe('iconReadError', () => {
     );
   });
 
-  it('gives the system\'s reason for ENOTDIR when no file is in the way', () => {
-    const notADirectory = Object.assign(new Error('ENOTDIR: not a directory'), { code: 'ENOTDIR', syscall: 'open' });
-    expect(iconReadError(join(dir, 'zz', 'builtin-icons.json'), notADirectory).message).toContain(
-      'cannot be read (ENOTDIR: not a directory). Fix what stops it from being read',
-    );
+  it('gives the system\'s reason for ENOTDIR when no file is in the way, naming the path once', () => {
+    const path = join(dir, 'zz', 'builtin-icons.json');
+    const errno = [...getSystemErrorMap()].find(([, [name]]) => name === 'ENOTDIR')?.[0];
+    const notADirectory = Object.assign(new Error(`ENOTDIR: not a directory, open '${path}'`), { code: 'ENOTDIR', errno, syscall: 'open', path });
+    const message = iconReadError(path, notADirectory).message;
+    expect(message).toContain('cannot be read (ENOTDIR: not a directory). Fix what stops it from being read');
+    expect(message.split(path)).toHaveLength(2);
+  });
+
+  it('reports data and environment errors that carry no system error number by their message', () => {
+    const path = join(dir, 'builtin-icons.json');
+    const tooLong = Object.assign(new Error('Cannot create a string longer than 0x1fffffe8 characters'), { code: 'ERR_STRING_TOO_LONG' });
+    expect(iconReadError(path, tooLong).message).toContain('cannot be read (Cannot create a string longer than 0x1fffffe8 characters)');
   });
 
   it('calls a path missing only when nothing is in the way', () => {
@@ -243,18 +289,20 @@ describe('iconReadError', () => {
   });
 });
 
-describe('isFileSystemError', () => {
-  it('goes by the error\'s shape, so codes like Windows\' UNKNOWN count too', () => {
+describe('isArgumentError', () => {
+  it('singles out errors in the call itself, which no change to the data can fix', () => {
     const dir = mkdtempSync(join(tmpdir(), 'egon-catalog-'));
     try {
-      expect(isFileSystemError(failedRead(join(dir, 'nope')))).toBe(true);
+      expect(isArgumentError(failedRead(join(dir, 'a\0b')))).toBe(true);
+      expect(isArgumentError(failedRead(join(dir, 'nope')))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-    expect(isFileSystemError(Object.assign(new Error('unknown error, stat'), { code: 'UNKNOWN', errno: -4094, syscall: 'stat' }))).toBe(true);
-    expect(isFileSystemError(Object.assign(new Error('bad path'), { code: 'ERR_INVALID_ARG_VALUE' }))).toBe(false);
-    expect(isFileSystemError(new Error('plain'))).toBe(false);
-    expect(isFileSystemError('not an error')).toBe(false);
+    // Data and environment problems are plain errors, whatever their code.
+    for (const code of ['ERR_STRING_TOO_LONG', 'ERR_ACCESS_DENIED', 'UNKNOWN']) {
+      expect(isArgumentError(Object.assign(new Error(code), { code })), code).toBe(false);
+    }
+    expect(isArgumentError('not an error')).toBe(false);
   });
 });
 
