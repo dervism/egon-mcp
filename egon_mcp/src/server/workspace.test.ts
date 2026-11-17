@@ -1,7 +1,8 @@
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, linkSync, mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readEgonFixture } from '../../test/egon-fixtures.js';
 import { parseStoryFile } from '../egon/parse.js';
@@ -10,6 +11,9 @@ import { Workspace, WorkspaceError } from './workspace.js';
 
 let root: string;
 let workspace: Workspace;
+
+// The pipe test runs the built workspace in a child process; `npm test` builds first.
+const builtWorkspace = fileURLToPath(new URL('../../dist/server/workspace.js', import.meta.url));
 
 const caseInsensitive = (() => {
   const dir = mkdtempSync(join(tmpdir(), 'egon-case-'));
@@ -38,28 +42,6 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
-
-/**
- * Makes a named pipe plus a short-lived process that, without ever blocking,
- * opens it for writing as soon as someone reads it and closes it again. Code
- * that wrongly reads the pipe then gets an empty file instead of hanging the
- * test run, and the process exits by itself after five seconds.
- */
-function pipeWithWriter(path: string): ChildProcess {
-  execFileSync('mkfifo', [path]);
-  const script = `
-    const fs = require('node:fs');
-    const end = Date.now() + 5000;
-    const timer = setInterval(() => {
-      try {
-        fs.closeSync(fs.openSync(process.argv[1], fs.constants.O_WRONLY | fs.constants.O_NONBLOCK));
-        clearInterval(timer);
-      } catch {
-        if (Date.now() > end) clearInterval(timer);
-      }
-    }, 20);`;
-  return spawn(process.execPath, ['-e', script, path], { stdio: 'ignore' });
-}
 
 describe('Workspace', () => {
   it('creates stories with readable, unique ids', () => {
@@ -291,6 +273,8 @@ describe('Workspace', () => {
   it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)('says when a file cannot be read to check it', () => {
     const story = workspace.create({ title: 'T' });
     workspace.save(story.id, {});
+    // A second story with saved files must exist: without the guard for unreadable
+    // files, it would wrongly be named as having opened or written notes.md.
     workspace.save(workspace.create({ title: 'Other' }).id, {});
     chmodSync(join(root, 'T.egn'), 0o000);
     writeFileSync(join(root, 'notes.md'), 'private');
@@ -306,14 +290,35 @@ describe('Workspace', () => {
   });
 
   it.runIf(process.platform !== 'win32')('refuses targets that are not regular files, such as named pipes', () => {
-    const writers = ['pipe.md', 'pipe.egn'].map((name) => pipeWithWriter(join(root, name)));
-    try {
+    expect(existsSync(builtWorkspace), 'dist is missing; run "npm run build" or "npm test"').toBe(true);
+    for (const name of ['pipe.md', 'pipe.egn']) {
+      execFileSync('mkfifo', [join(root, name)]);
+    }
+    // Reading or writing a pipe blocks synchronously, which no timeout inside this
+    // process can stop, so the calls run in a child process that gets killed instead.
+    const script = `
+      const { Workspace } = await import(${JSON.stringify(pathToFileURL(builtWorkspace).href)});
+      const workspace = new Workspace(process.argv[1]);
       const entry = workspace.create({ title: 'T' });
-      expect(() => workspace.save(entry.id, { path: 'pipe.md' })).toThrow(/not a regular file/);
-      expect(() => workspace.save(entry.id, { path: 'pipe.md', overwrite: true })).toThrow(/not a regular file/);
-      expect(() => workspace.open('pipe.egn')).toThrow(/not a regular file/);
-    } finally {
-      writers.forEach((writer) => writer.kill());
+      const attempt = (action) => {
+        try {
+          action();
+          return 'no error';
+        } catch (error) {
+          return error.message;
+        }
+      };
+      console.log(JSON.stringify([
+        attempt(() => workspace.save(entry.id, { path: 'pipe.md' })),
+        attempt(() => workspace.save(entry.id, { path: 'pipe.md', overwrite: true })),
+        attempt(() => workspace.open('pipe.egn')),
+      ]));`;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script, root], { encoding: 'utf8', timeout: 10_000 });
+    expect(result.signal, 'the workspace blocked on a named pipe').toBeNull();
+    const messages = JSON.parse(result.stdout) as string[];
+    expect(messages).toHaveLength(3);
+    for (const message of messages) {
+      expect(message).toMatch(/not a regular file/);
     }
   });
 

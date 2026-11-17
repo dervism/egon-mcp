@@ -11,13 +11,15 @@ async function currentTools() {
   const root = mkdtempSync(join(tmpdir(), 'egon-docs-'));
   const egon = createEgonServer({ root });
   const client = new Client({ name: 'docs', version: '1.0.0' });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await Promise.all([egon.server.connect(serverTransport), client.connect(clientTransport)]);
-  const { tools } = await client.listTools();
-  await client.close();
-  await egon.close();
-  rmSync(root, { recursive: true, force: true });
-  return tools;
+  try {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([egon.server.connect(serverTransport), client.connect(clientTransport)]);
+    return (await client.listTools()).tools;
+  } finally {
+    await client.close();
+    await egon.close();
+    rmSync(root, { recursive: true, force: true });
+  }
 }
 
 describe('toolReferenceMarkdown', () => {

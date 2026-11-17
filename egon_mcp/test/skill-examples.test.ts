@@ -1,6 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -77,6 +78,20 @@ describe('egon-mcp-skill', () => {
       const { tool, arguments: args } = JSON.parse(line);
       const result = (await client.callTool({ name: tool, arguments: args })) as { isError?: boolean; content: { text: string }[] };
       expect(result.isError, `${tool}: ${result.content[0]?.text}`).toBeFalsy();
+    }
+  });
+
+  it('explains only error messages the server can produce', () => {
+    const section = skill.slice(skill.indexOf('## When something fails'), skill.indexOf('## References'));
+    const keys = [...section.matchAll(/^\| (`[^|]+`) \|/gm)].flatMap((row) => [...(row[1] as string).matchAll(/`([^`]+)`/g)].map((match) => match[1] as string));
+    expect(keys.length).toBeGreaterThan(5);
+    const srcDir = fileURLToPath(new URL('../src/', import.meta.url));
+    const sources = (readdirSync(srcDir, { recursive: true }) as string[])
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+      .map((file) => readFileSync(join(srcDir, file), 'utf8'))
+      .join('\n');
+    for (const key of keys) {
+      expect(sources.includes(key), `no server message contains "${key}"`).toBe(true);
     }
   });
 });
