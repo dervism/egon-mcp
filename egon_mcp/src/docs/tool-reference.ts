@@ -1,4 +1,10 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { createEgonServer } from '../server/server.js';
 
 /** Where the generated tool reference lives inside the agent skill. */
 export const TOOL_REFERENCE_PATH = fileURLToPath(
@@ -20,6 +26,34 @@ interface ToolLike {
   title?: string;
   description?: string;
   inputSchema: JsonSchema;
+}
+
+/**
+ * The tools a fresh server offers, read over an in-memory connection. The
+ * server gets a temp workspace, which is removed afterwards.
+ */
+export async function listServerTools(): Promise<Awaited<ReturnType<Client['listTools']>>['tools']> {
+  const root = mkdtempSync(join(tmpdir(), 'egon-docs-'));
+  try {
+    const egon = createEgonServer({ root });
+    const client = new Client({ name: 'docs', version: '1.0.0' });
+    let tools;
+    try {
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      await Promise.all([egon.server.connect(serverTransport), client.connect(clientTransport)]);
+      tools = (await client.listTools()).tools;
+    } finally {
+      const closed = await Promise.allSettled([client.close(), egon.close()]);
+      const failure = closed.find((result) => result.status === 'rejected');
+      // Report a failed close, unless an earlier error is already on its way.
+      if (tools && failure) {
+        throw failure.reason;
+      }
+    }
+    return tools;
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 }
 
 /** Renders the server's tools as Markdown for the skill's reference file. */

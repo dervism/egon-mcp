@@ -6,6 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createEgonServer, type EgonServer } from '../src/server/server.js';
+import { closeAll } from './close-all.js';
 
 const skillDir = new URL('../../skills/egon-mcp-skill/', import.meta.url);
 const examples = readFileSync(new URL('references/examples.md', skillDir), 'utf8');
@@ -27,8 +28,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
-    await client?.close();
-    await egon?.close();
+    await closeAll(client, egon);
   } finally {
     if (root) {
       rmSync(root, { recursive: true, force: true });

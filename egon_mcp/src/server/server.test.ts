@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { closeAll } from '../../test/close-all.js';
 import { readEgonFixture } from '../../test/egon-fixtures.js';
 import { parseStoryFile } from '../egon/parse.js';
 import { createEgonServer, type EgonServer } from './server.js';
@@ -22,10 +23,11 @@ beforeEach(async () => {
 
 afterEach(async () => {
   try {
-    await client?.close();
-    await egon?.close();
+    await closeAll(client, egon);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    if (root) {
+      rmSync(root, { recursive: true, force: true });
+    }
   }
 });
 

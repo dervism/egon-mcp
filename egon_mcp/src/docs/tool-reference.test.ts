@@ -1,39 +1,10 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { createEgonServer } from '../server/server.js';
-import { TOOL_REFERENCE_PATH, toolReferenceMarkdown } from './tool-reference.js';
-
-async function currentTools() {
-  const root = mkdtempSync(join(tmpdir(), 'egon-docs-'));
-  try {
-    const egon = createEgonServer({ root });
-    const client = new Client({ name: 'docs', version: '1.0.0' });
-    let tools;
-    try {
-      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-      await Promise.all([egon.server.connect(serverTransport), client.connect(clientTransport)]);
-      tools = (await client.listTools()).tools;
-    } finally {
-      const closed = await Promise.allSettled([client.close(), egon.close()]);
-      const failure = closed.find((result) => result.status === 'rejected');
-      // Report a failed close, unless an earlier error is already on its way.
-      if (tools && failure) {
-        throw failure.reason;
-      }
-    }
-    return tools;
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-}
+import { listServerTools, TOOL_REFERENCE_PATH, toolReferenceMarkdown } from './tool-reference.js';
 
 describe('toolReferenceMarkdown', () => {
   it('documents every tool with its description and parameters', async () => {
-    const markdown = toolReferenceMarkdown(await currentTools());
+    const markdown = toolReferenceMarkdown(await listServerTools());
     expect(markdown).toContain('## add_activity');
     expect(markdown).toMatch(/\| `from` \| string \| yes \| Id of an element/);
     expect(markdown).toMatch(/\| `number` \| integer \| no \|/);
@@ -43,6 +14,6 @@ describe('toolReferenceMarkdown', () => {
 
   it('matches the reference in the skill; run "npm run docs" after changing tools', async () => {
     expect(existsSync(TOOL_REFERENCE_PATH)).toBe(true);
-    expect(readFileSync(TOOL_REFERENCE_PATH, 'utf8')).toBe(toolReferenceMarkdown(await currentTools()));
+    expect(readFileSync(TOOL_REFERENCE_PATH, 'utf8')).toBe(toolReferenceMarkdown(await listServerTools()));
   });
 });
