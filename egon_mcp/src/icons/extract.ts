@@ -1,6 +1,8 @@
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { basename, dirname, join } from 'node:path';
+// With a .ts extension, so scripts/generate-icons.mjs can load this file through type stripping.
+import { isIconList } from '../build-info.ts';
 import { runInNewContext } from 'node:vm';
 
 export interface BuiltInIcon {
@@ -80,15 +82,17 @@ export function extractBuiltInIcons(typeScriptSource: string): BuiltInIcon[] {
  * Egon's source has changed shape, and writes through a temporary file renamed
  * into place, so an interrupted run never leaves a cut-off file behind. The
  * temporary name starts with a dot, so the build skips one that a killed run left.
- * Together with the plain-string rules in extractBuiltInIcons, this writes
- * exactly what the build's check (isIconList in src/build-info.ts) accepts; a
- * test holds the two together.
+ * It runs the build's own check (isIconList in src/build-info.ts) first, so it
+ * never writes a file the build would reject.
  */
 export function writeIconFile(file: string, icons: BuiltInIcon[]): void {
   if (icons.length === 0) {
     throw new Error("No built-in icons found in Egon's source; its format may have changed.");
   }
   const content = `${JSON.stringify(icons, null, 1)}\n`;
+  if (!isIconList(content)) {
+    throw new Error("Egon's built-in icons do not have the shape the server reads; its format may have changed.");
+  }
   mkdirSync(dirname(file), { recursive: true });
   const temporary = join(dirname(file), `.${basename(file)}.${process.pid}.tmp`);
   try {

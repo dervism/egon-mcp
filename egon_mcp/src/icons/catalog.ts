@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { getSystemErrorMessage } from 'node:util';
 import { ICON_FIX, isIconList } from '../build-info.js';
 import type { IconMap, IconSet } from '../egon/types.js';
 import type { BuiltInIcon } from './extract.js';
@@ -43,14 +44,15 @@ export class IconCatalog {
     try {
       content = readFileSync(file, 'utf8');
     } catch (error) {
-      const { code, syscall } = error as NodeJS.ErrnoException;
+      const { code, errno, message } = error as NodeJS.ErrnoException;
       if (code === 'ENOENT') {
         throw new Error(`Built-in icon data ${path} is missing; ${fix}`);
       }
-      // Missing rights or something in the way, on the file or a folder above it.
+      // System errors get the system's text without the path, which Node's message repeats.
+      const reason = errno === undefined ? message : `${code}: ${getSystemErrorMessage(errno)}`;
       throw new Error(
-        `Built-in icon data ${path} cannot be read (${code ?? 'error'}, ${syscall ?? 'read'}). ` +
-          `Fix the access rights or remove whatever is in the way on this path, then ${fix}`,
+        `Built-in icon data ${path} cannot be read (${reason}). ` +
+          `Fix what stops it from being read, such as access rights or a file or folder in the way, then ${fix}`,
       );
     }
     if (!isIconList(content)) {

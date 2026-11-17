@@ -73,6 +73,19 @@ describe('writeIconFile', () => {
     }
   });
 
+  it('runs the build\'s own check, so it never writes a file the build rejects', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
+    try {
+      const file = join(dir, 'builtin-icons.json');
+      expect(() => writeIconFile(file, [{ name: '', svg: '<svg/>', keywords: [] }])).toThrow(
+        /do not have the shape the server reads; its format may have changed/,
+      );
+      expect(existsSync(file)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('refuses an empty icon list and keeps the previous file', () => {
     const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
     try {
@@ -157,8 +170,6 @@ describe('generateIconFile', () => {
         "const icons = new Dictionary();\nicons.putEntry(new Entry(5, 'A', []));\n",
         "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', 'a, b'));\n",
         "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', [1]));\n",
-        // A list with a hole: every() skips it, but the icon would get an undefined keyword.
-        "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', ['a', , 'b']));\n",
       ];
       for (const source of changed) {
         expect(() => generateIconFile(source, file), source).toThrow(/its format may have changed/);

@@ -14,6 +14,9 @@
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    // Lets src/icons/extract.ts import ../build-info.ts so Node can also load it
+    // without tsc (type stripping); tsc writes .js into dist.
+    "rewriteRelativeImportExtensions": true,
     "rootDir": ".",
     "outDir": "dist"
   },

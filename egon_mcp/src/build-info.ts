@@ -1,5 +1,6 @@
 // Node also loads this file without tsc, through type stripping: before the build
-// (scripts/record-sources.mjs) and in the icon generator (scripts/generate-icons.mjs).
+// (scripts/record-sources.mjs) and in the icon generator (scripts/generate-icons.mjs,
+// through src/icons/extract.ts).
 // So it must stay erasable TypeScript and import only node: modules. The server
 // uses isIconList from it too (src/icons/catalog.ts).
 import { createHash } from 'node:crypto';

@@ -68,27 +68,32 @@ describe('IconCatalog.fromFile', () => {
     }
   });
 
-  const unreadable = (code: string) =>
+  const unreadable = (code: string, reason: string) =>
     new RegExp(
-      `cannot be read \\(${code}, \\w+\\)\\. Fix the access rights or remove whatever is in the way on this path, then run "npm run generate:icons", then "npm run build"`,
+      `cannot be read \\(${code}: ${reason}\\)\\. Fix what stops it from being read, such as access rights or a file or folder in the way, then run "npm run generate:icons", then "npm run build"`,
     );
+  /** The message, which must name the path exactly once. */
+  const messageFor = (file: string) => {
+    try {
+      IconCatalog.fromFile(pathToFileURL(file));
+    } catch (error) {
+      const message = (error as Error).message;
+      expect(message.split(file)).toHaveLength(2);
+      return message;
+    }
+    throw new Error('fromFile did not fail');
+  };
 
   it('says why a path it cannot read failed, names it once, and how to clear it', () => {
     const file = join(dir, 'builtin-icons.json');
     mkdirSync(file);
-    let message = '';
-    try {
-      IconCatalog.fromFile(pathToFileURL(file));
-    } catch (error) {
-      message = (error as Error).message;
-    }
-    expect(message).toMatch(unreadable('EISDIR'));
-    expect(message.split(file)).toHaveLength(2);
+    expect(messageFor(file)).toMatch(unreadable('EISDIR', 'illegal operation on a directory'));
   });
 
-  it('covers a file in the way of a folder on the path', () => {
+  // On Windows a file in the way of a folder reads as a missing path.
+  it.runIf(process.platform !== 'win32')('covers a file in the way of a folder on the path', () => {
     writeFileSync(join(dir, 'generated'), 'not a folder');
-    expect(() => IconCatalog.fromFile(pathToFileURL(join(dir, 'generated', 'builtin-icons.json')))).toThrow(unreadable('ENOTDIR'));
+    expect(messageFor(join(dir, 'generated', 'builtin-icons.json'))).toMatch(unreadable('ENOTDIR', 'not a directory'));
   });
 
   it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)('does not call an unreadable folder a missing file', () => {
@@ -97,7 +102,7 @@ describe('IconCatalog.fromFile', () => {
     writeFileSync(join(locked, 'builtin-icons.json'), '[]');
     chmodSync(locked, 0o000);
     try {
-      expect(() => IconCatalog.fromFile(pathToFileURL(join(locked, 'builtin-icons.json')))).toThrow(unreadable('EACCES'));
+      expect(messageFor(join(locked, 'builtin-icons.json'))).toMatch(unreadable('EACCES', 'permission denied'));
     } finally {
       chmodSync(locked, 0o755);
     }
