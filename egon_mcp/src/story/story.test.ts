@@ -109,6 +109,17 @@ describe('activities', () => {
     ]);
   });
 
+  it('rejects actor-to-actor activities like Egon does', () => {
+    const { story, customer, clerk } = pizzaStory();
+    expect(() => story.addActivity({ from: customer.id, to: clerk.id, label: 'calls' })).toThrow(/two actors/i);
+  });
+
+  it('allows work object to work object activities without a number', () => {
+    const { story, order } = pizzaStory();
+    const receipt = story.addWorkObject({ name: 'Receipt' });
+    expect(story.addActivity({ from: order.id, to: receipt.id, label: 'becomes' }).number ?? null).toBeNull();
+  });
+
   it('accepts an explicit number for parallel steps', () => {
     const { story, customer, order, clerk } = pizzaStory();
     story.addActivity({ from: customer.id, to: order.id, label: 'places' });
@@ -168,12 +179,16 @@ describe('editing', () => {
     expect(group.y).toBeLessThan(100);
     expect(group.x + group.width).toBeGreaterThan(375);
     expect(group.y + group.height).toBeGreaterThan(175);
+    expect(story.get(a.id)?.['parent']).toBe(group.id);
+    story.removeElement(group.id);
+    expect(story.get(a.id)).not.toHaveProperty('parent');
   });
 
   it('attaches a text annotation to an element', () => {
     const { story, order } = pizzaStory();
     const { annotation, connection } = story.addAnnotation({ text: 'Paper slip', attachTo: order.id });
-    expect(annotation).toMatchObject({ type: 'domainStory:textAnnotation', text: 'Paper slip' });
+    expect(annotation).toMatchObject({ type: 'domainStory:textAnnotation', text: 'Paper slip', name: '' });
+    expect(annotation['number']).toBe(annotation.height);
     expect(connection).toMatchObject({ type: 'domainStory:connection', source: order.id, target: annotation.id });
   });
 

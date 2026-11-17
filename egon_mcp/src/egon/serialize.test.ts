@@ -44,6 +44,11 @@ describe('toEgnJson', () => {
     expect(again.iconSet).toEqual(original.iconSet);
   });
 
+  it('always writes the current Egon format version, because Egon treats a missing or old version as legacy', () => {
+    const doc = parseStoryFile(readEgonFixture('dst_export_version_2_2_0.json'), 'a.dst');
+    expect(JSON.parse(toEgnJson(doc)).domainStory.version).toBe('4.0.0');
+  });
+
   it('omits an empty scope', () => {
     const json = JSON.parse(toEgnJson(Story.create({ title: 'T' }).toDocument()));
     expect(json.domainStory).not.toHaveProperty('scope');

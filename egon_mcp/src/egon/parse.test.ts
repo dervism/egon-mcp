@@ -90,6 +90,34 @@ describe('parseStoryFile', () => {
     expect(doc.scope).toEqual({ pointInTime: 'to-be', domainPurity: 'pure', granularity: 'fine-grained' });
   });
 
+  it('converts pre-0.5 work object types the way Egon does', () => {
+    const doc = parseStoryFile(
+      JSON.stringify([
+        { type: 'domainStory:workObject', id: 'shape_1', name: 'Form', x: 0, y: 0 },
+        { type: 'domainStory:workObjectBubble', id: 'shape_2', name: 'Talk', x: 0, y: 0 },
+        { type: 'domainStory:actorPerson', id: 'shape_3', name: 'Ann', x: 0, y: 0 },
+        { version: '0.4.0' },
+      ]),
+      'old.dst',
+    );
+    expect(doc.elements.map((e) => e.type)).toEqual([
+      'domainStory:workObjectDocument',
+      'domainStory:workObjectConversation',
+      'domainStory:actorPerson',
+    ]);
+  });
+
+  it('replaces spaces in icon names with dashes like Egon', () => {
+    const doc = parseStoryFile(
+      JSON.stringify({
+        domainStory: { version: '3.0.0', businessObjects: [{ type: 'domainStory:workObjectGas station', id: 'shape_1', name: '', x: 0, y: 0 }] },
+        iconSet: { name: 'x', actors: {}, workObjects: {} },
+      }),
+      'a.egn',
+    );
+    expect(doc.elements[0]?.type).toBe('domainStory:workObjectGas-station');
+  });
+
   it('rejects text that is not a domain story', () => {
     expect(() => parseStoryFile('not json', 'a.egn')).toThrow(StoryParseError);
     expect(() => parseStoryFile('{"hello": 1}', 'a.egn')).toThrow(StoryParseError);

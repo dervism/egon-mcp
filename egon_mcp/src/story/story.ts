@@ -26,7 +26,7 @@ import {
   type TextAnnotationElement,
   type WorkObjectElement,
 } from '../egon/types.js';
-import { boundsOf, DEFAULT_ANNOTATION_SIZE, edgeWaypoints, type Bounds } from './geometry.js';
+import { boundsOf, DEFAULT_ANNOTATION_SIZE, edgeWaypoints, routeEdge, type Bounds } from './geometry.js';
 
 export class StoryError extends Error {
   override name = 'StoryError';
@@ -171,9 +171,9 @@ export class Story {
     if (source.id === target.id) {
       throw new StoryError('An activity needs two different elements.');
     }
-    if (isWorkObject(source) && isWorkObject(target)) {
+    if (isActor(source) && isActor(target)) {
       throw new StoryError(
-        `"${source.name}" and "${target.name}" are both work objects. In domain storytelling an actor does something with a work object, so connect an actor to each of them instead.`,
+        `"${source.name}" and "${target.name}" are two actors, and Egon cannot connect two actors. Put the work object they exchange between them, for example "${source.name} sends Message to ${target.name}".`,
       );
     }
     const activity: ActivityElement = {
@@ -182,7 +182,7 @@ export class Story {
       id: this.newId('connection'),
       source: source.id,
       target: target.id,
-      waypoints: edgeWaypoints(boundsOf(source), boundsOf(target)),
+      waypoints: this.route(source, target),
     };
     if (isActor(source)) {
       if (input.number !== undefined) {
@@ -228,6 +228,10 @@ export class Story {
     }
     // Groups go first so Egon draws them underneath the elements they contain.
     this.doc.elements.unshift(group);
+    // Egon records group membership on each member (domainStoryUpdater).
+    for (const member of members) {
+      member['parent'] = group.id;
+    }
     return structuredClone(group);
   }
 
@@ -253,6 +257,8 @@ export class Story {
       ...position,
       width: Math.max(DEFAULT_ANNOTATION_SIZE.width, Math.min(300, input.text.length * 7 + 20)),
       height: DEFAULT_ANNOTATION_SIZE.height,
+      // Egon stores an annotation's height in "number" as well (domainStoryRenderer).
+      number: DEFAULT_ANNOTATION_SIZE.height,
     };
     this.doc.elements.push(annotation);
     if (!anchor) {
@@ -312,6 +318,9 @@ export class Story {
           shape[key] = Math.round(value);
         }
       }
+      if (isTextAnnotation(shape) && update.height !== undefined) {
+        shape['number'] = shape.height;
+      }
       this.rerouteEdgesOf(shape.id);
     }
     return structuredClone(element);
@@ -328,6 +337,11 @@ export class Story {
     }
     const removed = this.doc.elements.filter((candidate) => removedIds.has(candidate.id));
     this.doc.elements = this.doc.elements.filter((candidate) => !removedIds.has(candidate.id));
+    for (const other of this.doc.elements) {
+      if (other['parent'] === element.id) {
+        delete other['parent'];
+      }
+    }
     if (removed.some((candidate) => isActivity(candidate))) {
       this.compactNumbers();
     }
@@ -502,8 +516,18 @@ export class Story {
     const source = this.find(edge.source);
     const target = this.find(edge.target);
     if (source && target && !isEdge(source) && !isEdge(target)) {
-      edge.waypoints = edgeWaypoints(boundsOf(source as ShapeElement), boundsOf(target as ShapeElement));
+      edge.waypoints = isActivity(edge)
+        ? this.route(source as ShapeElement, target as ShapeElement)
+        : edgeWaypoints(boundsOf(source as ShapeElement), boundsOf(target as ShapeElement));
     }
+  }
+
+  /** Waypoints for an activity that avoid the other actors and work objects. */
+  private route(source: ShapeElement, target: ShapeElement): ActivityElement['waypoints'] {
+    const obstacles = this.doc.elements
+      .filter((element) => (isActor(element) || isWorkObject(element)) && element.id !== source.id && element.id !== target.id)
+      .map((element) => boundsOf(element as ShapeElement));
+    return routeEdge(boundsOf(source), boundsOf(target), obstacles);
   }
 
   private nextFreeCell(): { x: number; y: number } {

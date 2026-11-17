@@ -56,6 +56,27 @@ export function parseStoryFile(text: string, fileName = 'story.egn'): StoryDocum
   if (scope) {
     doc.scope = scope;
   }
+  return repairLegacyTypes(doc);
+}
+
+/**
+ * Egon's ImportRepairService: icon names lose their spaces, and stories from
+ * version 0.5 or older (or without a version) get their old work object types
+ * converted.
+ */
+function repairLegacyTypes(doc: StoryDocument): StoryDocument {
+  const prefix = Number(doc.version.substring(0, doc.version.lastIndexOf('.')));
+  const legacy = Number.isNaN(prefix) || prefix <= 0.5;
+  for (const element of doc.elements) {
+    element.type = element.type.replace(/ /g, '-');
+    if (legacy) {
+      if (element.type === 'domainStory:workObject') {
+        element.type = 'domainStory:workObjectDocument';
+      } else if (element.type === 'domainStory:workObjectBubble') {
+        element.type = 'domainStory:workObjectConversation';
+      }
+    }
+  }
   return doc;
 }
 
@@ -100,7 +121,7 @@ function fromLegacyArray(entries: unknown[], title: string, iconSet: IconSet): S
       doc.version = asString(entry['version']) ?? '?';
     }
   }
-  return doc;
+  return repairLegacyTypes(doc);
 }
 
 function readIconSet(value: unknown): IconSet {

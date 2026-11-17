@@ -1,15 +1,18 @@
-import type { StoryDocument } from './types.js';
+import { EGON_FORMAT_VERSION, type StoryDocument } from './types.js';
 
 /**
  * Serializes a story as an `.egn` file, matching ExportService.downloadEGN:
- * `{ iconSet, domainStory }` with business objects sorted by id.
+ * `{ iconSet, domainStory }` with business objects sorted by id, written in
+ * the current Egon format version.
  */
 export function toEgnJson(doc: StoryDocument): string {
   const domainStory: Record<string, unknown> = {
     businessObjects: [...doc.elements].sort((a, b) => a.id.localeCompare(b.id)),
     title: doc.title,
     description: doc.description,
-    version: doc.version,
+    // Always the current version: Egon converts stories with a missing or
+    // pre-0.5 version as legacy files, and the parser already did that.
+    version: EGON_FORMAT_VERSION,
   };
   if (doc.scope && Object.keys(doc.scope).length > 0) {
     domainStory['scope'] = doc.scope;

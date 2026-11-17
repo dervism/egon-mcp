@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boundsOf, centerOf, edgeWaypoints } from './geometry.js';
+import { boundsOf, centerOf, edgeWaypoints, routeEdge } from './geometry.js';
 
 describe('geometry', () => {
   const actor = { x: 100, y: 100, width: 75, height: 75 };
@@ -40,5 +40,37 @@ describe('geometry', () => {
       expect(Number.isInteger(point.x)).toBe(true);
       expect(Number.isInteger(point.y)).toBe(true);
     }
+  });
+
+  describe('routeEdge', () => {
+    const left = { x: 0, y: 100, width: 75, height: 75 };
+    const middle = { x: 200, y: 100, width: 75, height: 75 };
+    const right = { x: 400, y: 100, width: 75, height: 75 };
+
+    it('goes straight when nothing is in the way', () => {
+      expect(routeEdge(left, middle, [right])).toEqual(edgeWaypoints(left, middle));
+    });
+
+    it('bends over shapes that sit on the straight line', () => {
+      const route = routeEdge(right, left, [middle]);
+      expect(route).toHaveLength(4);
+      const [start, up, across, end] = route;
+      expect(start).toMatchObject({ x: 438, y: 100 });
+      expect(up!.x).toBe(438);
+      expect(up!.y).toBeLessThan(100);
+      expect(across).toMatchObject({ x: 38, y: up!.y });
+      expect(end).toMatchObject({ x: 38, y: 100 });
+    });
+
+    it('bends to the side when the shapes are stacked vertically', () => {
+      const top = { x: 100, y: 0, width: 75, height: 75 };
+      const between = { x: 100, y: 200, width: 75, height: 75 };
+      const bottom = { x: 100, y: 400, width: 75, height: 75 };
+      const route = routeEdge(top, bottom, [between]);
+      expect(route).toHaveLength(4);
+      expect(route[1]!.x).toBeGreaterThan(175);
+      expect(route[0]).toMatchObject({ x: 175, y: 38 });
+      expect(route[3]).toMatchObject({ x: 175, y: 438 });
+    });
   });
 });
