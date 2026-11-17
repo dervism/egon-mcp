@@ -3,7 +3,8 @@
  * the first failure. Missing ones (setup failed before creating them) are skipped.
  */
 export async function closeAll(...closables: ({ close(): Promise<void> } | undefined)[]): Promise<void> {
-  const closed = await Promise.allSettled(closables.map((closable) => closable?.close()));
+  // async turns a close() that throws at once into a rejection, so the others still run.
+  const closed = await Promise.allSettled(closables.map(async (closable) => closable?.close()));
   const failure = closed.find((result) => result.status === 'rejected');
   if (failure) {
     throw failure.reason;
