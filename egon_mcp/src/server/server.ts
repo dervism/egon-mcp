@@ -17,7 +17,7 @@ import { registerPrompts } from './prompts.js';
 import { Workspace, WorkspaceError } from './workspace.js';
 
 export const SERVER_NAME = 'egon-mcp';
-export const SERVER_VERSION = '0.1.1';
+export const SERVER_VERSION = '0.2.0';
 
 export interface EgonServerOptions {
   /** Directory that file tools may read and write. */
