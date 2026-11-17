@@ -154,7 +154,7 @@ function workObjectFor(story: Story, input: SentenceInput, created: StoryElement
   const previous = existing[existing.length - 1];
   const icon = input.workObjectIcon ?? (previous ? iconNameOf(previous.type) : undefined);
   const element = create(story, 'workObject', input.workObject, icon, created);
-  if (previous?.pickedColor && !input.workObjectIcon) {
+  if (previous?.pickedColor) {
     const colored = story.updateElement(element.id, { color: previous.pickedColor }) as ShapeElement;
     created[created.length - 1] = colored;
     return colored;

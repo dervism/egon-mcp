@@ -161,7 +161,25 @@ describe('Workspace', () => {
     const first = workspace.open('mine.egn');
     const second = workspace.open('mine.egn');
     expect(() => workspace.save(first.id, {})).toThrow(/already exists/);
+    expect(() => workspace.save(first.id, {})).toThrow(new RegExp(`story "${second.id}" opened or wrote it later`));
     expect(() => workspace.save(second.id, {})).not.toThrow();
+  });
+
+  it('treats a file reached through a linked folder or another letter case as the same file', () => {
+    mkdirSync(join(root, 'real'));
+    symlinkSync(join(root, 'real'), join(root, 'alias'));
+    const a = workspace.create({ title: 'A' });
+    const b = workspace.create({ title: 'B' });
+    workspace.save(a.id, { path: 'real/x.egn' });
+    workspace.save(b.id, { path: 'alias/x.egn', overwrite: true });
+    expect(() => workspace.save(a.id, { path: 'real/x.egn' })).toThrow(/already exists/);
+    expect(() => workspace.save(b.id, { path: 'real/x.egn' })).not.toThrow();
+    if (existsSync(join(root, 'REAL', 'X.egn'))) {
+      // Case-insensitive file system, the default on macOS.
+      workspace.save(a.id, { path: 'REAL/X.egn', overwrite: true });
+      expect(() => workspace.save(b.id, { path: 'real/x.egn' })).toThrow(/already exists/);
+      expect(() => workspace.save(a.id, { path: 'real/x.egn' })).not.toThrow();
+    }
   });
 
   it('remembers the layout of a file after the story that opened it is closed', () => {

@@ -150,6 +150,20 @@ describe('buildStory', () => {
     expect(other.elements().filter((e) => e.name === 'Order').map((e) => e.type)).toEqual(['domainStory:workObjectDocument']);
   });
 
+  it('keeps the color of a declared work object when a later sentence picks another icon', () => {
+    const story = buildStory({
+      title: 'T',
+      workObjects: [{ name: 'Pizza', icon: 'Dining', color: '#E53935' }],
+      sentences: [
+        { actor: 'Baker', activity: 'bakes', workObject: 'Pizza' },
+        { actor: 'Clerk', activity: 'boxes', workObject: 'Pizza', workObjectIcon: 'Document' },
+      ],
+    });
+    const pizzas = story.elements().filter((e) => e.name === 'Pizza');
+    expect(pizzas.map((e) => e.pickedColor)).toEqual(['#E53935', '#E53935']);
+    expect(pizzas.map((e) => e.type)).toEqual(['domainStory:workObjectDining', 'domainStory:workObjectDocument']);
+  });
+
   it('attaches notes and group members to the actor, not to a group of the same name', () => {
     const story = buildStory({
       title: 'T',

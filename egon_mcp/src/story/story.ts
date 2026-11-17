@@ -385,6 +385,7 @@ export class Story {
 
   /** Finds an element by id, or by name for actors, work objects, groups and annotations. */
   resolve(ref: string): StoryElement {
+    assertRef(ref);
     const byId = this.find(ref);
     if (byId) {
       return byId;
@@ -452,6 +453,7 @@ export class Story {
   }
 
   private resolveNode(ref: string): ShapeElement {
+    assertRef(ref);
     // Only actors and work objects can be activity ends, so a group or note of the same name does not count.
     if (!this.find(ref)) {
       const wanted = ref.trim().toLowerCase();
@@ -476,6 +478,7 @@ export class Story {
    * repeat per sentence (ADR 13).
    */
   private resolveShapes(ref: string): ShapeElement[] {
+    assertRef(ref);
     const byId = this.find(ref);
     if (byId) {
       if (isEdge(byId)) {
@@ -655,4 +658,10 @@ function enclose(boxes: Bounds[], padding: number): Bounds {
   // Labels sit below actors and work objects, so leave extra room at the bottom.
   const maxY = Math.max(...boxes.map((box) => box.y + box.height)) + padding + 20;
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function assertRef(ref: string): void {
+  if (ref.trim() === '') {
+    throw new StoryError('The element needs an id or name, got an empty one.');
+  }
 }

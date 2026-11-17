@@ -1,6 +1,6 @@
 # 7. Write the Egon 3 file layout by default
 
-- Status: Accepted, amended by [ADR 15](0015-file-ownership-and-layout-per-story.md)
+- Status: Accepted, amended by [ADR 15](0015-file-ownership-per-story-layout-per-file.md)
 - Date: 2026-11-17
 - Context: The public app at egon.io runs Egon 3.2.1, which only reads `{ domain, dst }` files, while the unreleased Egon 4 on `main` writes `{ iconSet, domainStory }` and still reads the old layout.
 - Decision: The server writes the Egon 3 layout unless started with `--egon-format egon4` or told otherwise per save (ADR 15), and the parser reads every layout Egon has used.

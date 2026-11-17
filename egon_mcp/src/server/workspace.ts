@@ -83,8 +83,9 @@ export class Workspace {
     const relativePath = this.relative(absolute);
     const keepPath = /\.egn(\.svg)?$/i.test(relativePath) ? relativePath : undefined;
     const entry = this.add(Story.fromDocument(doc), keepPath, false);
-    this.owners.set(absolute, entry.id);
-    this.fileLayouts.set(absolute, doc.version.startsWith('4') ? 'egon4' : 'egon3');
+    const key = fileKey(absolute);
+    this.owners.set(key, entry.id);
+    this.fileLayouts.set(key, doc.version.startsWith('4') ? 'egon4' : 'egon3');
     return entry;
   }
 
@@ -142,16 +143,20 @@ export class Workspace {
       throw new WorkspaceError(`The extension of ${path} does not match the format ${format}.`);
     }
     const absolute = this.resolveForWrite(path);
-    if (lexists(absolute) && this.owners.get(absolute) !== id && !options.overwrite) {
-      throw new WorkspaceError(`${path} already exists. Pass overwrite: true to replace it, or choose another path.`);
+    const existingKey = lexists(absolute) ? fileKey(absolute) : undefined;
+    const owner = existingKey ? this.owners.get(existingKey) : undefined;
+    if (existingKey && owner !== id && !options.overwrite) {
+      const takenOver = owner !== undefined && this.entries.has(owner) ? `, and story "${owner}" opened or wrote it later` : '';
+      throw new WorkspaceError(`${path} already exists${takenOver}. Pass overwrite: true to replace it, or choose another path.`);
     }
-    const layout = options.layout ?? this.fileLayouts.get(absolute) ?? this.egonFormat;
+    const layout = options.layout ?? (existingKey ? this.fileLayouts.get(existingKey) : undefined) ?? this.egonFormat;
     const content = this.serialize(entry.story, format, layout);
     mkdirSync(dirname(absolute), { recursive: true });
     writeFileSync(absolute, content);
-    this.owners.set(absolute, id);
+    const key = fileKey(absolute);
+    this.owners.set(key, id);
     if (format === 'egn' || format === 'egn.svg') {
-      this.fileLayouts.set(absolute, layout);
+      this.fileLayouts.set(key, layout);
     }
     const relativePath = this.relative(absolute);
     const result: SaveResult = { path: relativePath, format, bytes: Buffer.byteLength(content) };
@@ -310,4 +315,12 @@ function lexists(path: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * One key per file, however the path was spelled: links resolved and, on
+ * case-insensitive file systems, the file's own letter case. The file must exist.
+ */
+function fileKey(absolute: string): string {
+  return realpathSync.native(absolute);
 }

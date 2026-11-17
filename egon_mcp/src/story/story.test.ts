@@ -222,6 +222,15 @@ describe('editing', () => {
     expect(() => story.removeElement('Kitchen')).toThrow(/ambiguous/);
   });
 
+  it('refuses a blank id or name', () => {
+    const story = Story.create({ title: 'T' });
+    story.addActor({ name: '' });
+    story.addWorkObject({ name: 'Pizza' });
+    expect(() => story.addActivity({ from: '   ', to: 'Pizza', label: 'bakes' })).toThrow(/needs an id or name/);
+    expect(() => story.updateElement('', { name: 'Baker' })).toThrow(/needs an id or name/);
+    expect(() => story.addGroup({ name: 'G', members: [' '] })).toThrow(/needs an id or name/);
+  });
+
   it('calls a name ambiguous unless it only repeats a work object', () => {
     const story = Story.create({ title: 'T' });
     story.addGroup({ name: 'Area' });
