@@ -17,7 +17,7 @@
   "scripts": {
     "generate:icons": "node --disable-warning=ExperimentalWarning scripts/generate-icons.mjs",
     "prebuild": "npm run generate:icons",
-    "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
+    "build": "node --disable-warning=ExperimentalWarning scripts/record-sources.mjs && tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
     "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",

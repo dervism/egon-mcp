@@ -1,17 +1,25 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { BUILD_HINT, distState } from './dist-check.js';
 
 const entry = fileURLToPath(new URL('../dist/index.js', import.meta.url));
 
 // Runs against the build output; `npm test` builds first.
+beforeEach((context) => {
+  const dist = distState();
+  expect(dist, `dist/ has no complete build; ${BUILD_HINT}`).not.toBe('missing');
+  if (dist === 'stale') {
+    context.skip(`dist/ was not built from the current sources; ${BUILD_HINT}`);
+  }
+});
+
 describe('egon-mcp over stdio', () => {
   it('starts, builds a story and saves it into the workspace root', async () => {
-    expect(existsSync(entry), 'dist/index.js is missing; run "npm run build" or "npm test"').toBe(true);
     const root = mkdtempSync(join(tmpdir(), 'egon-e2e-'));
     const transport = new StdioClientTransport({ command: process.execPath, args: [entry, '--root', root], stderr: 'pipe' });
     const client = new Client({ name: 'e2e', version: '1.0.0' });

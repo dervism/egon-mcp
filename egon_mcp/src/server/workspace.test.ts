@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { BUILD_HINT, distState } from '../../test/dist-check.js';
 import { readEgonFixture } from '../../test/egon-fixtures.js';
 import { parseStoryFile } from '../egon/parse.js';
-import { BUILD_INFO_FILE, sourceHash } from '../build-info.js';
 import { Story } from '../story/story.js';
 import { Workspace, WorkspaceError } from './workspace.js';
 
@@ -15,8 +15,6 @@ let workspace: Workspace;
 
 // The pipe test runs the built workspace in a child process; `npm test` builds first.
 const builtWorkspace = fileURLToPath(new URL('../../dist/server/workspace.js', import.meta.url));
-const buildInfo = fileURLToPath(new URL(`../../dist/${BUILD_INFO_FILE}`, import.meta.url));
-const srcDir = fileURLToPath(new URL('../', import.meta.url));
 
 const caseInsensitive = (() => {
   const dir = mkdtempSync(join(tmpdir(), 'egon-case-'));
@@ -302,12 +300,10 @@ describe('Workspace', () => {
   });
 
   it.runIf(process.platform !== 'win32')('refuses named pipes without blocking (built code)', (context) => {
-    expect(existsSync(builtWorkspace), 'dist is missing; run "npm run build" or "npm test"').toBe(true);
-    // A watch run after an edit, or `npm test --ignore-scripts`, may run against an
-    // old build. The build records a hash of the sources it was made from.
-    const built = existsSync(buildInfo) ? (JSON.parse(readFileSync(buildInfo, 'utf8')) as { sourceHash?: string }).sourceHash : undefined;
-    if (built !== sourceHash(srcDir)) {
-      context.skip('dist was not built from the current sources; run "npm run build"');
+    const dist = distState();
+    expect(dist, `dist/ has no complete build; ${BUILD_HINT}`).not.toBe('missing');
+    if (dist === 'stale') {
+      context.skip(`dist/ was not built from the current sources; ${BUILD_HINT}`);
     }
     for (const name of ['pipe.md', 'pipe.egn']) {
       execFileSync('mkfifo', [join(root, name)]);

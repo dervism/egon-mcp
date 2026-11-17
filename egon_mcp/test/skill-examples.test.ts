@@ -1,10 +1,11 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { sourceFiles } from '../src/build-info.js';
 import { createEgonServer, type EgonServer } from '../src/server/server.js';
 import { closeAll } from './close-all.js';
 
@@ -97,8 +98,7 @@ describe('egon-mcp-skill', () => {
     });
     const srcDir = fileURLToPath(new URL('../src/', import.meta.url));
     // Comments do not count: only text the server can actually send.
-    const sources = (readdirSync(srcDir, { recursive: true }) as string[])
-      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+    const sources = sourceFiles(srcDir)
       .map((file) =>
         readFileSync(join(srcDir, file), 'utf8')
           .replace(/\/\*[\s\S]*?\*\//g, '')
