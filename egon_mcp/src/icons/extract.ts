@@ -1,6 +1,6 @@
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
-import { dirname } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
 export interface BuiltInIcon {
@@ -66,18 +66,31 @@ export function extractBuiltInIcons(typeScriptSource: string): BuiltInIcon[] {
 /**
  * Writes the icon list for the build. It refuses an empty list, which means
  * Egon's source has changed shape, and writes through a temporary file renamed
- * into place, so an interrupted run never leaves a cut-off file behind.
+ * into place, so an interrupted run never leaves a cut-off file behind. The
+ * temporary name starts with a dot, so the build skips one that a killed run left.
  */
 export function writeIconFile(file: string, icons: BuiltInIcon[]): void {
   if (icons.length === 0) {
     throw new Error("No built-in icons found in Egon's source; its format may have changed.");
   }
   mkdirSync(dirname(file), { recursive: true });
-  const temporary = `${file}.${process.pid}.tmp`;
+  const temporary = join(dirname(file), `.${basename(file)}.${process.pid}.tmp`);
   try {
     writeFileSync(temporary, `${JSON.stringify(icons, null, 1)}\n`);
     renameSync(temporary, file);
   } finally {
     rmSync(temporary, { force: true });
   }
+}
+
+/** Extracts the icons from Egon's source and writes them; returns how many. */
+export function generateIconFile(egonSource: string, file: string): number {
+  let icons: BuiltInIcon[];
+  try {
+    icons = extractBuiltInIcons(egonSource);
+  } catch (error) {
+    throw new Error(`Cannot read Egon's built-in icons (${(error as Error).message}); its format may have changed.`);
+  }
+  writeIconFile(file, icons);
+  return icons.length;
 }

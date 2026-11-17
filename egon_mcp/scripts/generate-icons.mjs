@@ -2,7 +2,7 @@
 // JSON file (see docs/adr/0005-generate-icons-from-submodule.md).
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { extractBuiltInIcons, writeIconFile } from '../src/icons/extract.ts';
+import { generateIconFile } from '../src/icons/extract.ts';
 
 const source = fileURLToPath(
   new URL(
@@ -20,11 +20,11 @@ if (!existsSync(source)) {
   process.exit(1);
 }
 
-const icons = extractBuiltInIcons(readFileSync(source, 'utf8'));
+let count;
 try {
-  writeIconFile(outFile, icons);
+  count = generateIconFile(readFileSync(source, 'utf8'), outFile);
 } catch (error) {
   console.error(error.message);
   process.exit(1);
 }
-console.log(`Wrote ${icons.length} built-in icons to src/icons/generated/builtin-icons.json`);
+console.log(`Wrote ${count} built-in icons to src/icons/generated/builtin-icons.json`);

@@ -22,14 +22,24 @@ export const ASSETS: { dir: string; required: { file: string; usable: (content: 
   },
 ];
 
-/** A non-empty JSON list of icons with a name and an SVG, as the icon generator writes it. */
+/**
+ * A non-empty JSON list of icons in the shape the server reads (BuiltInIcon in
+ * src/icons/extract.ts): a name, an SVG and a list of keywords for the search.
+ */
 function isIconList(content: string): boolean {
   try {
     const icons: unknown = JSON.parse(content);
     return (
       Array.isArray(icons) &&
       icons.length > 0 &&
-      icons.every((icon) => typeof icon?.name === 'string' && typeof icon?.svg === 'string')
+      icons.every(
+        (icon) =>
+          typeof icon?.name === 'string' &&
+          icon.name !== '' &&
+          typeof icon.svg === 'string' &&
+          Array.isArray(icon.keywords) &&
+          icon.keywords.every((keyword: unknown) => typeof keyword === 'string'),
+      )
     );
   } catch {
     return false;

@@ -39,3 +39,11 @@ describe('IconCatalog', () => {
     expect(iconSet.name).toBe('default');
   });
 });
+
+describe('IconCatalog.fromFile', () => {
+  it('names both steps that bring missing icon data back', () => {
+    expect(() => IconCatalog.fromFile(new URL('file:///nonexistent/builtin-icons.json'))).toThrow(
+      /Run "npm run generate:icons", then "npm run build"/,
+    );
+  });
+});

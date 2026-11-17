@@ -99,6 +99,7 @@ describe('sourceFiles', () => {
 describe('sourceHash', () => {
   it('ignores tests, hidden files and other files', () => {
     const before = sourceHash(packageDir);
+    writeFileSync(join(generated, '.builtin-icons.json.123.tmp'), 'left by an interrupted generator');
     writeFileSync(join(src, 'a.test.ts'), 'changed test');
     writeFileSync(join(src, 'notes.md'), 'changed notes');
     writeFileSync(join(src, '.hidden.ts'), 'hidden');
@@ -160,6 +161,8 @@ describe('copyAssets', () => {
 
   it('copies exactly the asset files the hash covers, into a cleared folder', () => {
     writeFileSync(join(generated, '.DS_Store'), 'finder');
+    // What an interrupted icon generator leaves behind (see writeIconFile).
+    writeFileSync(join(generated, '.builtin-icons.json.123.tmp'), '[{ "name": "Per');
     mkdirSync(join(generated, 'node_modules'));
     writeFileSync(join(generated, 'node_modules', 'x.json'), '{}');
     mkdirSync(join(packageDir, 'dist', 'icons', 'generated'), { recursive: true });
@@ -178,7 +181,18 @@ describe('copyAssets', () => {
   });
 
   it('fails when a required file holds no usable data, such as an empty or cut-off icon list', () => {
-    for (const content of ['', '[{ "name": "Person"', '[]', '{}', '[{ "name": "Person" }]']) {
+    const unusable = [
+      '',
+      '[{ "name": "Person"',
+      '[]',
+      '{}',
+      '[{ "name": "Person" }]',
+      // The icon search needs keywords, and every icon needs a name.
+      '[{ "name": "Person", "svg": "<svg/>" }]',
+      '[{ "name": "Person", "svg": "<svg/>", "keywords": [1] }]',
+      '[{ "name": "", "svg": "<svg/>", "keywords": [] }]',
+    ];
+    for (const content of unusable) {
       writeFileSync(join(generated, 'builtin-icons.json'), content);
       expect(() => copyAssets(packageDir), JSON.stringify(content)).toThrow(
         /src\/icons\/generated\/builtin-icons\.json is not usable; run "npm run generate:icons", then "npm run build"/,

@@ -23,15 +23,18 @@ export class IconCatalog {
 
   /** The icons extracted from the egon.io submodule (see scripts/generate-icons.mjs). */
   static builtIn(): IconCatalog {
-    if (!builtInCatalog) {
-      if (!existsSync(GENERATED_FILE)) {
-        throw new Error(
-          'Built-in icon data is missing. Run "npm run generate:icons" in egon_mcp (needs the egon.io submodule).',
-        );
-      }
-      builtInCatalog = new IconCatalog(JSON.parse(readFileSync(GENERATED_FILE, 'utf8')) as BuiltInIcon[]);
-    }
+    builtInCatalog ??= IconCatalog.fromFile(GENERATED_FILE);
     return builtInCatalog;
+  }
+
+  /** Reads an icon list as the icon generator writes it. */
+  static fromFile(file: URL): IconCatalog {
+    if (!existsSync(file)) {
+      throw new Error(
+        'Built-in icon data is missing. Run "npm run generate:icons", then "npm run build" in egon_mcp (needs the egon.io submodule).',
+      );
+    }
+    return new IconCatalog(JSON.parse(readFileSync(file, 'utf8')) as BuiltInIcon[]);
   }
 
   names(): string[] {
