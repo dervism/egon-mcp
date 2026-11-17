@@ -84,8 +84,8 @@ Then read `narrate_story` and compare it with what the user said. Each line must
 ## Save and show
 
 - `save_story` without a path writes back to the file the story came from, or to `<title>.egn`. The extension picks the format: `.egn` (Egon file), `.egn.svg` (picture that Egon can import), `.svg` (picture only), `.md` (sentences). Legacy `.dst` files can be opened but not written.
-- `save_story` only replaces a file if this story was the last to open or write it and nobody changed the file since. Ask the user before passing `overwrite: true`.
-- Egon 3 (the public app) reads the title from the file name, so keep the file name equal to the title. Scope survives only in the Egon 4 layout: pass `layout: "egon4"` to `save_story`, or run the server with `--egon-format egon4`. Replacing an existing Egon file keeps its layout.
+- `save_story` only replaces a file that this story opened or wrote and that nobody changed since, not even another story. Ask the user before passing `overwrite: true`.
+- Egon 3 (the public app) reads the title from the file name, so keep the file name equal to the title. Scope survives only in the Egon 4 layout: pass `layout: "egon4"` to `save_story`, or run the server with `--egon-format egon4`. A story saved back to its own file keeps the layout it last opened or saved it with, and replacing any other Egon file keeps that file's layout.
 - `open_in_egon` returns an Egon link that loads the story from the running server. Give the user the `egonUrl`. The link works only on the same machine while the server runs, and it always shows the latest state, so edits only need a reload.
 - If the browser blocks the local link (Chrome may ask for local network access; some browsers refuse), save the story and tell the user to use "Import file" in Egon.
 - Image formats: `export_story` with `svg` returns the SVG text, which you can write to a file or show if the client renders SVG.
@@ -101,8 +101,9 @@ Tool errors explain the problem and usually the fix:
 | `no element with the id or name` | Check spelling with `get_story`. |
 | `Unknown icon` | Pick one of the suggested names or call `search_icons`. |
 | `outside the workspace root`, `symbolic link` | Use a plain path relative to the root; ask the user to move the file or restart the server with another `--root`. |
-| `already exists` | Pick another path. If the error names another story, save from that story only if it holds the changes you want. Otherwise ask the user whether to pass `overwrite: true`. |
-| `changed on disk` | Someone edited or replaced the file outside the server. Tell the user, then reopen it with `open_story`, save elsewhere, or pass `overwrite: true` if they agree to lose those changes. |
+| `already exists` | Pick another path, or ask the user whether to pass `overwrite: true`. |
+| `was saved by story` | Another open story saved the file after this one read it. Compare the two with `get_story`, save from the one to keep, or ask the user before passing `overwrite: true`. |
+| `changed on disk` | The file was edited or replaced outside the server, or by a story that is closed now. Tell the user, then reopen it with `open_story`, save elsewhere, or pass `overwrite: true` if they agree to lose those changes. |
 | `No open story` | Use `list_stories`; stories are lost when the server restarts unless saved. |
 
 ## References

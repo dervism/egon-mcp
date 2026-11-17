@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import { parseStoryFile } from '../egon/parse.js';
@@ -23,19 +24,13 @@ export interface StoryEntry {
   dirty: boolean;
 }
 
-/** Who may replace a file without `overwrite`, and the file's state when that story last read or wrote it. */
-interface Ownership {
-  storyId: string;
-  mtimeNs: bigint;
-  size: bigint;
-}
 
 export interface SaveOptions {
   path?: string;
   format?: SaveFormat;
-  /** Replace an existing file even if this story was not the last to open or write it. */
+  /** Replace an existing file that this story did not open or write, or that changed since it did. */
   overwrite?: boolean;
-  /** .egn layout; default: the layout of the target file if this session opened or wrote it, else the server's. */
+  /** .egn layout; default: the story's own layout for its own file, else the layout of the Egon file replaced, else the server's. */
   layout?: EgonFormat;
 }
 
@@ -58,8 +53,12 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024;
  */
 export class Workspace {
   private readonly entries = new Map<string, StoryEntry>();
-  /** File identity (see fileKey) to the story that last opened or wrote it; only that story may replace it. */
-  private readonly owners = new Map<string, Ownership>();
+  /**
+   * For each open story, the files it opened or wrote (see fileKey) with a hash
+   * of the content it read or wrote. A story may replace a file without
+   * `overwrite` only while the file still holds that content.
+   */
+  private readonly seen = new Map<string, Map<string, string>>();
   readonly root: string;
   /** Layout of written .egn files (docs/adr/0007-write-egon-3-file-layout.md). */
   readonly egonFormat: EgonFormat;
@@ -86,12 +85,13 @@ export class Workspace {
     if (lstatSync(absolute).size > MAX_FILE_BYTES) {
       throw new WorkspaceError(`${path} is larger than 20 MB.`);
     }
-    const doc = parseStoryFile(readFileSync(absolute, 'utf8'), absolute);
+    const bytes = readFileSync(absolute);
+    const doc = parseStoryFile(bytes.toString('utf8'), absolute);
     const relativePath = this.relative(absolute);
     const keepPath = /\.egn(\.svg)?$/i.test(relativePath) ? relativePath : undefined;
     const entry = this.add(Story.fromDocument(doc), keepPath, false);
     entry.layout = layoutOf(doc.version);
-    this.claim(absolute, entry.id);
+    this.remember(entry.id, absolute, bytes);
     return entry;
   }
 
@@ -123,11 +123,7 @@ export class Workspace {
     this.get(id);
     this.entries.delete(id);
     // Ids are reused, so a later story with the same title must not inherit these files.
-    for (const [key, owner] of this.owners) {
-      if (owner.storyId === id) {
-        this.owners.delete(key);
-      }
-    }
+    this.seen.delete(id);
   }
 
   touch(id: string): void {
@@ -137,10 +133,10 @@ export class Workspace {
   /**
    * Writes a story to disk. The format follows the file extension. Without a
    * path, the story goes back to the file it came from, else to "<title>.egn".
-   * An existing file is only replaced if this story was the last to open or
-   * write it and nobody changed it since, or with `overwrite`. Without
-   * `layout`, an existing Egon file keeps its layout, and a story saved back to
-   * its own file that has gone keeps the layout it was opened with (ADR 15).
+   * An existing file is only replaced if it still holds what this story last
+   * read from or wrote to it, or with `overwrite`. Without `layout`, a story
+   * saved back to its own file keeps the layout it last opened or saved that
+   * file with, and any other Egon file keeps its layout (ADR 15).
    */
   save(id: string, options: SaveOptions): SaveResult {
     const entry = this.get(id);
@@ -155,16 +151,15 @@ export class Workspace {
     if (exists && !options.overwrite) {
       this.assertMayReplace(absolute, path, entry);
     }
-    const ownFile = entry.path !== undefined && this.lexicallyInside(entry.path) === absolute;
     const layout =
       options.layout ??
+      (this.isOwnFile(entry, absolute) ? entry.layout : undefined) ??
       (exists && egonFile ? layoutOfFile(absolute) : undefined) ??
-      (!exists && ownFile ? entry.layout : undefined) ??
       this.egonFormat;
     const content = this.serialize(entry.story, format, layout);
     mkdirSync(dirname(absolute), { recursive: true });
     writeFileSync(absolute, content);
-    this.claim(absolute, id);
+    this.remember(id, absolute, content);
     const relativePath = this.relative(absolute);
     const result: SaveResult = { path: relativePath, format, bytes: Buffer.byteLength(content) };
     if (egonFile) {
@@ -216,29 +211,40 @@ export class Workspace {
     return found;
   }
 
-  /** Records that this story may replace the file as it is now. */
-  private claim(absolute: string, storyId: string): void {
-    const stats = statSync(absolute, { bigint: true });
-    this.owners.set(fileKey(absolute), { storyId, mtimeNs: stats.mtimeNs, size: stats.size });
+  /** Records the content this story read from or wrote to a file. */
+  private remember(storyId: string, absolute: string, content: Buffer | string): void {
+    let files = this.seen.get(storyId);
+    if (!files) {
+      files = new Map();
+      this.seen.set(storyId, files);
+    }
+    files.set(fileKey(absolute), hashOf(content));
+  }
+
+  private isOwnFile(entry: StoryEntry, absolute: string): boolean {
+    return entry.path !== undefined && this.lexicallyInside(entry.path) === absolute;
   }
 
   private assertMayReplace(absolute: string, path: string, entry: StoryEntry): void {
-    const stats = statSync(absolute, { bigint: true });
-    const owner = this.owners.get(fileKey(absolute));
-    const unchanged = owner !== undefined && owner.mtimeNs === stats.mtimeNs && owner.size === stats.size;
-    if (owner?.storyId === entry.id && unchanged) {
+    const key = fileKey(absolute);
+    const current = currentHash(absolute);
+    const known = this.seen.get(entry.id)?.get(key);
+    if (known !== undefined && known === current) {
       return;
     }
     const advice = 'Pass overwrite: true to replace it, or choose another path.';
-    // close() forgets a story's files, so an owner is always an open story.
-    if (owner && owner.storyId !== entry.id && unchanged) {
-      throw new WorkspaceError(`${path} already exists, and story "${owner.storyId}" opened or wrote it last. ${advice}`);
+    const writer =
+      current === undefined
+        ? undefined
+        : [...this.seen].find(([storyId, files]) => storyId !== entry.id && files.get(key) === current)?.[0];
+    if (known !== undefined || this.isOwnFile(entry, absolute)) {
+      throw new WorkspaceError(
+        writer
+          ? `${path} was saved by story "${writer}" after story "${entry.id}" opened or wrote it. ${advice}`
+          : `${path} changed on disk since story "${entry.id}" opened or wrote it. ${advice}`,
+      );
     }
-    const ownFile = entry.path !== undefined && this.lexicallyInside(entry.path) === absolute;
-    if (owner?.storyId === entry.id || ownFile) {
-      throw new WorkspaceError(`${path} changed on disk since story "${entry.id}" opened or wrote it. ${advice}`);
-    }
-    throw new WorkspaceError(`${path} already exists. ${advice}`);
+    throw new WorkspaceError(`${path} already exists${writer ? `, and story "${writer}" opened or wrote it` : ''}. ${advice}`);
   }
 
   private add(story: Story, path: string | undefined, dirty: boolean): StoryEntry {
@@ -352,12 +358,25 @@ function lexists(path: string): boolean {
 
 /**
  * One key per file however it is reached (symbolic or hard links, another
- * letter case): device and inode. Ownership also checks modification time and
- * size, so a new file on a reused inode number is not mistaken for the old one.
+ * letter case): device and inode. The content hash, not the key, decides
+ * whether a file changed, so a new file on a reused inode number is noticed.
  */
 function fileKey(absolute: string): string {
   const stats = statSync(absolute, { bigint: true });
   return `${stats.dev}:${stats.ino}`;
+}
+
+function hashOf(content: Buffer | string): string {
+  return createHash('sha256').update(content).digest('hex');
+}
+
+/** Hash of the file's content now, or undefined if it is too large or unreadable. */
+function currentHash(absolute: string): string | undefined {
+  try {
+    return statSync(absolute).size > MAX_FILE_BYTES ? undefined : hashOf(readFileSync(absolute));
+  } catch {
+    return undefined;
+  }
 }
 
 function layoutOf(version: string): EgonFormat {

@@ -248,7 +248,7 @@ describe('egon-mcp server', () => {
     expect(fieldDescription('add_sentence', 'workObject')).toMatch(/not used by any activity yet/);
     expect(fieldDescription('build_story', 'workObjects')).toMatch(/first sentence that names/);
     expect(fieldDescription('build_story', 'workObjects')).toMatch(/workObjectIcon on that sentence replaces/);
-    expect(fieldDescription('save_story', 'overwrite')).toMatch(/opened or wrote it last or it changed on disk/);
+    expect(fieldDescription('save_story', 'overwrite')).toMatch(/did not open or write, or that changed since it did/);
   });
 
   it('saves to other formats and refuses paths outside the workspace', async () => {

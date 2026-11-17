@@ -1,4 +1,4 @@
-import { existsSync, linkSync, mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -164,71 +164,63 @@ describe('Workspace', () => {
     expect(() => workspace.save(again.id, {})).toThrow(/already exists/);
   });
 
-  it('lets only the story that last opened or wrote a file replace it', () => {
+  it('lets a story replace a file only while it holds what the story last read or wrote', () => {
     writeFileSync(join(root, 'mine.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
     const first = workspace.open('mine.egn');
     const second = workspace.open('mine.egn');
-    expect(() => workspace.save(first.id, {})).toThrow(/already exists/);
-    expect(() => workspace.save(first.id, {})).toThrow(new RegExp(`story "${second.id}" opened or wrote it last`));
-    expect(() => workspace.save(second.id, {})).not.toThrow();
+    workspace.close(workspace.open('mine.egn').id);
+    // Opening a file elsewhere changes nothing on disk.
+    expect(() => workspace.save(first.id, {})).not.toThrow();
+    expect(() => workspace.save(second.id, {})).toThrow(new RegExp(`was saved by story "${first.id}" after story "${second.id}" opened or wrote it`));
+    expect(() => workspace.save(first.id, {})).not.toThrow();
   });
 
   it('treats a file reached through a linked folder or a hard link as the same file', () => {
     mkdirSync(join(root, 'real'));
     symlinkSync(join(root, 'real'), join(root, 'alias'));
-    const a = workspace.create({ title: 'A' });
-    const b = workspace.create({ title: 'B' });
+    const a = workspace.create({ title: 'A', description: 'first' });
+    const b = workspace.create({ title: 'B', description: 'second' });
     workspace.save(a.id, { path: 'real/x.egn' });
     workspace.save(b.id, { path: 'alias/x.egn', overwrite: true });
-    expect(() => workspace.save(a.id, { path: 'real/x.egn' })).toThrow(/already exists/);
+    expect(() => workspace.save(a.id, { path: 'real/x.egn' })).toThrow(/saved by story "b"/);
     expect(() => workspace.save(b.id, { path: 'real/x.egn' })).not.toThrow();
 
     workspace.save(a.id, { path: 'y.egn' });
     linkSync(join(root, 'y.egn'), join(root, 'hard.egn'));
     workspace.save(b.id, { path: 'hard.egn', overwrite: true });
-    expect(() => workspace.save(a.id, { path: 'y.egn' })).toThrow(/already exists/);
+    expect(() => workspace.save(a.id, { path: 'y.egn' })).toThrow(/saved by story "b"/);
   });
 
   it.runIf(caseInsensitive)('treats another letter case of a file as the same file', () => {
-    const a = workspace.create({ title: 'A' });
-    const b = workspace.create({ title: 'B' });
+    const a = workspace.create({ title: 'A', description: 'first' });
+    const b = workspace.create({ title: 'B', description: 'second' });
     workspace.save(a.id, { path: 'x.egn' });
     workspace.save(b.id, { path: 'X.EGN', overwrite: true });
-    expect(() => workspace.save(a.id, { path: 'x.egn' })).toThrow(/already exists/);
+    expect(() => workspace.save(a.id, { path: 'x.egn' })).toThrow(/saved by story "b"/);
     expect(() => workspace.save(b.id, { path: 'x.egn' })).not.toThrow();
   });
 
-  it('keeps the layout of an opened file when saving back after the file was deleted', () => {
-    writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
-    const entry = workspace.open('four.egn');
-    rmSync(join(root, 'four.egn'));
-    expect(workspace.save(entry.id, {}).layout).toBe('egon4');
+  it('notices any change to the content, even with the same size and modification time', () => {
+    const original = readEgonFixture('egn_export_version_4_0_0.json');
+    const file = join(root, 'mine.egn');
+    const second = 1_700_000_000;
+    writeFileSync(file, original);
+    utimesSync(file, second, second);
+    const opened = workspace.open('mine.egn');
+    const before = statSync(file, { bigint: true });
+    writeFileSync(file, original.replace('"', "'"));
+    utimesSync(file, second, second);
+    const after = statSync(file, { bigint: true });
+    expect([after.size, after.mtimeNs]).toEqual([before.size, before.mtimeNs]);
+    expect(() => workspace.save(opened.id, {})).toThrow(new RegExp(`changed on disk since story "${opened.id}" opened or wrote it`));
   });
 
-  it('takes the layout from the file being replaced, not from what was there before', () => {
-    writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
-    workspace.open('four.egn');
-    // Someone swaps the file for an Egon 3 file outside the server.
-    writeFileSync(join(root, 'swap.egn'), workspace.serialize(Story.create({ title: 'Three' }), 'egn', 'egon3'));
-    renameSync(join(root, 'swap.egn'), join(root, 'four.egn'));
-    const other = workspace.create({ title: 'Other' });
-    expect(workspace.save(other.id, { path: 'four.egn', overwrite: true }).layout).toBe('egon3');
-  });
-
-  it('uses the server layout for a new file at a path an earlier story used', () => {
-    writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
-    workspace.close(workspace.open('four.egn').id);
-    rmSync(join(root, 'four.egn'));
-    const fresh = workspace.create({ title: 'Fresh' });
-    expect(workspace.save(fresh.id, { path: 'four.egn' }).layout).toBe('egon3');
-  });
-
-  it('refuses to replace a file that changed on disk since the story opened or wrote it', () => {
+  it('refuses to replace a file that was edited or replaced outside the server', () => {
     const original = readEgonFixture('egn_export_version_4_0_0.json');
     writeFileSync(join(root, 'mine.egn'), original);
     const opened = workspace.open('mine.egn');
     writeFileSync(join(root, 'mine.egn'), original + '\n');
-    expect(() => workspace.save(opened.id, {})).toThrow(new RegExp(`changed on disk since story "${opened.id}" opened or wrote it`));
+    expect(() => workspace.save(opened.id, {})).toThrow(/changed on disk/);
 
     const written = workspace.create({ title: 'Written' });
     workspace.save(written.id, {});
@@ -239,11 +231,33 @@ describe('Workspace', () => {
     expect(() => workspace.save(written.id, {})).not.toThrow();
   });
 
-  it('remembers the layout of a file after the story that opened it is closed', () => {
+  it("keeps a story's own layout when saving back to its file, even if the file is gone or unreadable", () => {
+    writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
+    const entry = workspace.open('four.egn');
+    rmSync(join(root, 'four.egn'));
+    expect(workspace.save(entry.id, {}).layout).toBe('egon4');
+    writeFileSync(join(root, 'four.egn'), 'not a story');
+    expect(workspace.save(entry.id, { overwrite: true }).layout).toBe('egon4');
+  });
+
+  it('takes the layout from the Egon file being replaced when it is not the story\'s own', () => {
+    const fours = new Workspace(root, { egonFormat: 'egon4' });
+    writeFileSync(join(root, 'three.egn'), fours.serialize(Story.create({ title: 'Three' }), 'egn', 'egon3'));
+    const other = fours.create({ title: 'Other' });
+    expect(fours.save(other.id, { path: 'three.egn', overwrite: true }).layout).toBe('egon3');
+
     writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
     workspace.close(workspace.open('four.egn').id);
-    const other = workspace.create({ title: 'Other' });
-    expect(workspace.save(other.id, { path: 'four.egn', overwrite: true }).layout).toBe('egon4');
+    const fresh = workspace.create({ title: 'Fresh' });
+    expect(workspace.save(fresh.id, { path: 'four.egn', overwrite: true }).layout).toBe('egon4');
+  });
+
+  it('uses the server layout for a new file at a path an earlier story used', () => {
+    writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
+    workspace.close(workspace.open('four.egn').id);
+    rmSync(join(root, 'four.egn'));
+    const fresh = workspace.create({ title: 'Fresh' });
+    expect(workspace.save(fresh.id, { path: 'four.egn' }).layout).toBe('egon3');
   });
 
   it('keeps the Egon 4 layout only when saving in place, unless a layout is given', () => {
