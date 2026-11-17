@@ -113,8 +113,14 @@ describe('IconCatalog.fromFile', () => {
 
   it('passes on argument errors, such as a NUL in the path, unchanged', () => {
     const url = new URL(`${pathToFileURL(join(dir, 'a')).href}%00b/builtin-icons.json`);
-    expect(() => IconCatalog.fromFile(url)).toThrow(TypeError);
-    expect(() => IconCatalog.fromFile(url)).toThrow(expect.objectContaining({ code: 'ERR_INVALID_ARG_VALUE' }));
+    let direct: unknown;
+    try {
+      readFileSync(url, 'utf8');
+    } catch (error) {
+      direct = error;
+    }
+    expect(direct).toBeInstanceOf(TypeError);
+    expect(() => IconCatalog.fromFile(url)).toThrow(expect.objectContaining({ name: 'TypeError', code: 'ERR_INVALID_ARG_VALUE', message: (direct as Error).message }));
   });
 
   it('reports files the permission model hides with the path and the fix (built code)', (context) => {
@@ -130,23 +136,28 @@ describe('IconCatalog.fromFile', () => {
     // Node's permission model: only dist/ and one missing file may be read.
     const script = `
       const { IconCatalog } = await import(${JSON.stringify(pathToFileURL(builtCatalog).href)});
-      const attempt = (path) => {
+      const attempt = (href) => {
         try {
-          IconCatalog.fromFile(new URL('file://' + path));
+          IconCatalog.fromFile(new URL(href));
           return 'no error';
         } catch (error) {
           return error.message;
         }
       };
-      console.log(JSON.stringify([attempt(${JSON.stringify(hidden)}), attempt(${JSON.stringify(allowedButMissing)})]));`;
+      console.log(JSON.stringify([attempt(${JSON.stringify(pathToFileURL(hidden).href)}), attempt(${JSON.stringify(pathToFileURL(allowedButMissing).href)})]));`;
+    // Preloads from NODE_OPTIONS (debuggers, coverage tools) would be denied under --permission.
+    const { NODE_OPTIONS: _, ...env } = process.env;
     const result = spawnSync(
       process.execPath,
       ['--permission', `--allow-fs-read=${distDir}`, `--allow-fs-read=${allowedButMissing}`, '--input-type=module', '-e', script],
-      { encoding: 'utf8', timeout: 20_000 },
+      { encoding: 'utf8', timeout: 20_000, env },
     );
     expect(result.status, result.stderr).toBe(0);
     const [denied, missing] = JSON.parse(result.stdout) as string[];
-    expect(denied).toMatch(new RegExp(`^Built-in icon data .*builtin-icons\\.json cannot be read \\(Access to this API has been restricted`));
+    expect(denied).toContain(`Built-in icon data ${hidden} cannot be read (Access to this API has been restricted`);
+    // Node's own text ends in a period, which must not end up before the bracket.
+    expect(denied).not.toContain('.).');
+    expect(denied).toContain('then run "npm run generate:icons", then "npm run build" in egon_mcp');
     // The folder above may not be looked into either; that must not hide the "missing" advice.
     expect(missing).toBe(
       `Built-in icon data ${allowedButMissing} is missing; run "npm run generate:icons", then "npm run build" in egon_mcp (needs the egon.io submodule).`,
@@ -281,6 +292,13 @@ describe('iconReadError', () => {
     expect(iconReadError(path, tooLong).message).toContain('cannot be read (Cannot create a string longer than 0x1fffffe8 characters)');
   });
 
+  it('keeps the original error as the cause', () => {
+    const path = join(dir, 'zz', 'builtin-icons.json');
+    expect(iconReadError(path, missingPath).cause).toBe(missingPath);
+    const denied = Object.assign(new Error('Access to this API has been restricted.'), { code: 'ERR_ACCESS_DENIED' });
+    expect(iconReadError(path, denied).cause).toBe(denied);
+  });
+
   it('calls a path missing only when nothing is in the way', () => {
     const path = join(dir, 'generated', 'builtin-icons.json');
     expect(iconReadError(path, missingPath).message).toBe(
@@ -298,10 +316,7 @@ describe('isArgumentError', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-    // Data and environment problems are plain errors, whatever their code.
-    for (const code of ['ERR_STRING_TOO_LONG', 'ERR_ACCESS_DENIED', 'UNKNOWN']) {
-      expect(isArgumentError(Object.assign(new Error(code), { code })), code).toBe(false);
-    }
+    // ERR_ACCESS_DENIED, a plain Error, is covered end to end by the permission test above.
     expect(isArgumentError('not an error')).toBe(false);
   });
 });

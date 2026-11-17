@@ -26,14 +26,16 @@ export function readErrorReason(error: unknown): string {
   if (Number.isSafeInteger(errno) && (errno as number) < 0) {
     return `${code}: ${getSystemErrorMessage(errno as number)}`;
   }
-  return typeof message === 'string' ? message : 'unknown error';
+  // Node's own messages may end in a period, which would land before a closing bracket.
+  return typeof message === 'string' ? message.replace(/\.$/, '') : 'unknown error';
 }
 
 /**
- * Whether an error is a mistake in the call itself, such as a NUL in a path
- * (ERR_INVALID_ARG_VALUE), which no change to the files can fix. Node throws
- * those as TypeErrors; file system, data and environment problems (ENOENT,
- * ERR_STRING_TOO_LONG, ERR_ACCESS_DENIED under --permission) are plain Errors.
+ * Whether an error from the reads and stats in this module is a mistake in the
+ * call itself, such as a NUL in a path (ERR_INVALID_ARG_VALUE), which no change
+ * to the files can fix. For these calls Node throws those as TypeErrors, while
+ * file system, data and environment problems (ENOENT, ERR_STRING_TOO_LONG,
+ * ERR_ACCESS_DENIED under --permission) are plain Errors.
  */
 export function isArgumentError(error: unknown): boolean {
   return error instanceof TypeError;
@@ -78,12 +80,13 @@ export function iconReadError(path: string, error: unknown): Error {
   // Only these two codes can mean a file in the way; other errors are reported as they are.
   const blocker = code === 'ENOENT' || code === 'ENOTDIR' ? blockingAncestor(path) : undefined;
   if (code === 'ENOENT' && !blocker) {
-    return new Error(`Built-in icon data ${path} is missing; ${ICON_DATA_FIX}`);
+    return new Error(`Built-in icon data ${path} is missing; ${ICON_DATA_FIX}`, { cause: error });
   }
   const reason = blocker ? `${blocker} is a file, not a folder` : readErrorReason(error);
   return new Error(
     `Built-in icon data ${path} cannot be read (${reason}). ` +
       `Fix what stops it from being read, such as access rights or a file or folder in the way, then ${ICON_DATA_FIX}`,
+    { cause: error },
   );
 }
 
