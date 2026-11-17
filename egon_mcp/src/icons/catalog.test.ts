@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -68,10 +68,24 @@ describe('IconCatalog.fromFile', () => {
     }
   });
 
-  it('says why a path it cannot read failed, instead of a hint that cannot help', () => {
+  it('says why a path it cannot read failed, and how to clear it', () => {
     const file = join(dir, 'builtin-icons.json');
     mkdirSync(file);
-    expect(() => IconCatalog.fromFile(pathToFileURL(file))).toThrow(`${file} cannot be read (EISDIR)`);
+    expect(() => IconCatalog.fromFile(pathToFileURL(file))).toThrow(
+      new RegExp(`cannot be read \\(EISDIR[^)]*\\)\\. Make it readable or remove it, then run "npm run generate:icons", then "npm run build"`),
+    );
+  });
+
+  it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)('does not call an unreadable folder a missing file', () => {
+    const locked = join(dir, 'locked');
+    mkdirSync(locked);
+    writeFileSync(join(locked, 'builtin-icons.json'), '[]');
+    chmodSync(locked, 0o000);
+    try {
+      expect(() => IconCatalog.fromFile(pathToFileURL(join(locked, 'builtin-icons.json')))).toThrow(/cannot be read \(EACCES/);
+    } finally {
+      chmodSync(locked, 0o755);
+    }
   });
 
   it('is the only way the built-in icons are loaded, the default file included', async () => {

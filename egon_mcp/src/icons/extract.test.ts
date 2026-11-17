@@ -151,6 +151,8 @@ describe('generateIconFile', () => {
         "const icons = new Dictionary();\nicons.putEntry(new Entry(5, 'A', []));\n",
         "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', 'a, b'));\n",
         "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', [1]));\n",
+        // A list with a hole: every() skips it, but the icon would get an undefined keyword.
+        "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', ['a', , 'b']));\n",
       ];
       for (const source of changed) {
         expect(() => generateIconFile(source, file, isIconList), source).toThrow(/its format may have changed/);
@@ -159,6 +161,12 @@ describe('generateIconFile', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('reads only keyword lists without holes', () => {
+    expect(() => extractBuiltInIcons("const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', ['a', , 'b']));\n")).toThrow(
+      /the keywords of A are not a list of strings/,
+    );
   });
 
   it('refuses icons that the build would reject, naming the change in Egon as the cause', () => {

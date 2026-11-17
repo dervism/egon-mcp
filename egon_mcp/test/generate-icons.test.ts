@@ -47,14 +47,6 @@ describe('scripts/generate-icons.mjs', () => {
     expect(existsSync(result.out)).toBe(false);
   });
 
-  it('runs the build\'s own check before writing, for what extraction lets through', () => {
-    // A keyword list with a hole passes extraction but not the build's check.
-    const result = generate("const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'Person', ['a', , 'b']));\n");
-    expect(result.status).toBe(1);
-    expect(result.stderr).toMatch(/do not have the shape the server reads/);
-    expect(existsSync(result.out)).toBe(false);
-  });
-
   it('takes both paths or none, so a stray argument cannot overwrite the real icon file', () => {
     for (const args of [['only-source.ts'], ['--help'], ['a.ts', 'b.json', 'c']]) {
       const result = spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', 'scripts/generate-icons.mjs', ...args], {

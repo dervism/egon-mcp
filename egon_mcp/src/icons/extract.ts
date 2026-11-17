@@ -50,13 +50,15 @@ export function extractBuiltInIcons(typeScriptSource: string): BuiltInIcon[] {
       if (typeof svg !== 'string') {
         throw new TypeError(`the SVG of ${name} is not a string`);
       }
-      if (!Array.isArray(keywords) || !keywords.every((keyword) => typeof keyword === 'string')) {
+      // Check a copy: every() skips holes in a list, the copy turns them into undefined.
+      const list: unknown[] = Array.isArray(keywords) ? [...keywords] : [];
+      if (!Array.isArray(keywords) || !list.every((keyword) => typeof keyword === 'string')) {
         throw new TypeError(`the keywords of ${name} are not a list of strings`);
       }
       if (collected.some((icon) => icon.name === name)) {
         return;
       }
-      collected.push({ name, svg, keywords: [...keywords] });
+      collected.push({ name, svg, keywords: list as string[] });
     }
     set(key: unknown, value: unknown): void {
       this.putEntry(new Entry(value, key));
