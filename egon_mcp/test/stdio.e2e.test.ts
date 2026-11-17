@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,6 +41,7 @@ describe('egon-mcp over stdio', () => {
       expect(file.dst.length).toBe(9);
     } finally {
       await client.close();
+      rmSync(root, { recursive: true, force: true });
     }
   }, 20_000);
 
@@ -58,6 +59,7 @@ describe('egon-mcp over stdio', () => {
       expect((await client.listTools()).tools.length).toBeGreaterThan(0);
     } finally {
       await client.close();
+      rmSync(root, { recursive: true, force: true });
     }
   }, 20_000);
 });

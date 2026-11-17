@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -8,13 +8,15 @@ import { createEgonServer } from '../server/server.js';
 import { TOOL_REFERENCE_PATH, toolReferenceMarkdown } from './tool-reference.js';
 
 async function currentTools() {
-  const egon = createEgonServer({ root: mkdtempSync(join(tmpdir(), 'egon-docs-')) });
+  const root = mkdtempSync(join(tmpdir(), 'egon-docs-'));
+  const egon = createEgonServer({ root });
   const client = new Client({ name: 'docs', version: '1.0.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([egon.server.connect(serverTransport), client.connect(clientTransport)]);
   const { tools } = await client.listTools();
   await client.close();
   await egon.close();
+  rmSync(root, { recursive: true, force: true });
   return tools;
 }
 

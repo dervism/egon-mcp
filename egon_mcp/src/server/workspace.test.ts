@@ -1,8 +1,8 @@
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { chmodSync, existsSync, linkSync, mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readEgonFixture } from '../../test/egon-fixtures.js';
 import { parseStoryFile } from '../egon/parse.js';
 import { Story } from '../story/story.js';
@@ -23,6 +23,43 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'egon-ws-'));
   workspace = new Workspace(root);
 });
+
+const extraDirs: string[] = [];
+
+/** A temp folder outside the workspace root, removed after the test. */
+function outsideDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'egon-out-'));
+  extraDirs.push(dir);
+  return dir;
+}
+
+afterEach(() => {
+  for (const dir of [root, ...extraDirs.splice(0)]) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Makes a named pipe plus a short-lived process that, without ever blocking,
+ * opens it for writing as soon as someone reads it and closes it again. Code
+ * that wrongly reads the pipe then gets an empty file instead of hanging the
+ * test run, and the process exits by itself after five seconds.
+ */
+function pipeWithWriter(path: string): ChildProcess {
+  execFileSync('mkfifo', [path]);
+  const script = `
+    const fs = require('node:fs');
+    const end = Date.now() + 5000;
+    const timer = setInterval(() => {
+      try {
+        fs.closeSync(fs.openSync(process.argv[1], fs.constants.O_WRONLY | fs.constants.O_NONBLOCK));
+        clearInterval(timer);
+      } catch {
+        if (Date.now() > end) clearInterval(timer);
+      }
+    }, 20);`;
+  return spawn(process.execPath, ['-e', script, path], { stdio: 'ignore' });
+}
 
 describe('Workspace', () => {
   it('creates stories with readable, unique ids', () => {
@@ -88,7 +125,7 @@ describe('Workspace', () => {
   });
 
   it('refuses symlinks that lead out of the root', () => {
-    const outside = mkdtempSync(join(tmpdir(), 'egon-out-'));
+    const outside = outsideDir();
     writeFileSync(join(outside, 'secret.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
     symlinkSync(outside, join(root, 'link'));
     expect(() => workspace.open('link/secret.egn')).toThrow(/outside/);
@@ -97,7 +134,7 @@ describe('Workspace', () => {
   });
 
   it('refuses to write through a dangling symlink', () => {
-    const outside = mkdtempSync(join(tmpdir(), 'egon-out-'));
+    const outside = outsideDir();
     symlinkSync(join(outside, 'escaped.egn'), join(root, 'story.egn'));
     const entry = workspace.create({ title: 'T' });
     expect(() => workspace.save(entry.id, { path: 'story.egn' })).toThrow(/symbolic link|outside/);
@@ -105,7 +142,7 @@ describe('Workspace', () => {
   });
 
   it('refuses directories that are dangling symlinks', () => {
-    const outside = mkdtempSync(join(tmpdir(), 'egon-out-'));
+    const outside = outsideDir();
     symlinkSync(join(outside, 'missing-dir'), join(root, 'linkdir'));
     const entry = workspace.create({ title: 'T' });
     expect(() => workspace.save(entry.id, { path: 'linkdir/story.egn' })).toThrow(/symbolic link|outside/);
@@ -144,6 +181,7 @@ describe('Workspace', () => {
     expect(() => workspace.save(second.id, {})).toThrow(new RegExp(`already exists, and story "${first.id}" opened or wrote it`));
     writeFileSync(join(root, 'mine.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
     const opened = workspace.open('mine.egn');
+    expect(() => workspace.save(first.id, { path: 'mine.egn' })).toThrow(new RegExp(`already exists, and story "${opened.id}" opened or wrote it`));
     workspace.save(opened.id, {});
     expect(() => workspace.save(first.id, { path: 'mine.egn' })).toThrow(/already exists/);
   });
@@ -255,26 +293,27 @@ describe('Workspace', () => {
     workspace.save(story.id, {});
     workspace.save(workspace.create({ title: 'Other' }).id, {});
     chmodSync(join(root, 'T.egn'), 0o000);
+    writeFileSync(join(root, 'notes.md'), 'private');
+    chmodSync(join(root, 'notes.md'), 0o000);
     try {
       expect(() => workspace.save(story.id, {})).toThrow(/cannot be read/);
+      // Nothing to check for a file this story never saw.
+      expect(() => workspace.save(story.id, { path: 'notes.md' })).toThrow(/^notes\.md already exists\./);
     } finally {
       chmodSync(join(root, 'T.egn'), 0o644);
+      chmodSync(join(root, 'notes.md'), 0o644);
     }
   });
 
   it.runIf(process.platform !== 'win32')('refuses targets that are not regular files, such as named pipes', () => {
-    const fifo = join(root, 'pipe.md');
-    execFileSync('mkfifo', [fifo]);
-    // Holds the pipe open for writing for a moment, so code that reads it returns instead of hanging.
-    const writer = spawn('sh', ['-c', 'sleep 2 > "$0"', fifo], { stdio: 'ignore' });
+    const writers = ['pipe.md', 'pipe.egn'].map((name) => pipeWithWriter(join(root, name)));
     try {
       const entry = workspace.create({ title: 'T' });
       expect(() => workspace.save(entry.id, { path: 'pipe.md' })).toThrow(/not a regular file/);
       expect(() => workspace.save(entry.id, { path: 'pipe.md', overwrite: true })).toThrow(/not a regular file/);
-      execFileSync('mkfifo', [join(root, 'pipe.egn')]);
       expect(() => workspace.open('pipe.egn')).toThrow(/not a regular file/);
     } finally {
-      writer.kill();
+      writers.forEach((writer) => writer.kill());
     }
   });
 

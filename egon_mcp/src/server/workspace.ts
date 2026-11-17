@@ -241,13 +241,17 @@ export class Workspace {
       return;
     }
     const advice = 'Pass overwrite: true to replace it, or choose another path.';
-    if (current === undefined) {
+    const ownFile = known !== undefined || this.isOwnFile(entry, absolute);
+    if (current === undefined && ownFile) {
       throw new WorkspaceError(`${path} cannot be read to check it for changes. ${advice}`);
     }
-    const holders = [...this.seen].filter(([storyId, files]) => storyId !== entry.id && files.get(key)?.hash === current);
+    const holders =
+      current === undefined
+        ? []
+        : [...this.seen].filter(([storyId, files]) => storyId !== entry.id && files.get(key)?.hash === current);
     const holder = holders[0]?.[0];
     const writer = holders.find(([, files]) => files.get(key)?.wrote)?.[0];
-    if (known !== undefined || this.isOwnFile(entry, absolute)) {
+    if (ownFile) {
       throw new WorkspaceError(
         writer
           ? `${path} was saved by story "${writer}" after story "${entry.id}" opened or wrote it. ${advice}`

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -10,12 +10,14 @@ const skillDir = new URL('../../skills/egon-mcp-skill/', import.meta.url);
 const examples = readFileSync(new URL('references/examples.md', skillDir), 'utf8');
 const skill = readFileSync(new URL('SKILL.md', skillDir), 'utf8');
 
+let root: string;
 let egon: EgonServer;
 let client: Client;
 let toolNames: string[];
 
 beforeAll(async () => {
-  egon = createEgonServer({ root: mkdtempSync(join(tmpdir(), 'egon-skill-')) });
+  root = mkdtempSync(join(tmpdir(), 'egon-skill-'));
+  egon = createEgonServer({ root });
   client = new Client({ name: 'skill', version: '1.0.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([egon.server.connect(serverTransport), client.connect(clientTransport)]);
@@ -25,6 +27,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await client.close();
   await egon.close();
+  rmSync(root, { recursive: true, force: true });
 });
 
 function jsonBlocks(markdown: string): string[] {
