@@ -1,4 +1,4 @@
-import { ACTIVITY_TYPE, CONNECTION_TYPE, type IconMap, type IconSet, type Scope, type StoryDocument, type StoryElement } from './types.js';
+import { ACTIVITY_TYPE, CONNECTION_TYPE, MAX_COORDINATE, type IconMap, type IconSet, type Scope, type StoryDocument, type StoryElement } from './types.js';
 
 export class StoryParseError extends Error {
   override name = 'StoryParseError';
@@ -208,15 +208,15 @@ function cleanElement(raw: Record<string, unknown>): StoryElement {
   } else {
     for (const key of ['x', 'y']) {
       const value = finite(element[key]);
-      if (value === undefined) {
-        throw new StoryParseError(`${id}: ${key} must be a number.`);
+      if (value === undefined || Math.abs(value) > MAX_COORDINATE) {
+        throw new StoryParseError(`${id}: ${key} must be a number within a billion pixels.`);
       }
       element[key] = value;
     }
     for (const key of ['width', 'height']) {
       if (element[key] !== undefined) {
         const value = finite(element[key]);
-        if (value === undefined || value <= 0) {
+        if (value === undefined || value <= 0 || value > MAX_COORDINATE) {
           delete element[key];
         } else {
           element[key] = value;

@@ -140,25 +140,3 @@ function segmentHitsBox(a: Point, b: Point, box: Bounds): boolean {
   }
   return true;
 }
-
-/** Where a shape is drawn, for reading order: top to bottom, then left to right. */
-export function readingPosition(element: object | undefined): number[] {
-  const x = (element as Record<string, unknown> | undefined)?.['x'];
-  const y = (element as Record<string, unknown> | undefined)?.['y'];
-  if (typeof x !== 'number' || typeof y !== 'number') {
-    return [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
-  }
-  return [y, x];
-}
-
-/** Compares two keys element by element. */
-export function compareKeys(a: (number | string)[], b: (number | string)[]): number {
-  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
-    const left = a[index] as number | string;
-    const right = b[index] as number | string;
-    if (left !== right) {
-      return left < right ? -1 : 1;
-    }
-  }
-  return 0;
-}

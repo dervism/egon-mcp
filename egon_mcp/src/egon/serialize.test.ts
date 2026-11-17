@@ -55,6 +55,18 @@ describe('toEgnJson', () => {
     }
   });
 
+  it('writes ids in the order of their numbers, so shape_9999 comes before shape_10000', () => {
+    const story = Story.fromDocument(
+      parseStoryFile(
+        JSON.stringify({ domain: { name: 'default', actors: {}, workObjects: {} }, dst: [{ type: 'domainStory:actorPerson', id: 'shape_9999', name: 'A', x: 0, y: 0 }, { info: '' }, { version: '3.2.1' }] }),
+        'story.egn',
+      ),
+    );
+    story.addActor({ name: 'B' });
+    const ids = JSON.parse(toEgnJson(story.toDocument())).dst.slice(0, -2).map((element: { id: string }) => element.id);
+    expect(ids).toEqual(['shape_9999', 'shape_10000']);
+  });
+
   it('sorts business objects by id like Egon does on export', () => {
     for (const format of ['egon3', 'egon4'] as const) {
       const json = JSON.parse(toEgnJson(sampleStory().toDocument(), { format }));

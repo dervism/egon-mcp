@@ -49,6 +49,64 @@ describe('element ids', () => {
   });
 });
 
+describe('element ids, continued', () => {
+  const fileWith = (elements: object[]) =>
+    Story.fromDocument(parseStoryFile(JSON.stringify({ domain: { name: 'default', actors: {}, workObjects: {} }, dst: [...elements, { info: '' }, { version: '3.2.1' }] }), 'story.egn'));
+
+  it('start at 10000, above the four-digit ids Egon draws at random', () => {
+    const story = fileWith([{ type: 'domainStory:actorPerson', id: 'shape_0042', name: 'A', x: 0, y: 0 }]);
+    expect(story.addActor({ name: 'B' }).id).toBe('shape_10000');
+    expect(Story.create({ title: 'T' }).addActor({ name: 'A' }).id).toBe('shape_10000');
+  });
+
+  it('never hand out an id again after its element was removed', () => {
+    const story = Story.create({ title: 'T' });
+    const first = story.addActor({ name: 'A' });
+    story.removeElement(first.id);
+    expect(story.addActor({ name: 'B' }).id).not.toBe(first.id);
+  });
+
+  it('stay unique next to ids too large for a plain number', () => {
+    const story = fileWith([{ type: 'domainStory:actorPerson', id: 'shape_9007199254740993', name: 'A', x: 0, y: 0 }]);
+    const ids = [story.addActor({ name: 'B' }).id, story.addActor({ name: 'C' }).id];
+    expect(new Set([...ids, 'shape_9007199254740993']).size).toBe(3);
+    expect(ids[0]).toBe('shape_9007199254740994');
+  });
+});
+
+describe('positions', () => {
+  it('want both x and y, or neither', () => {
+    const story = Story.create({ title: 'T' });
+    expect(() => story.addActor({ name: 'A', x: 100 })).toThrow(/both x and y/);
+    expect(() => story.addWorkObject({ name: 'W', y: 100 })).toThrow(/both x and y/);
+    expect(() => story.addAnnotation({ text: 'n', x: 100 })).toThrow(/both x and y/);
+  });
+
+  it('refuse coordinates and sizes beyond a billion pixels', () => {
+    const story = Story.create({ title: 'T' });
+    expect(() => story.addActor({ name: 'A', x: 2e9, y: 0 })).toThrow(/billion/);
+    expect(() => story.addGroup({ name: 'G', x: 0, y: 0, width: 300, height: 1e20 })).toThrow(/billion/);
+    const actor = story.addActor({ name: 'B' });
+    expect(() => story.updateElement(actor.id, { y: -3e9 })).toThrow(/billion/);
+  });
+
+  it('places a shape next to a group that covers only the first column', () => {
+    const story = Story.create({ title: 'T' });
+    story.addGroup({ name: 'Narrow', x: 0, y: 0, width: 150, height: 5000 });
+    const actor = story.addActor({ name: 'A' });
+    expect(actor.y).toBeLessThan(300);
+    expect(actor.x).toBeGreaterThan(150);
+  });
+
+  it('draws a group without members or position below the story, where it takes in nothing', () => {
+    const story = Story.create({ title: 'T' });
+    const a = story.addActor({ name: 'A' });
+    const group = story.addGroup({ name: 'To discuss' });
+    expect(story.get(a.id)?.['parent']).toBeUndefined();
+    expect(group.y).toBeGreaterThan(a.y + 75);
+  });
+});
+
 describe('adding actors and work objects', () => {
   it('creates elements with Egon types, unique shape ids and default sizes', () => {
     const { story, customer, order } = pizzaStory();

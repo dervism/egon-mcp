@@ -1,4 +1,4 @@
-import { iconNameOf, isActivity, isActor, isWorkObject, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { compareIds, iconNameOf, isActivity, isActor, isWorkObject, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { IconCatalog } from '../icons/catalog.js';
 import { autoLayout } from './layout.js';
 import { Story, StoryError } from './story.js';
@@ -168,7 +168,11 @@ function sameName(story: Story, name: string, kind: 'actor' | 'workObject'): Sto
   if (!wanted) {
     throw new StoryError(`Every sentence needs a name for its ${kind === 'actor' ? 'actor' : 'work object'}.`);
   }
-  const matches = story.elements().filter((element) => element.name.trim().toLowerCase() === wanted);
+  // In id order, which is the order of adding and survives a save.
+  const matches = story
+    .elements()
+    .filter((element) => element.name.trim().toLowerCase() === wanted)
+    .sort((a, b) => compareIds(a.id, b.id));
   const otherKind = matches.find((element) => (kind === 'actor' ? isWorkObject(element) : isActor(element)));
   if (otherKind) {
     throw new StoryError(

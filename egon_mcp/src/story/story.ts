@@ -6,7 +6,9 @@ import {
   EGON_FORMAT_VERSION,
   GROUP_TYPE,
   TEXT_ANNOTATION_TYPE,
+  MAX_COORDINATE,
   WORK_OBJECT_PREFIX,
+  compareIds,
   groupAncestors,
   iconNameOf,
   isActivity,
@@ -81,6 +83,9 @@ const CUSTOM_ICON_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
  * use the id to refer to an element in later calls.
  */
 export class Story {
+  /** The highest id number handed out or seen so far, per kind. */
+  private readonly highestIds = { shape: 9999n, connection: 9999n };
+
   private constructor(
     private doc: StoryDocument,
     private readonly catalog: IconCatalog,
@@ -221,19 +226,18 @@ export class Story {
     let bounds: Bounds;
     // A name shared by several elements (work objects repeat per sentence) groups all of them.
     const members = (input.members ?? []).flatMap((ref) => this.resolveShapes(ref));
-    if ((input.x === undefined) !== (input.y === undefined)) {
-      throw new StoryError('Give both x and y for the box, or neither.');
-    }
-    const fitted = members.length > 0 && input.x === undefined;
+    const given = this.givenPosition(input);
+    const fitted = members.length > 0 && !given;
     if (fitted) {
       bounds = enclose(members.map((member) => boundsOf(member)), GROUP_PADDING);
     } else {
-      bounds = {
-        x: input.x ?? GRID.originX,
-        y: input.y ?? GRID.originY,
-        width: input.width ?? 300,
-        height: input.height ?? 200,
-      };
+      // A box without members or position goes below the story, so it takes in nothing.
+      const bottom = Math.max(
+        GRID.originY - 60,
+        ...this.doc.elements.filter((element) => !isEdge(element)).map((element) => boundsOf(element as ShapeElement).y + boundsOf(element as ShapeElement).height),
+      );
+      bounds = { x: given?.x ?? GRID.originX, y: given?.y ?? bottom + 60, width: input.width ?? 300, height: input.height ?? 200 };
+      checkCoordinates(bounds);
     }
     const group: GroupElement = {
       type: GROUP_TYPE,
@@ -274,8 +278,9 @@ export class Story {
     // With a shared name, the note goes to the first element of that name.
     const anchor = input.attachTo ? this.resolveShapes(input.attachTo)[0] : undefined;
     let position: { x: number; y: number };
-    if (input.x !== undefined && input.y !== undefined) {
-      position = { x: input.x, y: input.y };
+    const given = this.givenPosition(input);
+    if (given) {
+      position = given;
     } else if (anchor) {
       const bounds = boundsOf(anchor);
       position = { x: bounds.x + bounds.width + 40, y: Math.max(0, bounds.y - 50) };
@@ -294,7 +299,7 @@ export class Story {
       number: DEFAULT_ANNOTATION_SIZE.height,
     };
     this.doc.elements.push(annotation);
-    if (anchor && (input.x === undefined || input.y === undefined)) {
+    if (anchor && !given) {
       // A note placed next to its element belongs with that element, even if it lands in another group's box.
       const anchorGroup = this.doc.elements.find((element) => element.id === anchor['parent']);
       if (isGroup(anchor)) {
@@ -420,6 +425,7 @@ export class Story {
         if (!Number.isFinite(value) || ((key === 'width' || key === 'height') && value <= 0)) {
           throw new StoryError(`${key} must be a ${key === 'x' || key === 'y' ? 'finite' : 'positive'} number.`);
         }
+        checkCoordinates({ [key]: value });
         shape[key] = Math.round(value);
       }
     }
@@ -503,7 +509,7 @@ export class Story {
 
   private addShape(kind: IconKind, input: ShapeInput, defaultIcon: string): ShapeElement {
     const type = this.typeFor(kind, input.icon ?? defaultIcon);
-    const position = input.x !== undefined && input.y !== undefined ? { x: Math.round(input.x), y: Math.round(input.y) } : this.nextFreeCell();
+    const position = this.givenPosition(input) ?? this.nextFreeCell();
     const shape: ShapeElement = {
       type,
       name: input.name,
@@ -591,6 +597,8 @@ export class Story {
     if (matches.length === 0) {
       throw new StoryError(`There is no element with the id or name "${ref}".`);
     }
+    // In id order, which is the order of adding and survives a save.
+    matches.sort((a, b) => compareIds(a.id, b.id));
     const nodes = matches.filter((element) => isActor(element) || isWorkObject(element));
     const candidates = nodes.length > 0 ? nodes : matches;
     if (candidates.length > 1 && !candidates.every((element) => isWorkObject(element))) {
@@ -599,6 +607,18 @@ export class Story {
       );
     }
     return candidates as ShapeElement[];
+  }
+
+  /** x and y when both are given; one without the other is a mistake. */
+  private givenPosition(input: { x?: number | undefined; y?: number | undefined }): { x: number; y: number } | undefined {
+    if (input.x === undefined && input.y === undefined) {
+      return undefined;
+    }
+    if (input.x === undefined || input.y === undefined) {
+      throw new StoryError('Give both x and y, or neither.');
+    }
+    checkCoordinates({ x: input.x, y: input.y });
+    return { x: Math.round(input.x), y: Math.round(input.y) };
   }
 
   private find(id: string): StoryElement | undefined {
@@ -701,14 +721,23 @@ export class Story {
   }
 
   /**
-   * The next id above every id of that kind in the story. Egon and save_story
-   * write elements sorted by id, so rising ids keep the order they were added
-   * in, which the narrator uses for sentences that share a number.
+   * The next id above every id of that kind the story has had, from 10000 up.
+   * Egon and save_story write elements sorted by id, so rising ids keep the
+   * order they were added in, which the narrator uses for sentences that share
+   * a number. Egon draws its own ids at random below 10000, so these never
+   * crowd its range, and a removed element's id is not handed out again.
    */
   private newId(kind: 'shape' | 'connection'): string {
     const pattern = new RegExp(`^${kind}_(\\d+)$`);
-    const highest = Math.max(0, ...this.doc.elements.map((element) => Number(pattern.exec(element.id)?.[1] ?? 0)));
-    return `${kind}_${String(highest + 1).padStart(4, '0')}`;
+    let highest = this.highestIds[kind];
+    for (const element of this.doc.elements) {
+      const digits = pattern.exec(element.id)?.[1];
+      if (digits !== undefined && BigInt(digits) > highest) {
+        highest = BigInt(digits);
+      }
+    }
+    this.highestIds[kind] = highest + 1n;
+    return `${kind}_${highest + 1n}`;
   }
 
   private checkColor(color: string): string {
@@ -749,6 +778,14 @@ function intersects(a: Bounds, b: Bounds, margin: number): boolean {
     a.y < b.y + b.height + margin &&
     b.y < a.y + a.height + margin
   );
+}
+
+function checkCoordinates(values: Partial<Bounds>): void {
+  for (const [key, value] of Object.entries(values)) {
+    if (typeof value === 'number' && Math.abs(value) > MAX_COORDINATE) {
+      throw new StoryError(`${key} must be within a billion pixels.`);
+    }
+  }
 }
 
 function enclose(boxes: Bounds[], padding: number): Bounds {

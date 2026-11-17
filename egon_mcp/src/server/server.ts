@@ -1,14 +1,14 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { StoryParseError } from '../egon/parse.js';
+import { parseStoryFile, StoryParseError } from '../egon/parse.js';
 import { fileNameFor, toEgnJson, type EgonFormat } from '../egon/serialize.js';
 import { IconCatalog } from '../icons/catalog.js';
 import { renderStorySvg } from '../render/svg.js';
 import { autoLayout } from '../story/layout.js';
 import { narrate, narrativeMarkdown } from '../story/narrate.js';
 import { addSentence, buildStory } from '../story/sentences.js';
-import { StoryError } from '../story/story.js';
+import { Story, StoryError } from '../story/story.js';
 import { validateStory } from '../story/validate.js';
 import { describeStory, summarizeEntry } from './describe.js';
 import { DOMAIN_STORYTELLING_GUIDE } from './guide.js';
@@ -253,7 +253,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Save story to file',
       description:
-        'Writes a story into the workspace directory. groupChangesOnOpen in the result lists shapes inside a group box that are not in the group; opening the file again puts them in. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". An existing file is only replaced if this story opened or wrote it and nobody changed it since, or with overwrite: true.',
+        'Writes a story into the workspace directory. For .egn and .egn.svg files, groupChangesOnOpen in the result lists the group changes open_story would make when it opens the file again: a shape inside a group box that is not in a group joins that group. Egon itself only reads who is in a group. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". An existing file is only replaced if this story opened or wrote it and nobody changed it since, or with overwrite: true.',
       inputSchema: {
         storyId,
         path: z.string().optional().describe('Target path relative to the workspace root.'),
@@ -267,11 +267,8 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     },
     run(({ storyId: id, path, overwrite, layout }) => {
       const saved = workspace.save(id, { ...(path ? { path } : {}), ...(overwrite ? { overwrite } : {}), ...(layout ? { layout } : {}) });
-      // A file cannot say that a shape inside a box is not in the group, so opening it again adds it.
-      const covered = validateStory(workspace.get(id).story.toDocument())
-        .filter((issue) => issue.code === 'group-encloses-non-member')
-        .map((issue) => `${issue.message} Opening the file again puts it into the group.`);
-      return json({ ...saved, ...(covered.length > 0 ? { groupChangesOnOpen: covered } : {}), workspaceRoot: workspace.root });
+      const changes = saved.format === 'egn' || saved.format === 'egn.svg' ? groupChangesOnOpen(workspace.get(id).story) : [];
+      return json({ ...saved, ...(changes.length > 0 ? { groupChangesOnOpen: changes } : {}), workspaceRoot: workspace.root });
     }),
   );
 
@@ -426,13 +423,13 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Add group',
       description:
-        'Draws a box around elements that belong together, such as a department or subdomain. With members and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and they join the group when the file is opened again. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.',
+        'Draws a box around elements that belong together, such as a department or subdomain. With members and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put them into the group when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.',
       inputSchema: {
         storyId,
         name: z.string().describe('Label in the top-left corner of the box.'),
         members: z.array(elementRef).optional().describe('Elements to put in the group, even outside the box. Without x and y the box fits around them.'),
         color: color.optional(),
-        x: z.number().optional().describe('Left edge of the box. Give x and y together, or neither to fit the box around the members.'),
+        x: z.number().optional().describe('Left edge of the box. Give x and y together; without them the box fits around the members, or goes below the story when there are none.'),
         y: z.number().optional().describe('Top edge of the box. Give x and y together.'),
         width: z.number().positive().optional().describe('Box width with x and y; default 300.'),
         height: z.number().positive().optional().describe('Box height with x and y; default 200.'),
@@ -722,4 +719,27 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
       await server.close();
     },
   };
+}
+
+/**
+ * The group changes that open_story would make to this story once saved: a
+ * file only records who is in a group, so a shape that lies in a group's box
+ * without a group of its own joins it. Egon itself only reads `parent`.
+ */
+function groupChangesOnOpen(story: Story): string[] {
+  const before = story.elements();
+  const after = new Map(Story.fromDocument(parseStoryFile(toEgnJson(story.toDocument()), 'story.egn')).elements().map((element) => [element.id, element['parent']]));
+  const byId = new Map(before.map((element) => [element.id, element]));
+  const nameOf = (id: unknown) => {
+    const element = typeof id === 'string' ? byId.get(id) : undefined;
+    return element ? element.name || (element['text'] as string | undefined) || element.id : String(id);
+  };
+  return before
+    .filter((element) => element['parent'] !== after.get(element.id))
+    .map((element) => {
+      const now = after.get(element.id);
+      return now === undefined
+        ? `"${nameOf(element.id)}" leaves "${nameOf(element['parent'])}" when open_story opens the file.`
+        : `"${nameOf(element.id)}" goes into "${nameOf(now)}" when open_story opens the file, because its top-left corner lies in that box.`;
+    });
 }

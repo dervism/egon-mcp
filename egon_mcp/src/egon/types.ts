@@ -131,6 +131,32 @@ export function iconNameOf(type: string): string {
   return '';
 }
 
+/** Coordinates and sizes beyond this many pixels are refused; nobody draws that far. */
+export const MAX_COORDINATE = 1e9;
+
+/**
+ * Compares ids such as shape_0042 by kind and then by number, so shape_10000
+ * comes after shape_9999, also for numbers too large for a plain number.
+ */
+export function compareIds(a: string, b: string): number {
+  const split = (id: string) => {
+    const match = /^(.*?)0*(\d+)$/.exec(id);
+    return match ? { prefix: match[1] as string, digits: match[2] as string } : { prefix: id, digits: '' };
+  };
+  const left = split(a);
+  const right = split(b);
+  if (left.prefix !== right.prefix) {
+    return left.prefix < right.prefix ? -1 : 1;
+  }
+  if (left.digits.length !== right.digits.length) {
+    return left.digits.length - right.digits.length;
+  }
+  if (left.digits !== right.digits) {
+    return left.digits < right.digits ? -1 : 1;
+  }
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 /** The ids of the groups around `element`, innermost first, following `parent`. */
 export function groupAncestors(element: StoryElement | undefined, byId: Map<string, StoryElement>): string[] {
   const found: string[] = [];

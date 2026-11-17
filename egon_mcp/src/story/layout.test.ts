@@ -330,6 +330,41 @@ describe('autoLayout', () => {
     expectStableAfterReopening(story);
   });
 
+  it('keeps a note linked from two elements with the first link, whatever the element order', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [
+        { actor: 'Boss', activity: 'reads', workObject: 'R' },
+        ...['W0', 'W1', 'W2'].map((workObject) => ({ actor: 'Clerk', activity: 'files', workObject })),
+      ],
+      annotations: [{ text: 'shared note', attachTo: 'R' }],
+    });
+    story.addGroup({ name: 'Works', members: ['W0', 'W1', 'W2'] });
+    const note = story.elements().find((element) => element['text'] === 'shared note') as ShapeElement;
+    const w2 = story.elements().find((element) => element.name === 'W2') as ShapeElement;
+    const doc = story.toDocument();
+    doc.elements.push({ type: 'domainStory:connection', id: 'connection_99999', name: '', source: w2.id, target: note.id, waypoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }] });
+    for (const elements of [doc.elements, [...doc.elements].reverse()]) {
+      const opened = Story.fromDocument({ ...doc, elements });
+      autoLayout(opened);
+      expect(groupIssues(opened)).toEqual([]);
+      expect(opened.get(note.id)?.['parent']).toBeUndefined();
+      expectStableAfterReopening(opened);
+    }
+  });
+
+  it('lays out shapes in no sentence left to right when their row was drawn a little crooked', () => {
+    const story = Story.create({ title: 'T' });
+    const ids = [
+      story.addActor({ name: 'Left', x: 300, y: 102 }).id,
+      story.addActor({ name: 'Middle', x: 500, y: 100 }).id,
+      story.addActor({ name: 'Right', x: 700, y: 95 }).id,
+    ];
+    autoLayout(story);
+    const xs = ids.map((id) => (story.get(id) as ShapeElement).x);
+    expect(xs).toEqual([...xs].sort((a, b) => a - b));
+  });
+
   it('lays out a file whose groups named each other as parent', () => {
     const text = JSON.stringify({
       domain: { name: 'default', actors: {}, workObjects: {} },

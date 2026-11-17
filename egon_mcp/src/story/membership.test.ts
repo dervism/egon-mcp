@@ -153,13 +153,21 @@ describe('group membership while editing', () => {
     expect(parentOf(story, annotation.id)).toBeUndefined();
   });
 
+  it('gives a note attached without a position the group of its element, or the group it describes', () => {
+    const story = Story.create({ title: 'T' });
+    const a = story.addActor({ name: 'A', x: 100, y: 100 });
+    const box = story.addGroup({ name: 'G', members: [a.id] });
+    expect(parentOf(story, story.addAnnotation({ text: 'about A', attachTo: a.id }).annotation.id)).toBe(box.id);
+    expect(parentOf(story, story.addAnnotation({ text: 'about G', attachTo: box.id }).annotation.id)).toBe(box.id);
+  });
+
   it('places a shape without a position quickly below a very tall group', () => {
     const story = Story.create({ title: 'T' });
-    story.addGroup({ name: 'Everything', x: 0, y: 0, width: 2000, height: 1e12 });
+    story.addGroup({ name: 'Everything', x: 0, y: 0, width: 2000, height: 1e9 });
     const started = Date.now();
     const actor = story.addActor({ name: 'A' });
     expect(Date.now() - started).toBeLessThan(500);
-    expect(actor.y).toBeGreaterThan(1e12);
+    expect(actor.y).toBeGreaterThan(1e9);
   });
 
   it('puts a shape added inside a group box into that group, as dropping it there in Egon does', () => {

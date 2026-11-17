@@ -87,7 +87,7 @@ In a longer story, `number` is the number of the first sentence's step. (6)
 
 ### Parallel steps
 
-Two things that happen at the same time share a number: pass the number of the earlier step as `number`. `narrate_story` reads such sentences in the order they were added; in a story drawn in Egon, that is the order of their ids. Use this sparingly, because parallel steps make a story harder to read and retell. If the order does not matter, agree on one order. (6)
+Two things that happen at the same time share a number: pass the number of the earlier step as `number`. `narrate_story` reads such sentences in the order they were added. In a story drawn in Egon, whose ids are random, the order is arbitrary but stays the same. Use this sparingly, because parallel steps make a story harder to read and retell. If the order does not matter, agree on one order. (6)
 
 ## Work objects over time
 

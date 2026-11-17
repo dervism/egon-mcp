@@ -1,5 +1,5 @@
-import { groupAncestors, isActor, isConnection, isGroup, isTextAnnotation, isWorkObject, type ShapeElement, type StoryElement } from '../egon/types.js';
-import { boundsOf, compareKeys, readingPosition, type Bounds } from './geometry.js';
+import { compareIds, groupAncestors, isActor, isConnection, isGroup, isTextAnnotation, isWorkObject, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { boundsOf, type Bounds } from './geometry.js';
 import { narrate } from './narrate.js';
 import type { Story } from './story.js';
 
@@ -72,11 +72,9 @@ export function autoLayout(story: Story): void {
 
   // Elements that take part in no step, and notes that belong to no element, go on rows of their
   // own at the end, in the order they are drawn, since the order of elements in a file means nothing.
-  const anchored = new Set(doc.elements.filter(isConnection).filter((link) => isNode(byId.get(link.source))).map((link) => link.target));
-  const freeNotes = doc.elements.filter((element) => isTextAnnotation(element) && !anchored.has(element.id) && !inGroup(element));
-  const leftovers = [...nodes.filter((node) => !placed.has(node.id) && !inGroup(node)), ...freeNotes]
-    .map((element) => element as ShapeElement)
-    .sort((a, b) => compareKeys([...readingPosition(a), a.id], [...readingPosition(b), b.id]));
+  const anchors = noteAnchors(doc.elements);
+  const freeNotes = doc.elements.filter((element) => isTextAnnotation(element) && !isNode(anchors.get(element.id)) && !inGroup(element));
+  const leftovers = inReadingOrder([...nodes.filter((node) => !placed.has(node.id) && !inGroup(node)), ...freeNotes] as ShapeElement[]);
   let leftoverRow = nextRow();
   let leftoverCol = 0;
   let rowHeight = 1;
@@ -216,17 +214,16 @@ function refitGroups(story: Story): void {
 function placeAnnotations(story: Story): void {
   const elements = story.elements();
   const byId = new Map(elements.map((element) => [element.id, element]));
-  for (const link of elements.filter(isConnection)) {
-    const annotation = byId.get(link.target);
-    const anchor = byId.get(link.source);
-    if (!annotation || !anchor || !isTextAnnotation(annotation) || !(isActor(anchor) || isWorkObject(anchor))) {
+  for (const [noteId, anchor] of noteAnchors(elements)) {
+    const annotation = byId.get(noteId);
+    if (!annotation || !isNode(anchor)) {
       continue;
     }
     // Annotations in a group are laid out in the group's block.
     if (groupAncestors(annotation, byId).length > 0) {
       continue;
     }
-    const bounds = boundsOf(anchor as ShapeElement);
+    const bounds = boundsOf(anchor as unknown as ShapeElement);
     story.setBounds(annotation.id, { x: bounds.x + bounds.width + 20, y: Math.max(0, bounds.y - 45) });
   }
 }
@@ -240,19 +237,51 @@ function placeAnnotations(story: Story): void {
 function joinNotesToGroups(story: Story): void {
   const elements = story.elements();
   const byId = new Map(elements.map((element) => [element.id, element]));
-  const done = new Set<string>();
-  for (const link of elements.filter(isConnection)) {
-    const annotation = byId.get(link.target);
-    const anchor = byId.get(link.source);
-    if (!annotation || !isTextAnnotation(annotation) || !anchor || done.has(annotation.id)) {
-      continue;
-    }
-    done.add(annotation.id);
+  for (const [noteId, anchor] of noteAnchors(elements)) {
+    const annotation = byId.get(noteId) as StoryElement;
     const wanted = isGroup(anchor) ? anchor.id : isNode(anchor) ? groupAncestors(anchor, byId)[0] : annotation['parent'];
     if (wanted !== annotation['parent']) {
       story.setParent(annotation.id, wanted as string | undefined);
     }
   }
+}
+
+/**
+ * The element each note is attached to. Egon lets several elements link to one
+ * note; the link with the lowest id counts, so the choice does not depend on
+ * the order of elements in a file.
+ */
+function noteAnchors(elements: StoryElement[]): Map<string, StoryElement> {
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  const anchors = new Map<string, StoryElement>();
+  const links = elements.filter(isConnection).sort((a, b) => compareIds(a.id, b.id));
+  for (const link of links) {
+    const note = byId.get(link.target);
+    const anchor = byId.get(link.source);
+    if (note && anchor && isTextAnnotation(note) && !anchors.has(note.id)) {
+      anchors.set(note.id, anchor);
+    }
+  }
+  return anchors;
+}
+
+/**
+ * Shapes in reading order: rows from the top, then left to right. A shape
+ * within 50 pixels below the first shape of a row still counts as that row,
+ * so a row drawn a little crooked reads left to right.
+ */
+function inReadingOrder(shapes: ShapeElement[]): ShapeElement[] {
+  const byY = [...shapes].sort((a, b) => a.y - b.y || a.x - b.x || compareIds(a.id, b.id));
+  const rows: ShapeElement[][] = [];
+  for (const shape of byY) {
+    const row = rows.at(-1);
+    if (row && shape.y - (row[0] as ShapeElement).y < 50) {
+      row.push(shape);
+    } else {
+      rows.push([shape]);
+    }
+  }
+  return rows.flatMap((row) => row.sort((a, b) => a.x - b.x || compareIds(a.id, b.id)));
 }
 
 function isNode(element: StoryElement | undefined): boolean {

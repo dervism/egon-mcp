@@ -145,6 +145,13 @@ describe('parseStoryFile', () => {
     expect(doc.elements[0]).not.toHaveProperty('pickedColor');
   });
 
+  it('rejects coordinates beyond a billion pixels and drops such sizes', () => {
+    const file = (element: object) => JSON.stringify({ domain: { name: 'default', actors: {}, workObjects: {} }, dst: [element, { info: '' }, { version: '3.2.1' }] });
+    expect(() => parseStoryFile(file({ type: 'domainStory:actorPerson', id: 'a', name: 'A', x: 1e20, y: 0 }), 'a.egn')).toThrow(/x must be a number/);
+    const doc = parseStoryFile(file({ type: 'domainStory:group', id: 'g', name: 'G', x: 0, y: 0, width: 300, height: 1e20 }), 'a.egn');
+    expect(doc.elements[0]?.['height']).toBeUndefined();
+  });
+
   it('rejects text that is not a domain story', () => {
     expect(() => parseStoryFile('not json', 'a.egn')).toThrow(StoryParseError);
     expect(() => parseStoryFile('{"hello": 1}', 'a.egn')).toThrow(StoryParseError);

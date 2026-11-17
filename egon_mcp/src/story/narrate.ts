@@ -1,6 +1,7 @@
 import {
   isActivity,
   isActor,
+  compareIds,
   isWorkObject,
   type ActivityElement,
   type StoryDocument,
@@ -24,9 +25,11 @@ export interface NarrativeStep {
  * activities until it reaches an actor, so "Customer tells Order to Clerk"
  * is one sentence. A work object reached in several steps repeats its onward
  * activities in each of them, as in Egon. Sentences that share a number, and
- * the onward arrows of one work object, are read in id order, which is the
- * order they were added in: new ids count up, and Egon and save_story write
- * elements sorted by id, so element order says nothing once a file is saved.
+ * the onward arrows of one work object, are read in id order, since element
+ * order says nothing once Egon or save_story has written the file sorted by
+ * id. egon-mcp's ids count up, so its own elements read in the order they
+ * were added; Egon draws its ids at random, so in stories drawn there the
+ * order is arbitrary but stays the same.
  */
 export function narrate(doc: StoryDocument): NarrativeStep[] {
   const byId = new Map(doc.elements.map((element) => [element.id, element]));
@@ -108,13 +111,6 @@ function continueFrom(
   ordered.push(...leading);
   const joined = ordered.map((part, index) => (index === 0 ? part : startsWithAnd(part) ? ` ${part}` : ` and ${part}`)).join('');
   return `${displayName(element)} ${joined}`;
-}
-
-/** Compares ids such as connection_0042 by their number, so connection_10000 comes after connection_9999. */
-export function compareIds(a: string, b: string): number {
-  const [, prefixA = a, numberA = ''] = /^(.*?)(\d+)$/.exec(a) ?? [];
-  const [, prefixB = b, numberB = ''] = /^(.*?)(\d+)$/.exec(b) ?? [];
-  return prefixA.localeCompare(prefixB) || Number(numberA || -1) - Number(numberB || -1) || a.localeCompare(b);
 }
 
 function isActorId(byId: Map<string, StoryElement>, id: string): boolean {

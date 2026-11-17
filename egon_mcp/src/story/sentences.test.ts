@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { parseStoryFile } from '../egon/parse.js';
+import { toEgnJson } from '../egon/serialize.js';
 import { isActor, isWorkObject } from '../egon/types.js';
 import { narrate } from './narrate.js';
 import { addSentence, buildStory } from './sentences.js';
@@ -184,6 +186,19 @@ describe('buildStory', () => {
     expect(actor['parent']).toBe(restaurant?.id);
     const connection = story.elements().find((e) => e.type === 'domainStory:connection');
     expect(connection?.['source']).toBe(actor.id);
+  });
+
+  it('reuses the same work object before and after a save, whatever the ids', () => {
+    const file = JSON.stringify({ domain: { name: 'default', actors: {}, workObjects: {} }, dst: [{ type: 'domainStory:actorPerson', id: 'shape_9998', name: 'Clerk', x: 0, y: 0 }, { info: '' }, { version: '3.2.1' }] });
+    const story = Story.fromDocument(parseStoryFile(file, 'story.egn'));
+    addSentence(story, { actor: 'Clerk', activity: 'drafts', workObject: 'Report' });
+    addSentence(story, { actor: 'Clerk', activity: 'revises', workObject: 'Report' });
+    const reopened = Story.fromDocument(parseStoryFile(toEgnJson(story.toDocument()), 'story.egn'));
+    const reuse = (of: Story) => addSentence(of, { actor: 'Clerk', activity: 'files', workObject: 'Report', reuseWorkObject: true });
+    const target = (of: Story) => of.elements().filter((element) => element.type === 'domainStory:activity').at(-1)?.['target'];
+    reuse(story);
+    reuse(reopened);
+    expect(target(reopened)).toBe(target(story));
   });
 
   it('puts every instance of a name into a group and attaches annotations to the first one', () => {

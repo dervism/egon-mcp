@@ -1,4 +1,4 @@
-import { EGON_FORMAT_VERSION, groupAncestors, isGroup, type StoryDocument, type StoryElement } from './types.js';
+import { EGON_FORMAT_VERSION, compareIds, groupAncestors, isGroup, type StoryDocument, type StoryElement } from './types.js';
 
 /**
  * Egon file layouts:
@@ -17,16 +17,16 @@ export interface SerializeOptions {
 
 /**
  * Serializes a story as an `.egn` file, matching Egon's own export: business
- * objects sorted by id and the current version of the chosen layout (Egon
+ * objects sorted by id (by number, so shape_10000 follows shape_9999) and the current version of the chosen layout (Egon
  * treats a missing or pre-0.5 version as a legacy file). Groups keep their
  * places but come outer first, because Egon's import puts a group into its
  * `parent` only when it has already read that group.
  */
 export function toEgnJson(doc: StoryDocument, options: SerializeOptions = {}): string {
-  const elements = [...doc.elements].sort((a, b) => a.id.localeCompare(b.id));
+  const elements = [...doc.elements].sort((a, b) => compareIds(a.id, b.id));
   const byId = new Map(elements.map((element) => [element.id, element]));
   const depth = (element: StoryElement) => groupAncestors(element, byId).length;
-  const outerFirst = elements.filter(isGroup).sort((a, b) => depth(a) - depth(b) || a.id.localeCompare(b.id));
+  const outerFirst = elements.filter(isGroup).sort((a, b) => depth(a) - depth(b) || compareIds(a.id, b.id));
   elements.forEach((element, index) => {
     if (isGroup(element)) {
       elements[index] = outerFirst.shift() as StoryElement;

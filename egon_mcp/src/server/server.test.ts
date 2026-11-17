@@ -264,11 +264,29 @@ describe('egon-mcp server', () => {
     expect(saved['groupChangesOnOpen']).toEqual([expect.stringContaining('"W"')]);
   });
 
+  it('reports on save only the groups that open_story would really change', async () => {
+    await ok('create_story', { title: 'Exact' });
+    await ok('add_actor', { storyId: 'exact', name: 'A', x: 100, y: 100 });
+    await ok('add_work_object', { storyId: 'exact', name: 'W', x: 100, y: 500 });
+    await ok('add_group', { storyId: 'exact', name: 'G1', members: ['A'] });
+    // A already belongs to G1, so the box of G2 around it changes nothing on open.
+    await ok('add_group', { storyId: 'exact', name: 'G2', x: 80, y: 80, width: 400, height: 300 });
+    expect((await ok('save_story', { storyId: 'exact' }))['groupChangesOnOpen']).toBeUndefined();
+    // An empty group whose corner touches a fitted box goes into it on open.
+    await ok('add_group', { storyId: 'exact', name: 'Tag', x: 900, y: 900, width: 50, height: 50 });
+    await ok('add_work_object', { storyId: 'exact', name: 'V', x: 1000, y: 1000 });
+    await ok('add_actor', { storyId: 'exact', name: 'B', x: 760, y: 760 });
+    await ok('add_group', { storyId: 'exact', name: 'Big', members: ['B', 'V'] });
+    const saved = await ok('save_story', { storyId: 'exact', path: 'exact.egn' });
+    expect(saved['groupChangesOnOpen']).toEqual([expect.stringContaining('"Tag"')]);
+    expect((await ok('save_story', { storyId: 'exact', path: 'exact.md' }))['groupChangesOnOpen']).toBeUndefined();
+  });
+
   it('tells agents how shapes get into a group', async () => {
     const { tools } = await client.listTools();
     const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';
     expect(describe('add_group')).toMatch(/fits around them and holds only them/);
-    expect(describe('add_group')).toMatch(/join the group when the file is opened again/);
+    expect(describe('add_group')).toMatch(/open_story would put them into the group/);
     expect(describe('save_story')).toMatch(/groupChangesOnOpen/);
     expect(describe('add_group')).toMatch(/takes in every shape whose top-left corner lies inside/);
     expect(describe('update_element')).toMatch(/joins the group whose box it is moved into/);
