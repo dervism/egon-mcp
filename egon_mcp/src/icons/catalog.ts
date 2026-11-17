@@ -29,18 +29,26 @@ export function readErrorReason(error: unknown): string {
   return typeof message === 'string' ? message : 'unknown error';
 }
 
+/** Like statSync without throwing for file system errors (a missing or unreadable path); other errors pass on. */
+function statIfPossible(path: string) {
+  try {
+    return statSync(path, { throwIfNoEntry: false });
+  } catch (error) {
+    // System error codes look like EACCES or ELOOP; ERR_* codes are programming errors.
+    if (/^E[A-Z0-9]+$/.test(String((error as NodeJS.ErrnoException).code))) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 /**
  * The closest existing ancestor of `path` if it is a file instead of a folder.
- * Never throws: a folder it cannot look into counts as no file in the way.
+ * A folder it cannot look into counts as no file in the way.
  */
 export function blockingAncestor(path: string): string | undefined {
   for (let dir = dirname(path); dir !== dirname(dir); dir = dirname(dir)) {
-    let stats;
-    try {
-      stats = statSync(dir, { throwIfNoEntry: false });
-    } catch {
-      return undefined;
-    }
+    const stats = statIfPossible(dir);
     if (stats) {
       return stats.isDirectory() ? undefined : dir;
     }
@@ -58,7 +66,9 @@ const ICON_DATA_FIX = `${ICON_FIX} in egon_mcp (needs the egon.io submodule).`;
 export function iconReadError(path: string, error: unknown): Error {
   const { code } = (error ?? {}) as NodeJS.ErrnoException;
   const blocker = code === 'ENOENT' || code === 'ENOTDIR' ? blockingAncestor(path) : undefined;
-  if (code === 'ENOENT' && !blocker) {
+  // A path that ends in a separator can fail as missing on Windows although the file is there.
+  const exists = statIfPossible(path.replace(/[\\/]+$/, '')) !== undefined;
+  if (code === 'ENOENT' && !blocker && !exists) {
     return new Error(`Built-in icon data ${path} is missing; ${ICON_DATA_FIX}`);
   }
   const reason = blocker ? `${blocker} is a file, not a folder` : readErrorReason(error);

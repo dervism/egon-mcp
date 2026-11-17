@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { blockingAncestor, DEFAULT_ICON_NAMES, IconCatalog, iconReadError, readErrorReason } from './catalog.js';
@@ -172,6 +172,29 @@ describe('blockingAncestor', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)(
+    'treats a folder it cannot look into as nothing in the way, so the server still reports its own message',
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'egon-catalog-'));
+      const locked = join(dir, 'locked');
+      mkdirSync(locked);
+      chmodSync(locked, 0o000);
+      try {
+        const path = join(locked, 'inner', 'x', 'builtin-icons.json');
+        expect(blockingAncestor(path)).toBeUndefined();
+        const missing = Object.assign(new Error('ENOENT'), { code: 'ENOENT', errno: -2 });
+        expect(iconReadError(path, missing).message).toMatch(/^Built-in icon data /);
+      } finally {
+        chmodSync(locked, 0o755);
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('passes on errors that are not about the file system, such as a bad path', () => {
+    expect(() => blockingAncestor(join(tmpdir(), 'a\0b', 'builtin-icons.json'))).toThrow(/null bytes|ERR_INVALID_ARG/);
+  });
 });
 
 describe('iconReadError', () => {
@@ -191,25 +214,19 @@ describe('iconReadError', () => {
     );
   });
 
+  it('never calls an existing file missing, whatever error the read reports', () => {
+    const file = join(dir, 'builtin-icons.json');
+    writeFileSync(file, '[]');
+    // Windows reports a trailing separator on a file as a missing path.
+    for (const path of [`${file}${sep}`, `${file}${sep}${sep}`]) {
+      expect(iconReadError(path, missingPath).message, path).toMatch(/cannot be read/);
+    }
+  });
+
   it('calls a path missing only when nothing is in the way', () => {
     const path = join(dir, 'generated', 'builtin-icons.json');
     expect(iconReadError(path, missingPath).message).toBe(
       `Built-in icon data ${path} is missing; run "npm run generate:icons", then "npm run build" in egon_mcp (needs the egon.io submodule).`,
     );
-  });
-});
-
-describe('blockingAncestor, unreadable folders', () => {
-  it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)('does not throw for a folder it cannot look into', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'egon-catalog-'));
-    const locked = join(dir, 'locked');
-    mkdirSync(locked);
-    chmodSync(locked, 0o000);
-    try {
-      expect(blockingAncestor(join(locked, 'inner', 'x', 'builtin-icons.json'))).toBeUndefined();
-    } finally {
-      chmodSync(locked, 0o755);
-      rmSync(dir, { recursive: true, force: true });
-    }
   });
 });
