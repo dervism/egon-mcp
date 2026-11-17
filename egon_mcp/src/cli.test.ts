@@ -38,6 +38,8 @@ describe('parseOptions', () => {
     expect(parseOptions(['--version'], {}, '/work')).toEqual({ root: '/work', version: true });
     // They answer even when the environment holds a setting the server would refuse.
     expect(parseOptions(['--version'], { EGON_FORMAT: 'bad', EGON_APP_URL: 'ftp://x' }, '/work')).toEqual({ root: '/work', version: true });
+    // ... and whatever the other flags hold.
+    expect(parseOptions(['--egon-format', 'bad', '--help'], {}, '/work')).toEqual({ root: '/work', help: true });
   });
 
   it('rejects unknown flags and non-http Egon URLs', () => {

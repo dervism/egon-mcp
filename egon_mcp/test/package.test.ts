@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { builtinModules } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +16,7 @@ const pkg = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')) a
   files: string[];
   bin: Record<string, string>;
   scripts: Record<string, string>;
+  dependencies: Record<string, string>;
   repository?: { url?: string };
 };
 
@@ -31,7 +33,9 @@ describe('npm package', () => {
     expect(pkg.main).toBeUndefined();
     expect(pkg.bin).toEqual({ 'egon-mcp': 'dist/index.js' });
     // A clean build, so files of deleted sources do not ship.
-    expect(pkg.scripts['prepack']).toBe('node scripts/clean-dist.mjs && npm run build && node scripts/pack-extras.mjs');
+    // Every build starts from an empty dist/, so no files of deleted sources ship.
+    expect(pkg.scripts['build']).toMatch(/^node scripts\/clean-dist\.mjs && /);
+    expect(pkg.scripts['prepack']).toBe('npm run build && node scripts/pack-extras.mjs');
     expect(pkg.repository?.url).toContain('github.com/dervism/egon-mcp');
   });
 
@@ -51,7 +55,7 @@ describe('npm package', () => {
       const args = ['pack', '--dry-run', '--json', '--ignore-scripts'];
       const options = { cwd: packageDir, encoding: 'utf8' as const, timeout: 60_000 };
       const result =
-        npm && /npm/.test(npm)
+        npm && /npm-cli\.js$/.test(npm)
           ? spawnSync(process.execPath, [npm, ...args], options)
           : spawnSync('npm', args, { ...options, shell: process.platform === 'win32' });
       expect(result.status, result.stderr).toBe(0);
@@ -61,12 +65,20 @@ describe('npm package', () => {
       }
       expect(files.filter((path) => /^(src|test|scripts|dist\/docs)\/|\.map$|\.tgz$/.test(path))).toEqual([]);
       expect(readFileSync(join(packageDir, 'dist', 'index.js'), 'utf8').startsWith('#!/usr/bin/env node\n')).toBe(true);
-      // Every file a packed module imports is packed too, and none points at a source map.
+      // Every file a packed module imports is packed too, every package it imports is a dependency,
+      // and no module points at a source map.
+      const dependencies = Object.keys(pkg.dependencies);
       for (const path of files.filter((file) => file.endsWith('.js'))) {
         const code = readFileSync(join(packageDir, path), 'utf8');
         expect(code, path).not.toMatch(/sourceMappingURL/);
-        for (const [, target] of code.matchAll(/(?:from\s*|import\s*\(\s*|import\s+)['"](\.{1,2}\/[^'"]+)['"]/g)) {
-          expect(files, `${path} imports ${target}`).toContain(posix.join(posix.dirname(path), target as string));
+        for (const [, target] of code.matchAll(/(?:from\s*|import\s*\(\s*|import\s+)['"]([^'"]+)['"]/g)) {
+          const specifier = target as string;
+          if (specifier.startsWith('.')) {
+            expect(files, `${path} imports ${specifier}`).toContain(posix.join(posix.dirname(path), specifier));
+          } else if (!specifier.startsWith('node:') && !builtinModules.includes(specifier)) {
+            const name = specifier.split('/').slice(0, specifier.startsWith('@') ? 2 : 1).join('/');
+            expect(dependencies, `${path} imports ${specifier}`).toContain(name);
+          }
         }
       }
     });
@@ -106,6 +118,15 @@ describe('pack-extras', () => {
         '[^1]: Footnote text here.',
         '',
         "Single [quoted](docs/q.md 'Q'), ![logo](docs/logo.png) and a [cdn](//cdn.example.com/x.js).",
+        'Kept: [app](<https://egon.io/app>), [top](<#install>) and `[code](docs/span.md)`.',
+        '[web2]: <https://egon.io>',
+        '[![build](docs/badge.svg)](docs/ci.md) and [a [nested] text](docs/x.md).',
+        '',
+        '````markdown',
+        '```',
+        '[deep](docs/deep.md)',
+        '```',
+        '````',
         '',
         '```markdown',
         '[in code](docs/code.md)',
@@ -138,6 +159,11 @@ describe('pack-extras', () => {
     expect(readme).toContain('![logo](https://github.com/dervism/egon-mcp/raw/v9.9.9/docs/logo.png)');
     expect(readme).toContain('[cdn](//cdn.example.com/x.js)');
     expect(readme).toContain('[in code](docs/code.md)');
+    expect(readme).toContain('Kept: [app](<https://egon.io/app>), [top](<#install>) and `[code](docs/span.md)`.');
+    expect(readme).toContain('[web2]: <https://egon.io>');
+    expect(readme).toContain(`[![build](https://github.com/dervism/egon-mcp/raw/v9.9.9/docs/badge.svg)](${base}docs/ci.md)`);
+    expect(readme).toContain(`[a [nested] text](${base}docs/x.md)`);
+    expect(readme).toContain('[deep](docs/deep.md)');
     expect(readFileSync(join(target(), 'LICENSE'), 'utf8')).toBe('GPL text');
     expect(readFileSync(join(target(), 'skill', 'references', 'tools.md'), 'utf8')).toBe('# Tools');
   });

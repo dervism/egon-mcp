@@ -15,24 +15,41 @@ const repo = 'https://github.com/dervism/egon-mcp';
 
 // A target with a scheme, an #anchor or a leading // is not a path in the repository.
 const local = '(?![a-z][a-z0-9+.-]*:|#|//)';
-const at = (path, kind = 'blob') => `${repo}/${kind}/v${version}/${path.replace(/^\.?\//, '')}`;
-const inline = new RegExp(`(!?)\\[([^\\]]*)\\]\\(${local}(<?)([^)\\s>]+)(>?)((?:\\s+(?:"[^"]*"|'[^']*'|\\([^)]*\\)))?)\\)`, 'gi');
-const reference = new RegExp(`^(\\s*\\[(?!\\^)[^\\]]+\\]:\\s*)${local}(<?)([^\\s>]+)(>?)`, 'i');
+const target = `(<?)${local}([^)\\s<>]+)(>?)`;
+const title = `((?:\\s+(?:"[^"]*"|'[^']*'|\\([^)]*\\)))?)`;
+// Link text may hold one level of brackets, as in a linked image (a badge).
+const text = '((?:[^\\[\\]]|\\[[^\\]]*\\])*)';
+const image = new RegExp(`!\\[${text}\\]\\(${target}${title}\\)`, 'gi');
+const link = new RegExp(`(?<!!)\\[${text}\\]\\(${target}${title}\\)`, 'gi');
+const reference = new RegExp(`^(\\s*\\[(?!\\^)[^\\]]+\\]:\\s*)${target}`, 'i');
+const at = (path, kind) => `${repo}/${kind}/v${version}/${path.replace(/^\.?\//, '')}`;
+const rewrite = (prose) =>
+  prose
+    .replace(image, (_, words, open, path, close, label) => `![${words}](${open}${at(path, 'raw')}${close}${label})`)
+    .replace(link, (_, words, open, path, close, label) => `[${words}](${open}${at(path, 'blob')}${close}${label})`)
+    .replace(reference, (_, label, open, path, close) => `${label}${open}${at(path, 'blob')}${close}`);
 
-let fenced = false;
+// Code stays as written: fenced blocks, closed only by a fence of the same kind and at
+// least the same length, and inline code spans.
+let fence;
 const readme = readFileSync(join(repoDir, 'README.md'), 'utf8')
   .split('\n')
   .map((line) => {
-    if (/^\s*(```|~~~)/.test(line)) {
-      fenced = !fenced;
+    const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+    if (fence !== undefined) {
+      if (marker && marker[0] === fence[0] && marker.length >= fence.length && line.trim() === marker) {
+        fence = undefined;
+      }
       return line;
     }
-    if (fenced) {
+    if (marker) {
+      fence = marker;
       return line;
     }
     return line
-      .replace(inline, (_, bang, text, open, path, close, title) => `${bang}[${text}](${open}${at(path, bang ? 'raw' : 'blob')}${close}${title})`)
-      .replace(reference, (_, label, open, path, close) => `${label}${open}${at(path)}${close}`);
+      .split(/(`+[^`]*`+)/)
+      .map((part, index) => (index % 2 === 1 ? part : rewrite(part)))
+      .join('');
   })
   .join('\n');
 writeFileSync(join(packageDir, 'README.md'), readme);

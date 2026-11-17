@@ -66,7 +66,7 @@ export function parseOptions(argv: string[], env: Record<string, string | undefi
     }
   }
 
-  // Help and version answer whatever the environment holds.
+  // Help and version answer without checking the other flags or the environment.
   if (flags.help || flags.version) {
     return { root: resolve(cwd, root ?? '.'), ...flags };
   }

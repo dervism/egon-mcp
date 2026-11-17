@@ -8,11 +8,11 @@ The egon-mcp server: Node, TypeScript, the official MCP SDK over stdio, tested w
 |---|---|
 | `npm test` | Builds (which extracts Egon's icons from the submodule), then runs all tests. |
 | `npm run typecheck` | Type checks sources and tests. |
-| `npm run build` | Builds `dist/`; `node dist/index.js --help` lists the options. |
+| `npm run build` | Empties `dist/` and builds it; `node dist/index.js --help` lists the options. |
 | `npm run docs` | Builds, then regenerates the skill's [tool reference](../skills/egon-mcp-skill/references/tools.md) from the server. A test fails when the reference is out of date. |
 | `npm run generate:icons` | Writes `src/icons/generated/builtin-icons.json` (gitignored) from `modules/egon.io`. |
 | `npm run release` | Publishes the version in `package.json`; see Releasing below. |
-| `npm pack`, `npm publish` | Empty `dist/` and build it again, then copy the repository README (links pointed at the version's tag on GitHub), `LICENSE` and the skill into this folder, gitignored, so the package carries them. |
+| `npm pack`, `npm publish` | Build, then copy the repository README (links pointed at the version's tag on GitHub), `LICENSE` and the skill into this folder, gitignored, so the package carries them. |
 
 Some tests run the built code in `dist/` in a separate process, which `npm test` builds first: the stdio end-to-end test in `test/stdio.e2e.test.ts`, the named pipe test in `src/server/workspace.test.ts`, so a blocked read cannot hang the run, the icon data test under Node's permission model in `src/icons/catalog.test.ts`, and the package tests in `test/package.test.ts`, which check what npm would pack and what `--version` and `--help` print. Without a complete build they fail with a hint, and they are skipped when `dist/` was not built from the current sources, for example in `npm run test:watch` after an edit. For that check the build records a hash of its inputs (sources, generated icons, `package.json`, both tsconfig files and the installed TypeScript compiler's package file) in `dist/build-info.json`, written only once tsc and the asset copy have succeeded.
 
@@ -42,5 +42,5 @@ Tests sit next to the code (`*.test.ts`), plus `test/` for end-to-end and skill 
 
 1. Set the version in `package.json` (`npm version <x.y.z> --no-git-tag-version`) and `SERVER_VERSION` in `src/server/server.ts`; a test checks that they match.
 2. Commit, tag `v<x.y.z>` and push the tag (`git push origin v<x.y.z>`). The README on npm links to files at that tag. Push `main` once the package is out, so the README on GitHub never offers a version npm does not have yet.
-3. Run `npm run release`. It checks that the working tree is clean and the tag is on GitHub, runs the tests, packs a clean build, publishes that tarball and prints its SHA-256. It publishes with `NPM_TOKEN` when that is set, in the environment or in the repository's `.env`, and otherwise with your npm login. Add `-- --otp <code>` when npm asks for a one-time code, or `-- --dry-run` to try it without publishing.
+3. Run `npm run release` (`-- --dry-run` tries it first, also before the tag is pushed). It checks that the working tree is clean and that the tag points at HEAD here and on GitHub, runs the tests, packs a clean build, publishes that tarball with your npm login and prints its SHA-256. npm asks on the terminal for a one-time code when your account needs one.
 4. Point the formula in [dervism/homebrew-tap](https://github.com/dervism/homebrew-tap) at the new tarball on the npm registry, with that SHA-256. The formula links the package's `skill` folder to `share/egon-mcp/skill`, the path the README gives for Homebrew installs.

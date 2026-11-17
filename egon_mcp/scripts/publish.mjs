@@ -1,79 +1,90 @@
-// Publishes the version in package.json to npm (DEVELOPMENT.md, Releasing).
-// It checks that the working tree is clean and that the tag v<version> points
-// at HEAD and is on GitHub, runs the tests, packs a clean build, publishes
-// that tarball and prints its SHA-256 for the Homebrew formula.
+// Publishes the version in package.json to npm with your npm login
+// (DEVELOPMENT.md, Releasing). It checks that the working tree is clean and
+// that the tag v<version> points at HEAD, here and on GitHub, runs the tests,
+// packs a clean build, publishes that tarball and prints its SHA-256 for the
+// Homebrew formula. Other arguments, such as --otp <code>, go on to npm publish.
 //
-// Usage: npm run release [-- --otp <code>] [-- --dry-run]
-//
-// With NPM_TOKEN set, in the environment or in the repository's .env, it
-// publishes with that token; otherwise with your npm login. The token goes to
-// npm through the environment only, never on a command line or into a file.
+// Usage: npm run release [-- --dry-run]
+// A dry run may come before the tag is on GitHub, and publishes nothing.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const packageDir = fileURLToPath(new URL('../', import.meta.url));
-const run = (command, args, options = {}) => execFileSync(command, args, { cwd: packageDir, encoding: 'utf8', ...options });
-const succeeds = (command, args) => {
-  try {
-    run(command, args, { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-};
 const fail = (message) => {
   console.error(message);
   process.exit(1);
 };
+const git = (...args) => execFileSync('git', args, { cwd: packageDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+const commitOf = (ref) => {
+  try {
+    return git('rev-parse', '--verify', '--quiet', `${ref}^{commit}`);
+  } catch {
+    return undefined;
+  }
+};
+
+// "npm run release --dry-run" reaches the script as npm_config_dry_run; it must not
+// make npm pack skip the tarball, so it goes to npm publish as an argument instead.
+const args = process.argv.slice(2);
+const dryRun = args.some((arg) => /^--dry-run(=true)?$/.test(arg)) || process.env.npm_config_dry_run === 'true';
+const env = { ...process.env };
+delete env.npm_config_dry_run;
+if (dryRun && !args.some((arg) => arg.startsWith('--dry-run'))) {
+  args.push('--dry-run');
+}
+
 // The npm that runs this script, or the one on the PATH.
-const npm = (args, options) =>
-  process.env.npm_execpath ? run(process.execPath, [process.env.npm_execpath, ...args], options) : run('npm', args, options);
+const npmCli = process.env.npm_execpath && /npm-cli\.js$/.test(process.env.npm_execpath) ? process.env.npm_execpath : undefined;
+const npm = (...npmArgs) => {
+  try {
+    if (npmCli) {
+      execFileSync(process.execPath, [npmCli, ...npmArgs], { cwd: packageDir, stdio: 'inherit', env });
+    } else {
+      execFileSync('npm', npmArgs, { cwd: packageDir, stdio: 'inherit', env, shell: process.platform === 'win32' });
+    }
+  } catch {
+    fail(`npm ${npmArgs[0]} failed; see its output above.`);
+  }
+};
 
 const { name, version } = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
 const tag = `v${version}`;
-if (run('git', ['status', '--porcelain']).trim() !== '') {
+if (git('status', '--porcelain') !== '') {
   fail('Commit or stash your changes first, so the package matches the tag.');
 }
-const head = run('git', ['rev-parse', 'HEAD']).trim();
-if (!succeeds('git', ['rev-parse', '--verify', '--quiet', `${tag}^{commit}`]) || run('git', ['rev-parse', `${tag}^{commit}`]).trim() !== head) {
-  fail(`Tag ${tag} must point at HEAD: git tag ${tag}`);
+const tagged = commitOf(tag);
+if (tagged === undefined) {
+  fail(`Tag ${tag} is missing: git tag ${tag}`);
 }
-if (!succeeds('git', ['ls-remote', '--exit-code', '--tags', 'origin', `refs/tags/${tag}`])) {
-  fail(`Push the tag first, so the README on npm can link to it: git push origin ${tag}`);
+if (tagged !== git('rev-parse', 'HEAD')) {
+  fail(`Tag ${tag} points at another commit than HEAD. Move it with git tag -f ${tag} if it has not been pushed yet.`);
+}
+// ls-remote lists an annotated tag twice, the second time peeled to its commit.
+let remote = '';
+try {
+  remote = git('ls-remote', 'origin', `refs/tags/${tag}`, `refs/tags/${tag}^{}`);
+} catch {
+  fail('Could not reach origin to check the tag.');
+}
+const lines = remote.split('\n').filter(Boolean);
+const remoteCommit = (lines.find((line) => line.endsWith('^{}')) ?? lines[0])?.split(/\s/)[0];
+if (remoteCommit === undefined) {
+  if (!dryRun) {
+    fail(`Push the tag first, so the README on npm can link to it: git push origin ${tag}`);
+  }
+  console.error(`${tag} is not on GitHub yet; push it before the real release: git push origin ${tag}`);
+} else if (remoteCommit !== tagged) {
+  fail(`${tag} on GitHub points at another commit than here. Publish from the commit GitHub has, or tag a new version.`);
 }
 
-npm(['test'], { stdio: 'inherit' });
+// Lifecycle scripts on, whatever the npm config says: pretest and prepack build the package.
+npm('test', '--ignore-scripts=false');
 const tarball = `${name}-${version}.tgz`;
 rmSync(join(packageDir, tarball), { force: true });
-npm(['pack'], { stdio: 'inherit' });
-
-const dotEnv = join(packageDir, '..', '.env');
-const fromDotEnv = existsSync(dotEnv)
-  ? readFileSync(dotEnv, 'utf8')
-      .match(/^\s*(?:export\s+)?NPM_TOKEN\s*=\s*(.*?)\s*$/m)?.[1]
-      ?.replace(/^(['"])(.*)\1$/, '$2')
-  : undefined;
-const token = process.env.NPM_TOKEN || fromDotEnv;
-const args = process.argv.slice(2);
-const env = { ...process.env };
-let config;
-if (token) {
-  // npm fills in ${NPM_TOKEN} from the environment when it reads this file.
-  config = mkdtempSync(join(tmpdir(), 'egon-npmrc-'));
-  writeFileSync(join(config, 'npmrc'), '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n');
-  env.NPM_TOKEN = token;
-  args.push('--userconfig', join(config, 'npmrc'));
-}
-try {
-  npm(['publish', tarball, ...args], { stdio: 'inherit', env });
-} finally {
-  if (config) {
-    rmSync(config, { recursive: true, force: true });
-  }
-}
+npm('pack', '--ignore-scripts=false');
+npm('publish', tarball, ...args);
 const sha = createHash('sha256').update(readFileSync(join(packageDir, tarball))).digest('hex');
-console.log(`\n${args.includes('--dry-run') ? 'Checked' : 'Published'} ${name}@${version}. SHA-256 of ${tarball} for the Homebrew formula:\n${sha}`);
+console.log(`\n${dryRun ? 'Checked' : 'Published'} ${name}@${version}. SHA-256 of ${tarball} for the Homebrew formula:\n${sha}`);

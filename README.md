@@ -72,7 +72,7 @@ Claude Desktop does not start servers with your shell's `PATH`, so it may not fi
 }
 ```
 
-After `npm install -g egon-mcp`, `which node` prints the first path, and the second is `dist/index.js` in the folder `echo "$(npm root -g)/egon-mcp"` prints. After a Homebrew install, they are `$(brew --prefix)/bin/node` and `dist/index.js` in `$(brew --prefix egon-mcp)/libexec/lib/node_modules/egon-mcp`.
+After `npm install -g egon-mcp`, `which node` prints the first path, and the second is `dist/index.js` in the folder that `echo "$(npm root -g)/egon-mcp"` prints. After a Homebrew install, `echo "$(brew --prefix)/bin/node"` prints the first, and the second is `dist/index.js` in the folder that `echo "$(brew --prefix egon-mcp)/libexec/lib/node_modules/egon-mcp"` prints.
 
 ### The skill
 
@@ -88,7 +88,7 @@ Or after a Homebrew install:
 mkdir -p ~/.claude/skills && ln -sfn "$(brew --prefix egon-mcp)/share/egon-mcp/skill" ~/.claude/skills/egon-mcp-skill
 ```
 
-Both links keep working after upgrades. With a Node version manager, the npm link points into the Node version you installed with; after installing egon-mcp under another version, run the command again. Inside this repository Claude Code loads the skill from [skills/egon-mcp-skill](skills/egon-mcp-skill/SKILL.md) by itself.
+Both links keep working after upgrades. If `~/.claude/skills/egon-mcp-skill` is a copied folder rather than a link, remove it first. With a Node version manager, the npm link points into the Node version you installed with; after installing egon-mcp under another version, run the command again. Inside this repository Claude Code loads the skill from [skills/egon-mcp-skill](skills/egon-mcp-skill/SKILL.md) by itself.
 
 ### From source
 
