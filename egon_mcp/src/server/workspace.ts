@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import { parseStoryFile } from '../egon/parse.js';
 import { fileNameFor, toEgnJson, type EgonFormat } from '../egon/serialize.js';
 import type { Scope } from '../egon/types.js';
@@ -19,11 +19,16 @@ export interface StoryEntry {
   story: Story;
   /** Path relative to the workspace root that the story was opened from or last saved to as .egn / .egn.svg. */
   path?: string;
-  /** The .egn layout of that file, used when saving back after the file was deleted or moved. */
+  /** The .egn layout of that file, used whenever the story is saved back to it. */
   layout?: EgonFormat;
   dirty: boolean;
 }
 
+/** What a story last read from or wrote to a file. */
+interface SeenContent {
+  hash: string;
+  wrote: boolean;
+}
 
 export interface SaveOptions {
   path?: string;
@@ -58,7 +63,7 @@ export class Workspace {
    * of the content it read or wrote. A story may replace a file without
    * `overwrite` only while the file still holds that content.
    */
-  private readonly seen = new Map<string, Map<string, string>>();
+  private readonly seen = new Map<string, Map<string, SeenContent>>();
   readonly root: string;
   /** Layout of written .egn files (docs/adr/0007-write-egon-3-file-layout.md). */
   readonly egonFormat: EgonFormat;
@@ -82,6 +87,9 @@ export class Workspace {
 
   open(path: string): StoryEntry {
     const absolute = this.resolveExisting(path);
+    if (!statSync(absolute).isFile()) {
+      throw new WorkspaceError(`${path} is not a regular file.`);
+    }
     if (lstatSync(absolute).size > MAX_FILE_BYTES) {
       throw new WorkspaceError(`${path} is larger than 20 MB.`);
     }
@@ -91,7 +99,7 @@ export class Workspace {
     const keepPath = /\.egn(\.svg)?$/i.test(relativePath) ? relativePath : undefined;
     const entry = this.add(Story.fromDocument(doc), keepPath, false);
     entry.layout = layoutOf(doc.version);
-    this.remember(entry.id, absolute, bytes);
+    this.remember(entry.id, absolute, bytes, false);
     return entry;
   }
 
@@ -159,7 +167,7 @@ export class Workspace {
     const content = this.serialize(entry.story, format, layout);
     mkdirSync(dirname(absolute), { recursive: true });
     writeFileSync(absolute, content);
-    this.remember(id, absolute, content);
+    this.remember(id, absolute, content, true);
     const relativePath = this.relative(absolute);
     const result: SaveResult = { path: relativePath, format, bytes: Buffer.byteLength(content) };
     if (egonFile) {
@@ -212,31 +220,33 @@ export class Workspace {
   }
 
   /** Records the content this story read from or wrote to a file. */
-  private remember(storyId: string, absolute: string, content: Buffer | string): void {
+  private remember(storyId: string, absolute: string, content: Buffer | string, wrote: boolean): void {
     let files = this.seen.get(storyId);
     if (!files) {
       files = new Map();
       this.seen.set(storyId, files);
     }
-    files.set(fileKey(absolute), hashOf(content));
+    files.set(fileKey(absolute), { hash: hashOf(content), wrote });
   }
 
   private isOwnFile(entry: StoryEntry, absolute: string): boolean {
-    return entry.path !== undefined && this.lexicallyInside(entry.path) === absolute;
+    return entry.path !== undefined && fileKey(this.lexicallyInside(entry.path)) === fileKey(absolute);
   }
 
   private assertMayReplace(absolute: string, path: string, entry: StoryEntry): void {
     const key = fileKey(absolute);
     const current = currentHash(absolute);
     const known = this.seen.get(entry.id)?.get(key);
-    if (known !== undefined && known === current) {
+    if (known !== undefined && known.hash === current) {
       return;
     }
     const advice = 'Pass overwrite: true to replace it, or choose another path.';
-    const writer =
-      current === undefined
-        ? undefined
-        : [...this.seen].find(([storyId, files]) => storyId !== entry.id && files.get(key) === current)?.[0];
+    if (current === undefined) {
+      throw new WorkspaceError(`${path} cannot be read to check it for changes. ${advice}`);
+    }
+    const holders = [...this.seen].filter(([storyId, files]) => storyId !== entry.id && files.get(key)?.hash === current);
+    const holder = holders[0]?.[0];
+    const writer = holders.find(([, files]) => files.get(key)?.wrote)?.[0];
     if (known !== undefined || this.isOwnFile(entry, absolute)) {
       throw new WorkspaceError(
         writer
@@ -244,7 +254,7 @@ export class Workspace {
           : `${path} changed on disk since story "${entry.id}" opened or wrote it. ${advice}`,
       );
     }
-    throw new WorkspaceError(`${path} already exists${writer ? `, and story "${writer}" opened or wrote it` : ''}. ${advice}`);
+    throw new WorkspaceError(`${path} already exists${holder ? `, and story "${holder}" opened or wrote it` : ''}. ${advice}`);
   }
 
   private add(story: Story, path: string | undefined, dirty: boolean): StoryEntry {
@@ -289,6 +299,9 @@ export class Workspace {
     const candidate = this.lexicallyInside(path);
     if (lexists(candidate) && lstatSync(candidate).isSymbolicLink()) {
       throw new WorkspaceError(`${path} is a symbolic link. Write to a regular file inside the workspace root.`);
+    }
+    if (lexists(candidate) && !lstatSync(candidate).isFile()) {
+      throw new WorkspaceError(`${path} is not a regular file.`);
     }
     // Check the nearest existing ancestor, including dangling links, so that
     // links cannot lead the write out of the root.
@@ -357,23 +370,32 @@ function lexists(path: string): boolean {
 }
 
 /**
- * One key per file however it is reached (symbolic or hard links, another
- * letter case): device and inode. The content hash, not the key, decides
- * whether a file changed, so a new file on a reused inode number is noticed.
+ * One key per file path, whatever its spelling: links in the path resolved
+ * and, where the file system ignores case, the file's own letter case. Works
+ * for files that do not exist yet. Hard links stay separate keys, but the
+ * content hash still notices changes made through them.
  */
 function fileKey(absolute: string): string {
-  const stats = statSync(absolute, { bigint: true });
-  return `${stats.dev}:${stats.ino}`;
+  try {
+    return realpathSync.native(absolute);
+  } catch {
+    try {
+      return join(realpathSync.native(dirname(absolute)), basename(absolute));
+    } catch {
+      return absolute;
+    }
+  }
 }
 
 function hashOf(content: Buffer | string): string {
   return createHash('sha256').update(content).digest('hex');
 }
 
-/** Hash of the file's content now, or undefined if it is too large or unreadable. */
+/** Hash of the file's content now, or undefined if it is too large, not a regular file or unreadable. */
 function currentHash(absolute: string): string | undefined {
   try {
-    return statSync(absolute).size > MAX_FILE_BYTES ? undefined : hashOf(readFileSync(absolute));
+    const stats = statSync(absolute);
+    return !stats.isFile() || stats.size > MAX_FILE_BYTES ? undefined : hashOf(readFileSync(absolute));
   } catch {
     return undefined;
   }
@@ -386,7 +408,8 @@ function layoutOf(version: string): EgonFormat {
 /** The layout of an existing Egon file, or undefined if it is not one or cannot be read. */
 function layoutOfFile(absolute: string): EgonFormat | undefined {
   try {
-    if (statSync(absolute).size > MAX_FILE_BYTES) {
+    const stats = statSync(absolute);
+    if (!stats.isFile() || stats.size > MAX_FILE_BYTES) {
       return undefined;
     }
     return layoutOf(parseStoryFile(readFileSync(absolute, 'utf8'), absolute).version);

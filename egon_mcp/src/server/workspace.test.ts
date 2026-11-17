@@ -1,4 +1,5 @@
-import { existsSync, linkSync, mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { chmodSync, existsSync, linkSync, mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -140,7 +141,7 @@ describe('Workspace', () => {
     const first = workspace.create({ title: 'Order' });
     const second = workspace.create({ title: 'Order' });
     workspace.save(first.id, {});
-    expect(() => workspace.save(second.id, {})).toThrow(/already exists/);
+    expect(() => workspace.save(second.id, {})).toThrow(new RegExp(`already exists, and story "${first.id}" opened or wrote it`));
     writeFileSync(join(root, 'mine.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
     const opened = workspace.open('mine.egn');
     workspace.save(opened.id, {});
@@ -175,7 +176,7 @@ describe('Workspace', () => {
     expect(() => workspace.save(first.id, {})).not.toThrow();
   });
 
-  it('treats a file reached through a linked folder or a hard link as the same file', () => {
+  it('protects a file changed through a linked folder or a hard link', () => {
     mkdirSync(join(root, 'real'));
     symlinkSync(join(root, 'real'), join(root, 'alias'));
     const a = workspace.create({ title: 'A', description: 'first' });
@@ -188,7 +189,7 @@ describe('Workspace', () => {
     workspace.save(a.id, { path: 'y.egn' });
     linkSync(join(root, 'y.egn'), join(root, 'hard.egn'));
     workspace.save(b.id, { path: 'hard.egn', overwrite: true });
-    expect(() => workspace.save(a.id, { path: 'y.egn' })).toThrow(/saved by story "b"/);
+    expect(() => workspace.save(a.id, { path: 'y.egn' })).toThrow(/changed on disk/);
   });
 
   it.runIf(caseInsensitive)('treats another letter case of a file as the same file', () => {
@@ -231,13 +232,70 @@ describe('Workspace', () => {
     expect(() => workspace.save(written.id, {})).not.toThrow();
   });
 
-  it("keeps a story's own layout when saving back to its file, even if the file is gone or unreadable", () => {
+  it('accepts a file re-created with the same content, and says "saved by" only for a story that wrote it', () => {
+    const story = workspace.create({ title: 'T', description: 'mine' });
+    workspace.save(story.id, {});
+    workspace.save(story.id, { path: 'T.md' });
+    for (const name of ['T.egn', 'T.md']) {
+      const bytes = readFileSync(join(root, name));
+      rmSync(join(root, name));
+      writeFileSync(join(root, name), bytes);
+    }
+    expect(() => workspace.save(story.id, {})).not.toThrow();
+    expect(() => workspace.save(story.id, { path: 'T.md' })).not.toThrow();
+
+    // A reader of the edited file is not its writer.
+    writeFileSync(join(root, 'T.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
+    workspace.open('T.egn');
+    expect(() => workspace.save(story.id, {})).toThrow(/changed on disk/);
+  });
+
+  it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)('says when a file cannot be read to check it', () => {
+    const story = workspace.create({ title: 'T' });
+    workspace.save(story.id, {});
+    workspace.save(workspace.create({ title: 'Other' }).id, {});
+    chmodSync(join(root, 'T.egn'), 0o000);
+    try {
+      expect(() => workspace.save(story.id, {})).toThrow(/cannot be read/);
+    } finally {
+      chmodSync(join(root, 'T.egn'), 0o644);
+    }
+  });
+
+  it.runIf(process.platform !== 'win32')('refuses targets that are not regular files, such as named pipes', () => {
+    const fifo = join(root, 'pipe.md');
+    execFileSync('mkfifo', [fifo]);
+    // Holds the pipe open for writing for a moment, so code that reads it returns instead of hanging.
+    const writer = spawn('sh', ['-c', 'sleep 2 > "$0"', fifo], { stdio: 'ignore' });
+    try {
+      const entry = workspace.create({ title: 'T' });
+      expect(() => workspace.save(entry.id, { path: 'pipe.md' })).toThrow(/not a regular file/);
+      expect(() => workspace.save(entry.id, { path: 'pipe.md', overwrite: true })).toThrow(/not a regular file/);
+      execFileSync('mkfifo', [join(root, 'pipe.egn')]);
+      expect(() => workspace.open('pipe.egn')).toThrow(/not a regular file/);
+    } finally {
+      writer.kill();
+    }
+  });
+
+  it("keeps a story's own layout when saving back to its file, even if the file is gone, unreadable or replaced", () => {
     writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
     const entry = workspace.open('four.egn');
     rmSync(join(root, 'four.egn'));
     expect(workspace.save(entry.id, {}).layout).toBe('egon4');
     writeFileSync(join(root, 'four.egn'), 'not a story');
     expect(workspace.save(entry.id, { overwrite: true }).layout).toBe('egon4');
+    writeFileSync(join(root, 'four.egn'), workspace.serialize(Story.create({ title: 'Three' }), 'egn', 'egon3'));
+    expect(workspace.save(entry.id, { overwrite: true }).layout).toBe('egon4');
+  });
+
+  it('knows its own file through a linked folder after the file was deleted', () => {
+    mkdirSync(join(root, 'real'));
+    symlinkSync(join(root, 'real'), join(root, 'alias'));
+    writeFileSync(join(root, 'real', 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
+    const entry = workspace.open('alias/four.egn');
+    rmSync(join(root, 'real', 'four.egn'));
+    expect(workspace.save(entry.id, { path: 'alias/four.egn' }).layout).toBe('egon4');
   });
 
   it('takes the layout from the Egon file being replaced when it is not the story\'s own', () => {

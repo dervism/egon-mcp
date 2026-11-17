@@ -103,6 +103,7 @@ Tool errors explain the problem and usually the fix:
 | `outside the workspace root`, `symbolic link` | Use a plain path relative to the root; ask the user to move the file or restart the server with another `--root`. |
 | `already exists` | Pick another path, or ask the user whether to pass `overwrite: true`. |
 | `was saved by story` | Another open story saved the file after this one read it. Compare the two with `get_story`, save from the one to keep, or ask the user before passing `overwrite: true`. |
+| `cannot be read` | The file is unreadable or too large to check. Ask the user, then save elsewhere or pass `overwrite: true`. |
 | `changed on disk` | The file was edited or replaced outside the server, or by a story that is closed now. Tell the user, then reopen it with `open_story`, save elsewhere, or pass `overwrite: true` if they agree to lose those changes. |
 | `No open story` | Use `list_stories`; stories are lost when the server restarts unless saved. |
 
