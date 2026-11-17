@@ -217,6 +217,13 @@ describe('readErrorReason', () => {
     }
     expect(readErrorReason('not an error')).toBe('unknown error');
   });
+
+  it('drops the final period of Node\'s own messages, so they fit in brackets', () => {
+    const denied = Object.assign(new Error('Access to this API has been restricted. Use --allow-fs-read to manage permissions.'), {
+      code: 'ERR_ACCESS_DENIED',
+    });
+    expect(readErrorReason(denied)).toBe('Access to this API has been restricted. Use --allow-fs-read to manage permissions');
+  });
 });
 
 describe('blockingAncestor', () => {
@@ -316,7 +323,12 @@ describe('isArgumentError', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-    // ERR_ACCESS_DENIED, a plain Error, is covered end to end by the permission test above.
+    // Classified by class, not by code: data and environment problems are plain Errors
+    // even when their code starts with ERR_ (the permission test above also checks
+    // ERR_ACCESS_DENIED end to end, when dist/ is current).
+    for (const code of ['ERR_STRING_TOO_LONG', 'ERR_ACCESS_DENIED', 'UNKNOWN']) {
+      expect(isArgumentError(Object.assign(new Error(code), { code })), code).toBe(false);
+    }
     expect(isArgumentError('not an error')).toBe(false);
   });
 });

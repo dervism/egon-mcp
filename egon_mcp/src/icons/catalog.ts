@@ -18,7 +18,8 @@ let builtInCatalog: IconCatalog | undefined;
 
 /**
  * Text for an error from reading a file: the system's words for system errors,
- * without the path that Node's own message repeats, else the message itself.
+ * without the path that Node's own message repeats, else the message without
+ * its final period, so the text fits inside brackets.
  */
 export function readErrorReason(error: unknown): string {
   const { code, errno, message } = (error ?? {}) as NodeJS.ErrnoException;

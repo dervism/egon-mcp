@@ -4,4 +4,4 @@
 - Date: 2026-11-17
 - Context: The server generates files that a separate app must import, so format mistakes only show up later inside Egon.
 - Decision: Every feature starts with a failing Vitest test, and Egon's own sample exports serve as fixtures.
-- Consequences: The test suite documents the file format. Vitest runs the TypeScript sources directly, and `npm test` builds first so the tests that run the built code in a child process can.
+- Consequences: The test suite documents the file format. Vitest runs the TypeScript sources directly, and `npm test` builds first so the tests that start the built code in a child process have a current build to run.
