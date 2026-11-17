@@ -67,7 +67,7 @@ Other details:
 
 ## Limits egon-mcp adds
 
-`open_story` refuses a file with an id longer than 256 characters or a coordinate beyond a billion pixels either way, and drops a width or height beyond that, falling back to the default size. The tools refuse such values too, so every file egon-mcp writes opens again.
+`open_story` refuses a file with an id longer than 256 characters or a coordinate beyond a billion pixels either way, and drops a width or height beyond that, falling back to the default size. The tools refuse such values too, so every file egon-mcp writes opens again, unless custom icons make it larger than the 20 MB `open_story` reads; `save_story` then says so in `reopenError`.
 
 ## Rules Egon enforces when editing
 

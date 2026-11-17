@@ -60,6 +60,22 @@ describe('element ids, continued', () => {
     expect(Story.create({ title: 'T' }).addActor({ name: 'A' }).id).toBe('shape_10000');
   });
 
+  it('never repeat an id that is already in the story, even at sixteen digits', () => {
+    const story = fileWith([
+      { type: 'domainStory:actorPerson', id: 'shape_999999999999998', name: 'A', x: 0, y: 0 },
+      { type: 'domainStory:actorPerson', id: 'shape_1000000000000000', name: 'B', x: 300, y: 0 },
+    ]);
+    const ids = [story.addActor({ name: 'C' }).id, story.addActor({ name: 'D' }).id, story.addActor({ name: 'E' }).id];
+    expect(new Set([...ids, 'shape_999999999999998', 'shape_1000000000000000']).size).toBe(5);
+    expect(story.elements().filter((element) => element.name === 'B')).toHaveLength(1);
+  });
+
+  it('are not used up by a refused edit', () => {
+    const story = Story.create({ title: 'T' });
+    expect(() => story.addActor({ name: 'A', x: 5e9, y: 0 })).toThrow(/billion/);
+    expect(story.addActor({ name: 'B' }).id).toBe('shape_10000');
+  });
+
   it('never hand out an id again after its element was removed', () => {
     const story = Story.create({ title: 'T' });
     const first = story.addActor({ name: 'A' });

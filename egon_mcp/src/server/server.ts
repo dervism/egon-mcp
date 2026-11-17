@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
@@ -133,15 +131,10 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
    */
   const edit = <T>(id: string, change: (entry: ReturnType<Workspace['get']>) => T): T => {
     const entry = workspace.get(id);
-    const snapshot = entry.story.toDocument();
-    try {
-      const result = change(entry);
-      workspace.touch(id);
-      return result;
-    } catch (error) {
-      entry.story.restore(snapshot);
-      throw error;
-    }
+    // A failed change leaves the story as it was, ids handed out included.
+    const result = entry.story.transaction(() => change(entry));
+    workspace.touch(id);
+    return result;
   };
 
   // ---------------------------------------------------------------- lifecycle
@@ -269,7 +262,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     },
     run(({ storyId: id, path, overwrite, layout }) => {
       const saved = workspace.save(id, { ...(path ? { path } : {}), ...(overwrite ? { overwrite } : {}), ...(layout ? { layout } : {}) });
-      const check = saved.format === 'egn' || saved.format === 'egn.svg' ? reopenCheck(workspace.get(id).story, join(workspace.root, saved.path)) : {};
+      const check = saved.format === 'egn' || saved.format === 'egn.svg' ? reopenCheck(workspace, workspace.get(id).story, saved.path) : {};
       return json({ ...saved, ...check, workspaceRoot: workspace.root });
     }),
   );
@@ -492,10 +485,10 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
         name: z.string().optional().describe('New name or activity label.'),
         icon: iconName.optional(),
         color: z.string().optional().describe('New color as hex, or "" to reset it.'),
-        x: z.number().optional().describe('New left edge (shapes only).'),
-        y: z.number().optional().describe('New top edge (shapes only).'),
-        width: z.number().positive().optional().describe('New width (groups and annotations).'),
-        height: z.number().positive().optional().describe('New height (groups and annotations).'),
+        x: z.number().optional().describe('New left edge (shapes only), at most a billion pixels either way.'),
+        y: z.number().optional().describe('New top edge (shapes only), at most a billion pixels either way.'),
+        width: z.number().positive().optional().describe('New width (groups and annotations), at most a billion pixels.'),
+        height: z.number().positive().optional().describe('New height (groups and annotations), at most a billion pixels.'),
         number: z.number().int().positive().optional().describe('Activities from an actor: move to this step; later steps shift by one.'),
         text: z.string().optional().describe('Text annotations: the new text.'),
       },
@@ -729,10 +722,10 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
  * shape that lies in a group's box without a group of its own joins it;
  * Egon itself only reads `parent`), or that the file would not open at all.
  */
-function reopenCheck(story: Story, path: string): { groupChangesOnOpen?: string[]; reopenError?: string } {
+function reopenCheck(workspace: Workspace, story: Story, path: string): { groupChangesOnOpen?: string[]; reopenError?: string } {
   let reopened: Story;
   try {
-    reopened = Story.fromDocument(parseStoryFile(readFileSync(path, 'utf8'), path));
+    reopened = Story.fromDocument(workspace.readStory(path));
   } catch (error) {
     return { reopenError: `open_story would refuse the saved file: ${(error as Error).message}` };
   }

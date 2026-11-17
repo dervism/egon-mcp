@@ -88,35 +88,38 @@ export function buildStory(input: BuildStoryInput): Story {
     ...(input.description !== undefined ? { description: input.description } : {}),
     ...(input.scope !== undefined ? { scope: input.scope } : {}),
   });
-  for (const spec of input.actors ?? []) {
-    withContext(`actor "${spec.name}"`, () => story.addActor(shapeInput(spec)));
-  }
-  for (const spec of input.workObjects ?? []) {
-    withContext(`work object "${spec.name}"`, () => story.addWorkObject(shapeInput(spec)));
-  }
-  input.sentences.forEach((sentence, index) => {
-    withContext(`sentence ${index + 1}`, () => addSentence(story, sentence));
+  // One transaction, so each step does not keep its own copy to undo.
+  story.transaction(() => {
+    for (const spec of input.actors ?? []) {
+      withContext(`actor "${spec.name}"`, () => story.addActor(shapeInput(spec)));
+    }
+    for (const spec of input.workObjects ?? []) {
+      withContext(`work object "${spec.name}"`, () => story.addWorkObject(shapeInput(spec)));
+    }
+    input.sentences.forEach((sentence, index) => {
+      withContext(`sentence ${index + 1}`, () => addSentence(story, sentence));
+    });
+    for (const group of input.groups ?? []) {
+      withContext(`group "${group.name}"`, () =>
+        story.addGroup({
+          name: group.name,
+          members: group.members,
+          ...(group.color ? { color: group.color } : {}),
+        }),
+      );
+    }
+    for (const annotation of input.annotations ?? []) {
+      withContext('annotation', () =>
+        story.addAnnotation({
+          text: annotation.text,
+          ...(annotation.attachTo ? { attachTo: annotation.attachTo } : {}),
+        }),
+      );
+    }
+    if (input.layout !== false) {
+      autoLayout(story);
+    }
   });
-  for (const group of input.groups ?? []) {
-    withContext(`group "${group.name}"`, () =>
-      story.addGroup({
-        name: group.name,
-        members: group.members,
-        ...(group.color ? { color: group.color } : {}),
-      }),
-    );
-  }
-  for (const annotation of input.annotations ?? []) {
-    withContext('annotation', () =>
-      story.addAnnotation({
-        text: annotation.text,
-        ...(annotation.attachTo ? { attachTo: annotation.attachTo } : {}),
-      }),
-    );
-  }
-  if (input.layout !== false) {
-    autoLayout(story);
-  }
   return story;
 }
 

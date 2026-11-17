@@ -39,22 +39,27 @@ export function autoLayout(story: Story): void {
     try {
       layOut(story);
     } catch (error) {
-      if (error instanceof StoryError && /billion/.test(error.message)) {
-        throw new StoryError(
-          `auto_layout cannot fit the story within a billion pixels: "${largestName(story)}" is too large. Make it smaller with update_element first.`,
-        );
+      if (error instanceof StoryError && /billion/.test(error.message) && !error.message.startsWith('auto_layout')) {
+        throw tooLarge(largestName(story));
       }
       throw error;
     }
   });
 }
 
-/** The name of the element with the largest box, which is what pushes the layout too far. */
+function tooLarge(name: string): StoryError {
+  return new StoryError(`auto_layout cannot fit the story within a billion pixels: "${name}" is too large. Make it smaller with update_element first.`);
+}
+
+function nameOf(element: StoryElement | undefined): string {
+  return element ? element.name || (element['text'] as string | undefined) || element.id : '';
+}
+
+/** The element with the largest box, for failures outside the grid, such as a refitted group. */
 function largestName(story: Story): string {
   const shapes = story.elements().filter((element) => typeof element['x'] === 'number') as ShapeElement[];
   const size = (shape: ShapeElement) => Math.max(boundsOf(shape).width, boundsOf(shape).height);
-  const largest = shapes.sort((a, b) => size(b) - size(a))[0];
-  return largest ? largest.name || (largest['text'] as string | undefined) || largest.id : '';
+  return nameOf(shapes.sort((a, b) => size(b) - size(a))[0]);
 }
 
 function layOut(story: Story): void {
@@ -213,7 +218,22 @@ function layOut(story: Story): void {
   }
 
   for (const [id, cell] of placed) {
-    story.setBounds(id, { x: ORIGIN.x + cell.col * CELL_WIDTH, y: ORIGIN.y + cell.row * CELL_HEIGHT });
+    try {
+      story.setBounds(id, { x: ORIGIN.x + cell.col * CELL_WIDTH, y: ORIGIN.y + cell.row * CELL_HEIGHT });
+    } catch (error) {
+      if (!(error instanceof StoryError && /billion/.test(error.message))) {
+        throw error;
+      }
+      // Rows above push an element down, cells to its left push it right: name the biggest of those.
+      const down = /^y /.test(error.message);
+      const size = (other: string) => (down ? span(other).rows : span(other).cols);
+      const culprit =
+        [...placed]
+          .filter(([, other]) => (down ? other.row < cell.row : other.row === cell.row && other.col < cell.col))
+          .map(([other]) => other)
+          .sort((a, b) => size(b) - size(a) || compareIds(a, b))[0] ?? id;
+      throw tooLarge(nameOf(byId.get(culprit)));
+    }
   }
 
   placeAnnotations(story);

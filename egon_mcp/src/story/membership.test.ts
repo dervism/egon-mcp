@@ -293,6 +293,7 @@ describe('group checks', () => {
     );
     const view = describeStory({ story: Story.fromDocument(doc) } as unknown as StoryEntry);
     expect(view.annotations[0]?.attachedTo).toBe('Bob');
+    expect(view.annotations[0]?.attachedToId).toBe(bob.id);
   });
 
   it('lists annotation members of a group by their text', () => {

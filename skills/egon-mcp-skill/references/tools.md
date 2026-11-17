@@ -209,10 +209,10 @@ Changes an element: rename it, change its icon or color, move or resize it, edit
 | `name` | string | no | New name or activity label. |
 | `icon` | string | no | Name of a built-in Egon icon (see search_icons) or a custom icon added with add_custom_icon. |
 | `color` | string | no | New color as hex, or "" to reset it. |
-| `x` | number | no | New left edge (shapes only). |
-| `y` | number | no | New top edge (shapes only). |
-| `width` | number | no | New width (groups and annotations). |
-| `height` | number | no | New height (groups and annotations). |
+| `x` | number | no | New left edge (shapes only), at most a billion pixels either way. |
+| `y` | number | no | New top edge (shapes only), at most a billion pixels either way. |
+| `width` | number | no | New width (groups and annotations), at most a billion pixels. |
+| `height` | number | no | New height (groups and annotations), at most a billion pixels. |
 | `number` | integer | no | Activities from an actor: move to this step; later steps shift by one. |
 | `text` | string | no | Text annotations: the new text. |
 

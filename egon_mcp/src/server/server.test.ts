@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeAll } from '../../test/close-all.js';
 import { readEgonFixture } from '../../test/egon-fixtures.js';
 import { parseStoryFile } from '../egon/parse.js';
+import { Story } from '../story/story.js';
 import { createEgonServer, type EgonServer } from './server.js';
 
 let root: string;
@@ -282,6 +283,20 @@ describe('egon-mcp server', () => {
     expect((await ok('save_story', { storyId: 'exact', path: 'exact.md' }))['groupChangesOnOpen']).toBeUndefined();
     expect((await ok('save_story', { storyId: 'exact', path: 'exact.egn.svg' }))['groupChangesOnOpen']).toEqual([expect.stringContaining('"Tag"')]);
     expect((await ok('save_story', { storyId: 'exact', path: 'exact.svg' }))['groupChangesOnOpen']).toBeUndefined();
+  });
+
+  it('does not use up ids on a refused add_sentence', async () => {
+    await ok('create_story', { title: 'Refused' });
+    expect((await call('add_sentence', { storyId: 'refused', actor: 'Alice', activity: 'writes', workObject: 'Note', number: 5 })).isError).toBe(true);
+    expect((await ok('add_actor', { storyId: 'refused', name: 'Bob' }))['id']).toBe('shape_10000');
+  });
+
+  it('says on save when open_story would refuse the written file', async () => {
+    const doc = Story.create({ title: 'Far away' }).toDocument();
+    doc.elements.push({ type: 'domainStory:actorPerson', id: 'shape_1', name: 'Far', x: 5e9, y: 0 });
+    const entry = egon.workspace.adopt(Story.fromDocument(doc));
+    const saved = await ok('save_story', { storyId: entry.id, path: 'far.egn' });
+    expect(saved['reopenError']).toMatch(/within a billion pixels/);
   });
 
   it('tells agents how shapes get into a group', async () => {

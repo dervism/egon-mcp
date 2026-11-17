@@ -100,6 +100,9 @@ const CUSTOM_ICON_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
  * use the id to refer to an element in later calls.
  */
 export class Story {
+  /** How many transactions are running; only the outermost keeps a copy to undo. */
+  private depth = 0;
+
   /** The highest id number handed out or seen so far, per kind. */
   private readonly highestIds = { shape: 9999, connection: 9999 };
 
@@ -370,14 +373,21 @@ export class Story {
    * included, so a refused edit leaves the story as it was.
    */
   private atomic<T>(edit: () => T): T {
+    // Inside another transaction, that one undoes everything.
+    if (this.depth > 0) {
+      return edit();
+    }
     const doc = structuredClone(this.doc);
     const ids = { ...this.highestIds };
+    this.depth += 1;
     try {
       return edit();
     } catch (error) {
       this.doc = doc;
       Object.assign(this.highestIds, ids);
       throw error;
+    } finally {
+      this.depth -= 1;
     }
   }
 
@@ -802,8 +812,13 @@ export class Story {
         highest = Number(digits);
       }
     }
-    this.highestIds[kind] = highest + 1;
-    return `${kind}_${highest + 1}`;
+    const taken = new Set(this.doc.elements.map((element) => element.id));
+    let next = highest + 1;
+    while (taken.has(`${kind}_${next}`)) {
+      next += 1;
+    }
+    this.highestIds[kind] = next;
+    return `${kind}_${next}`;
   }
 
   private checkColor(color: string): string {

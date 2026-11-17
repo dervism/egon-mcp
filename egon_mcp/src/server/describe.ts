@@ -2,7 +2,6 @@ import {
   iconNameOf,
   isActivity,
   isActor,
-  isConnection,
   isGroup,
   isTextAnnotation,
   isWorkObject,
@@ -66,7 +65,7 @@ export function describeStory(entry: StoryEntry, options: { positions?: boolean 
       return {
         id: annotation.id,
         text: annotation.text ?? '',
-        ...(anchor ? { attachedTo: nameOf(anchor.id) } : {}),
+        ...(anchor ? { attachedTo: nameOf(anchor.id), attachedToId: anchor.id } : {}),
         ...position(annotation),
       };
     }),

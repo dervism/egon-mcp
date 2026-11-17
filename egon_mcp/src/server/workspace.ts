@@ -3,7 +3,7 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSy
 import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import { parseStoryFile } from '../egon/parse.js';
 import { fileNameFor, toEgnJson, type EgonFormat } from '../egon/serialize.js';
-import type { Scope } from '../egon/types.js';
+import type { Scope, StoryDocument } from '../egon/types.js';
 import { renderStorySvg } from '../render/svg.js';
 import { narrativeMarkdown } from '../story/narrate.js';
 import { Story } from '../story/story.js';
@@ -86,15 +86,7 @@ export class Workspace {
   }
 
   open(path: string): StoryEntry {
-    const absolute = this.resolveExisting(path);
-    if (!statSync(absolute).isFile()) {
-      throw new WorkspaceError(`${path} is not a regular file.`);
-    }
-    if (lstatSync(absolute).size > MAX_FILE_BYTES) {
-      throw new WorkspaceError(`${path} is larger than 20 MB.`);
-    }
-    const bytes = readFileSync(absolute);
-    const doc = parseStoryFile(bytes.toString('utf8'), absolute);
+    const { absolute, bytes, doc } = this.read(path);
     const relativePath = this.relative(absolute);
     const keepPath = /\.egn(\.svg)?$/i.test(relativePath) ? relativePath : undefined;
     const entry = this.add(Story.fromDocument(doc), keepPath, false);
@@ -284,6 +276,26 @@ export class Workspace {
       id = `${base}-${counter}`;
     }
     return id;
+  }
+
+  /**
+   * Reads a story file with every check open_story applies, without opening
+   * it. save_story uses it to tell whether the file it wrote opens again.
+   */
+  readStory(path: string): StoryDocument {
+    return this.read(path).doc;
+  }
+
+  private read(path: string): { absolute: string; bytes: Buffer; doc: StoryDocument } {
+    const absolute = this.resolveExisting(path);
+    if (!statSync(absolute).isFile()) {
+      throw new WorkspaceError(`${path} is not a regular file.`);
+    }
+    if (lstatSync(absolute).size > MAX_FILE_BYTES) {
+      throw new WorkspaceError(`${path} is larger than 20 MB.`);
+    }
+    const bytes = readFileSync(absolute);
+    return { absolute, bytes, doc: parseStoryFile(bytes.toString('utf8'), absolute) };
   }
 
   private resolveExisting(path: string): string {
