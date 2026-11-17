@@ -88,38 +88,64 @@ export function settleMembership(elements: StoryElement[]): void {
   }
 }
 
+/** Everything a group holds, nested groups and their contents included, but no arrows. */
+export function contentsOf(groupId: string, elements: StoryElement[]): string[] {
+  return elements.flatMap((element) =>
+    element['parent'] !== groupId || isEdge(element) ? [] : isGroup(element) ? [element.id, ...contentsOf(element.id, elements)] : [element.id],
+  );
+}
+
+/**
+ * What counts as chosen when these ids become members: the ids, everything
+ * inside a chosen group, and every note attached to a chosen element.
+ */
+function chosenWith(ids: string[], elements: StoryElement[]): Set<string> {
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  const chosen = new Set(ids.flatMap((id) => (isGroup(byId.get(id) as StoryElement) ? [id, ...contentsOf(id, elements)] : [id])));
+  for (const link of elements.filter(isConnection)) {
+    const target = byId.get(link.target);
+    if (target && isTextAnnotation(target) && chosen.has(link.source)) {
+      chosen.add(target.id);
+    }
+  }
+  return chosen;
+}
+
+/**
+ * The first thing in the group that keeps it from going in whole with these
+ * ids: an element that is not chosen. A note on the group itself, or on a
+ * group inside it, belongs to the group and does not count.
+ */
+export function blockerIn(groupId: string, ids: string[], elements: StoryElement[]): StoryElement | undefined {
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  const chosen = chosenWith(ids, elements);
+  const inside = contentsOf(groupId, elements);
+  const groupsHere = new Set([groupId, ...inside.filter((id) => isGroup(byId.get(id) as StoryElement))]);
+  const notesOnGroups = new Set(
+    elements.filter(isConnection).filter((link) => groupsHere.has(link.source)).map((link) => link.target),
+  );
+  const blocker = inside.find((id) => !isGroup(byId.get(id) as StoryElement) && !chosen.has(id) && !notesOnGroups.has(id));
+  return blocker === undefined ? undefined : byId.get(blocker);
+}
+
 /**
  * The members for a new group, with every existing group whose contents are
  * all chosen taken in whole instead of one by one, outermost first, so no
- * group is left empty and inner groups may be drawn before outer ones. A
- * chosen group counts with all it holds, and a note counts as chosen when the
- * element it is attached to is. A group that holds anything else, such as an
- * actor of a subdomain, is not taken; its chosen members move one by one.
+ * group is left empty and inner groups may be drawn before outer ones. A group
+ * passed as a member stays as it is. A group that holds anything else, such as
+ * an actor of a subdomain, is not taken; its chosen members move one by one.
  */
 export function takeWholeGroups(ids: string[], elements: StoryElement[]): string[] {
   const byId = new Map(elements.map((element) => [element.id, element]));
-  const contents = (groupId: string): string[] =>
-    elements.flatMap((element) =>
-      element['parent'] !== groupId || isEdge(element) ? [] : isGroup(element) ? [element.id, ...contents(element.id)] : [element.id],
-    );
-  const chosen = new Set(ids.flatMap((id) => (isGroup(byId.get(id) as StoryElement) ? [id, ...contents(id)] : [id])));
-  for (const link of elements.filter(isConnection)) {
-    if (chosen.has(link.source) && isTextAnnotation(byId.get(link.target) as StoryElement)) {
-      chosen.add(link.target);
-    }
-  }
-  const members: string[] = [];
+  const whole = (groupId: string) =>
+    contentsOf(groupId, elements).some((id) => !isGroup(byId.get(id) as StoryElement)) && blockerIn(groupId, ids, elements) === undefined;
+  const picked: string[] = [];
   for (const id of ids) {
-    const whole = groupAncestors(byId.get(id), byId)
-      .filter((groupId) => {
-        const inside = contents(groupId).filter((content) => !isGroup(byId.get(content) as StoryElement));
-        return inside.length > 0 && inside.every((content) => chosen.has(content));
-      })
-      .at(-1);
-    const member = whole ?? id;
-    if (!members.includes(member)) {
-      members.push(member);
+    const member = isGroup(byId.get(id) as StoryElement) ? id : (groupAncestors(byId.get(id), byId).filter(whole).at(-1) ?? id);
+    if (!picked.includes(member)) {
+      picked.push(member);
     }
   }
-  return members;
+  // A member inside another member goes along with it.
+  return picked.filter((id) => !groupAncestors(byId.get(id), byId).some((ancestor) => picked.includes(ancestor)));
 }

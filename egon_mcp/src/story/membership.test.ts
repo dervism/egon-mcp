@@ -142,7 +142,7 @@ describe('group membership while editing', () => {
   it('refuses a member group that is not smaller than the box it should go into', () => {
     const story = Story.create({ title: 'T' });
     const big = story.addGroup({ name: 'Big', x: 0, y: 0, width: 800, height: 800 });
-    expect(() => story.addGroup({ name: 'Small', members: [big.id], x: 1000, y: 0, width: 300, height: 200 })).toThrow(/not smaller than the new box/);
+    expect(() => story.addGroup({ name: 'Small', members: [big.id], x: 1000, y: 0, width: 300, height: 200 })).toThrow(/not smaller than the box/);
   });
 
   it('wants both x and y for a box, or neither', () => {
@@ -241,11 +241,12 @@ describe('group membership while editing', () => {
       const after = story.get(element.id) as ShapeElement;
       expect([after.x - element.x, after.y - element.y], element.id).toEqual([500, 300]);
     }
+    // The note on Form went into Inner together with Form.
     expect([parentOf(story, 'Clerk'), parentOf(story, inner.id), parentOf(story, 'Form'), parentOf(story, 'monthly')]).toEqual([
       outer.id,
       outer.id,
       inner.id,
-      outer.id,
+      inner.id,
     ]);
     expect(validateStory(story.toDocument()).filter((issue) => issue.code.includes('group'))).toEqual([]);
   });
@@ -345,6 +346,30 @@ describe('taking groups in whole', () => {
     ]);
     expect(takeWholeGroups(['estimate'], elements)).toEqual(['estimate']);
     expect(takeWholeGroups(['customer', 'estimate'], elements)).toEqual(['customers', 'estimate']);
+  });
+
+  it('counts a note on the group itself as part of it', () => {
+    const elements = doc([
+      group('intake', 0, 0, 1000, 1000),
+      { type: 'domainStory:workObjectDocument', id: 'a', name: 'A', x: 100, y: 100, parent: 'intake' },
+      { type: 'domainStory:textAnnotation', id: 'n', text: 'about intake', x: 300, y: 100, width: 100, height: 30, parent: 'intake' },
+      { type: 'domainStory:connection', id: 'c', source: 'intake', target: 'n', waypoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }] },
+    ]);
+    expect(takeWholeGroups(['a'], elements)).toEqual(['intake']);
+  });
+
+  it('ignores a link to a note that does not exist', () => {
+    const elements = doc([
+      group('g', 0, 0, 1000, 1000),
+      { type: 'domainStory:workObjectDocument', id: 'a', name: 'A', x: 100, y: 100, parent: 'g' },
+      { type: 'domainStory:connection', id: 'c', source: 'a', target: 'shape_404', waypoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }] },
+    ]);
+    expect(takeWholeGroups(['a'], elements)).toEqual(['g']);
+  });
+
+  it('keeps a group that was passed as it is, without taking its parent', () => {
+    const elements = doc([group('g2', 0, 0, 2000, 2000), group('g1', 100, 100, 500, 500, 'g2'), { type: 'domainStory:workObjectDocument', id: 'a', name: 'A', x: 150, y: 150, parent: 'g1' }]);
+    expect(takeWholeGroups(['g1'], elements)).toEqual(['g1']);
   });
 
   it('counts a chosen group and notes on chosen elements as chosen', () => {

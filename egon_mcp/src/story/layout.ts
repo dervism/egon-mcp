@@ -265,7 +265,8 @@ function layOut(story: Story): void {
       besideRow += 1;
       for (const noteId of besideNotes.get(actor) ?? []) {
         const note = byId.get(noteId) as ShapeElement;
-        const width = Math.max(40, Math.min(boundsOf(note).width, leftEdge - 20 - ORIGIN.x));
+        // wrap() keeps at least ten characters a line, about 70 pixels.
+        const width = Math.max(70, Math.min(boundsOf(note).width, leftEdge - 20 - ORIGIN.x));
         const lines = wrap(String(note['text'] ?? ''), Math.max(10, Math.floor(width / 6.5))).length;
         const height = Math.max(30, 14 + lines * 17);
         noteSizes.set(noteId, { width, height });

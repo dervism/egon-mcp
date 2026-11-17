@@ -1,7 +1,7 @@
 import { compareIds, groupAncestors, iconNameOf, isGroup, isActivity, isActor, isWorkObject, type Scope, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { IconCatalog } from '../icons/catalog.js';
 import { autoLayout } from './layout.js';
-import { takeWholeGroups } from './membership.js';
+import { blockerIn, takeWholeGroups } from './membership.js';
 import { narrate } from './narrate.js';
 import { Story, StoryError } from './story.js';
 
@@ -109,7 +109,7 @@ export function buildStory(input: BuildStoryInput): Story {
       withContext(`group "${group.name}"`, () =>
         story.addGroup({
           name: group.name,
-          members: [...(group.members ?? []), ...(group.steps ? membersOfSteps(story, group.steps) : [])],
+          members: [...(group.members ?? []), ...(group.steps ? membersOfSteps(story, group.steps, (group.members ?? []).flatMap((ref) => story.idsOf(ref))) : [])],
           ...(group.color ? { color: group.color } : {}),
         }),
       );
@@ -212,11 +212,11 @@ function shapeInput(spec: ShapeSpec) {
 /**
  * The members for a group made from the sentences with these step numbers:
  * their work objects, the second work object of a sentence included, but
- * never their actors, which usually take part in several subdomains. A group
- * whose work objects all belong to these steps goes in whole, so inner groups
- * may be drawn before outer ones.
+ * never their actors, which usually take part in several subdomains. An
+ * existing group made only of these (and of `named`, members given in the
+ * same call) goes in whole, so inner groups may be drawn before outer ones.
  */
-export function membersOfSteps(story: Story, steps: number[]): string[] {
+export function membersOfSteps(story: Story, steps: number[], named: string[] = []): string[] {
   const doc = story.toDocument();
   const byId = new Map(doc.elements.map((element) => [element.id, element]));
   const narrative = narrate(doc);
@@ -245,29 +245,33 @@ export function membersOfSteps(story: Story, steps: number[]): string[] {
       }
     }
   }
-  // A work object shared with a sentence outside these steps cannot be in two groups. Once it sits
-  // in a group, that is decided and it stays there; otherwise the caller has to decide.
-  for (const id of [...ids]) {
-    const others = (stepsOf.get(id) ?? []).filter((number) => !steps.includes(number));
-    if (others.length === 0) {
-      continue;
-    }
-    if (groupAncestors(byId.get(id), byId).length > 0) {
+  // A work object shared with a sentence outside these steps cannot be in two groups. Naming it in
+  // the same call decides that it belongs here. A group it already sits in decides too, unless that
+  // group is the one the new box nests in, or one around it, which holds its other sentences as well.
+  const plain = ids.filter((id) => (stepsOf.get(id) ?? []).every((number) => steps.includes(number)));
+  const chains = plain.map((id) => groupAncestors(byId.get(id), byId));
+  const around = chains[0]?.find((group) => chains.every((chain) => chain.includes(group)));
+  const aroundChain = around ? [around, ...groupAncestors(byId.get(around), byId)] : [];
+  for (const id of ids.filter((candidate) => !plain.includes(candidate))) {
+    const home = groupAncestors(byId.get(id), byId)[0];
+    if (named.includes(id) || (home !== undefined && !aroundChain.includes(home))) {
       ids.splice(ids.indexOf(id), 1);
       continue;
     }
+    const others = (stepsOf.get(id) ?? []).filter((number) => !steps.includes(number));
     throw new StoryError(
-      `"${nameOf(id)}" in step ${stepOf.get(id)} is used by ${others.length > 1 ? 'steps' : 'step'} ${others.join(', ')} too, so it cannot go into a group of these steps alone. Decide which group it belongs to and put it there by members (its id is in get_story); grouping by steps then leaves it where it is.`,
+      `"${nameOf(id)}" in step ${stepOf.get(id)} is used by ${others.length > 1 ? 'steps' : 'step'} ${others.join(', ')} too, so it cannot go into a group of these steps alone. Decide which group it belongs to: to put it in this one, pass its id (from get_story) in members as well as the steps; grouping other steps later leaves it where it is.`,
     );
   }
-  if (ids.length === 0) {
+  if (ids.length === 0 && named.length === 0) {
     throw new StoryError(`Every work object of ${steps.length > 1 ? 'steps' : 'step'} ${steps.join(', ')} is already in another group, so there is nothing left to group.`);
   }
-  // An existing group whose work objects all belong to these steps goes in whole, outermost first.
-  const members = takeWholeGroups(ids, doc.elements);
-  if (members.length === 1 && isGroup(byId.get(members[0] as string) as StoryElement)) {
+  // An existing group made only of these work objects goes in whole, outermost first.
+  const members = takeWholeGroups([...ids, ...named], doc.elements);
+  const only = members.length === 1 ? (members[0] as string) : undefined;
+  if (only && isGroup(byId.get(only) as StoryElement) && !named.includes(only)) {
     throw new StoryError(
-      `${steps.length > 1 ? 'Steps' : 'Step'} ${steps.join(', ')} ${steps.length > 1 ? 'are' : 'is'} already the group "${nameOf(members[0] as string)}"; leave out one of the two groups, or choose other steps.`,
+      `${steps.length > 1 ? 'Steps' : 'Step'} ${steps.join(', ')} ${steps.length > 1 ? 'are' : 'is'} already the group "${nameOf(only)}"; leave out one of the two groups, or choose other steps.`,
     );
   }
   // What is left must not cross other groups; all in one group is fine, which then holds the new group.
@@ -275,8 +279,15 @@ export function membersOfSteps(story: Story, steps: number[]): string[] {
   if (new Set(homes).size > 1) {
     const index = homes.findIndex((home) => home !== undefined);
     const id = members[index] as string;
+    const home = homes[index] as string;
+    const blocker = blockerIn(home, [...ids, ...named], doc.elements);
+    const kind = (element: StoryElement) =>
+      isActor(element) ? 'the actor' : isWorkObject(element) ? 'the work object' : isGroup(element) ? 'the group' : 'the note';
+    const holds = blocker
+      ? `which also holds ${kind(blocker)} "${blocker.name || (blocker['text'] as string | undefined) || blocker.id}"`
+      : 'while other work objects of these steps are in no group or another one';
     throw new StoryError(
-      `"${nameOf(id)}"${stepOf.has(id) ? ` in step ${stepOf.get(id)}` : ''} is in the group "${nameOf(homes[index] as string)}", which also holds work objects outside these steps, so the two groups would cross. Change or remove that group, or group by members instead.`,
+      `"${nameOf(id)}"${stepOf.has(id) ? ` in step ${stepOf.get(id)}` : ''} is in the group "${nameOf(home)}", ${holds}, so the new box would cross it. Change or remove that group, or group by members instead.`,
     );
   }
   return members;

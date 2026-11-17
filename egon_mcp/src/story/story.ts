@@ -13,6 +13,7 @@ import {
   iconNameOf,
   isActivity,
   isActor,
+  isConnection,
   isEdge,
   isGroup,
   isTextAnnotation,
@@ -250,17 +251,15 @@ export class Story {
     // A name shared by several elements (work objects repeat per sentence) groups all of them.
     const resolved = (input.members ?? []).flatMap((ref) => this.resolveShapes(ref));
     const given = this.givenPosition(input);
-    // A box fitted around members takes in whole every group that is all among them, so none is
-    // left empty; a box drawn with x and y takes exactly the members named.
-    const ids = given
-      ? resolved.map((member) => member.id)
-      : takeWholeGroups(
-          resolved.map((member) => member.id),
-          this.doc.elements,
-        );
+    // Every group that is all among the members goes in whole, so none is left empty, and a member
+    // inside another member goes along with it.
+    const ids = takeWholeGroups(
+      resolved.map((member) => member.id),
+      this.doc.elements,
+    );
     const members = ids.map((id) => this.find(id) as ShapeElement);
     const only = members.length === 1 ? members[0] : undefined;
-    if (only && isGroup(only) && !resolved.some((member) => member.id === only.id)) {
+    if (!given && only && isGroup(only) && !resolved.some((member) => member.id === only.id)) {
       throw new StoryError(
         `${resolved.map((member) => `"${member.name || member['text'] || member.id}"`).join(', ')} ${resolved.length > 1 ? 'are' : 'is'} already the group "${only.name || only.id}". Pass the group itself to draw a box around it.`,
       );
@@ -291,7 +290,7 @@ export class Story {
       const box = boundsOf(member);
       if (box.width * box.height >= bounds.width * bounds.height) {
         throw new StoryError(
-          `The group "${member.name || member.id}" is not smaller than the new box, so it cannot go inside. Leave out x, y, width and height to fit the box around the members.`,
+          `The group "${member.name || member.id}" goes into the new box whole, but it is not smaller than the box. Draw a larger box, or leave out x, y, width and height to fit the box around the members.`,
         );
       }
     }
@@ -302,8 +301,14 @@ export class Story {
     const shared = chains[0]?.find((id) => chains.every((chain) => chain.includes(id)));
     // Groups go first so Egon draws them underneath the elements they contain.
     this.doc.elements.unshift(group);
-    // Egon records group membership on each member (domainStoryUpdater).
-    for (const member of members) {
+    // Egon records group membership on each member (domainStoryUpdater). A note on a member that sat
+    // in the same group as the member moves along with it.
+    const notesAlong = this.doc.elements.filter(isConnection).flatMap((link) => {
+      const member = members.find((candidate) => candidate.id === link.source && !isGroup(candidate));
+      const note = this.find(link.target);
+      return member && note && isTextAnnotation(note) && note['parent'] === member['parent'] && !members.includes(note as ShapeElement) ? [note] : [];
+    });
+    for (const member of [...members, ...notesAlong]) {
       member['parent'] = group.id;
     }
     if (fitted && shared) {
@@ -318,7 +323,11 @@ export class Story {
           width: inner.width + 2 * GROUP_PADDING,
           height: inner.height + 2 * GROUP_PADDING,
         });
-        this.setGeometry(outer, box);
+        try {
+          this.setGeometry(outer, box);
+        } catch (error) {
+          throw new StoryError(`The group "${outer.name || outer.id}" would have to grow past a billion pixels to hold the new group. ${(error as Error).message}`);
+        }
         inner = box;
       }
     } else if (!fitted) {
@@ -710,6 +719,11 @@ export class Story {
       );
     }
     return candidates as ShapeElement[];
+  }
+
+  /** The ids an element reference stands for: the id itself, or every element of that name. */
+  idsOf(ref: string): string[] {
+    return this.resolveShapes(ref).map((element) => element.id);
   }
 
   /** x and y when both are given; one without the other is a mistake. */
