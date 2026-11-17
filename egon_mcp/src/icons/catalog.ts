@@ -29,13 +29,23 @@ export function readErrorReason(error: unknown): string {
   return typeof message === 'string' ? message : 'unknown error';
 }
 
-/** Like statSync without throwing for file system errors (a missing or unreadable path); other errors pass on. */
+/**
+ * Whether an error comes from the file system rather than from a programming
+ * mistake. System errors name the system call they came from (EACCES, ELOOP,
+ * and UNKNOWN for Windows errors libuv has no name for); argument errors such
+ * as ERR_INVALID_ARG_VALUE do not.
+ */
+export function isFileSystemError(error: unknown): boolean {
+  const { code, syscall } = (error ?? {}) as NodeJS.ErrnoException;
+  return typeof syscall === 'string' && !String(code).startsWith('ERR_');
+}
+
+/** Like statSync, but undefined for file system errors (a missing or unreadable path); other errors pass on. */
 function statIfPossible(path: string) {
   try {
     return statSync(path, { throwIfNoEntry: false });
   } catch (error) {
-    // System error codes look like EACCES or ELOOP; ERR_* codes are programming errors.
-    if (/^E[A-Z0-9]+$/.test(String((error as NodeJS.ErrnoException).code))) {
+    if (isFileSystemError(error)) {
       return undefined;
     }
     throw error;
@@ -44,7 +54,8 @@ function statIfPossible(path: string) {
 
 /**
  * The closest existing ancestor of `path` if it is a file instead of a folder.
- * A folder it cannot look into counts as no file in the way.
+ * A folder it cannot look into counts as no file in the way. Errors that are
+ * not file system errors, such as a NUL in the path, pass on.
  */
 export function blockingAncestor(path: string): string | undefined {
   for (let dir = dirname(path); dir !== dirname(dir); dir = dirname(dir)) {
@@ -57,18 +68,33 @@ export function blockingAncestor(path: string): string | undefined {
 }
 
 const ICON_DATA_FIX = `${ICON_FIX} in egon_mcp (needs the egon.io submodule).`;
+const TRAILING_SEPARATORS = process.platform === 'win32' ? /[\\/]+$/ : /\/+$/;
+
+/**
+ * A file standing where `path` needs a folder: the path itself when it ends in
+ * a separator, or an ancestor.
+ */
+function fileInTheWay(path: string): string | undefined {
+  const stripped = path.replace(TRAILING_SEPARATORS, '');
+  if (stripped !== path) {
+    const stats = statIfPossible(stripped);
+    if (stats && !stats.isDirectory()) {
+      return stripped;
+    }
+  }
+  return blockingAncestor(path);
+}
 
 /**
  * The error to report when the icon data at `path` could not be read. A file
  * standing where a folder should be shows as ENOTDIR on POSIX and as a missing
- * path on Windows; both get a message that names it.
+ * path on Windows; both get the same message, which names it.
  */
 export function iconReadError(path: string, error: unknown): Error {
   const { code } = (error ?? {}) as NodeJS.ErrnoException;
-  const blocker = code === 'ENOENT' || code === 'ENOTDIR' ? blockingAncestor(path) : undefined;
-  // A path that ends in a separator can fail as missing on Windows although the file is there.
-  const exists = statIfPossible(path.replace(/[\\/]+$/, '')) !== undefined;
-  if (code === 'ENOENT' && !blocker && !exists) {
+  // Only these two codes can mean a file in the way; other errors are reported as they are.
+  const blocker = code === 'ENOENT' || code === 'ENOTDIR' ? fileInTheWay(path) : undefined;
+  if (code === 'ENOENT' && !blocker) {
     return new Error(`Built-in icon data ${path} is missing; ${ICON_DATA_FIX}`);
   }
   const reason = blocker ? `${blocker} is a file, not a folder` : readErrorReason(error);
