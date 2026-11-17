@@ -109,7 +109,9 @@ export function buildStory(input: BuildStoryInput): Story {
       withContext(`group "${group.name}"`, () =>
         story.addGroup({
           name: group.name,
-          members: [...(group.members ?? []), ...(group.steps ? membersOfSteps(story, group.steps, (group.members ?? []).flatMap((ref) => story.idsOf(ref))) : [])],
+          members: group.steps
+            ? ((named) => [...named, ...membersOfSteps(story, group.steps as number[], named)])(namedForSteps(story, group.members ?? [], group.steps))
+            : (group.members ?? []),
           ...(group.color ? { color: group.color } : {}),
         }),
       );
@@ -252,19 +254,24 @@ export function membersOfSteps(story: Story, steps: number[], named: string[] = 
   const chains = plain.map((id) => groupAncestors(byId.get(id), byId));
   const around = chains[0]?.find((group) => chains.every((chain) => chain.includes(group)));
   const aroundChain = around ? [around, ...groupAncestors(byId.get(around), byId)] : [];
+  const settled: string[] = [];
   for (const id of ids.filter((candidate) => !plain.includes(candidate))) {
     const home = groupAncestors(byId.get(id), byId)[0];
     if (named.includes(id) || (home !== undefined && !aroundChain.includes(home))) {
       ids.splice(ids.indexOf(id), 1);
+      settled.push(id);
       continue;
     }
     const others = (stepsOf.get(id) ?? []).filter((number) => !steps.includes(number));
     throw new StoryError(
-      `"${nameOf(id)}" in step ${stepOf.get(id)} is used by ${others.length > 1 ? 'steps' : 'step'} ${others.join(', ')} too, so it cannot go into a group of these steps alone. Decide which group it belongs to: to put it in this one, pass its id (from get_story) in members as well as the steps; grouping other steps later leaves it where it is.`,
+      `"${nameOf(id)}" in step ${stepOf.get(id)} is used by ${others.length > 1 ? 'steps' : 'step'} ${others.join(', ')} too, so it cannot go into a group of these steps alone. Decide which group it belongs to: to put it in this one, pass "${nameOf(id)}" in members as well as the steps; grouping other steps later leaves it where it is.`,
     );
   }
   if (ids.length === 0 && named.length === 0) {
-    throw new StoryError(`Every work object of ${steps.length > 1 ? 'steps' : 'step'} ${steps.join(', ')} is already in another group, so there is nothing left to group.`);
+    const examples = settled.map((id) => `"${nameOf(id)}" in "${nameOf(groupAncestors(byId.get(id), byId)[0] as string)}"`).join(', ');
+    throw new StoryError(
+      `Every work object of ${steps.length > 1 ? 'steps' : 'step'} ${steps.join(', ')} serves other steps too and already sits in a group (${examples}), so there is nothing left to group. To move one into this group, pass it in members as well as the steps.`,
+    );
   }
   // An existing group made only of these work objects goes in whole, outermost first.
   const members = takeWholeGroups([...ids, ...named], doc.elements);
@@ -276,6 +283,13 @@ export function membersOfSteps(story: Story, steps: number[], named: string[] = 
   }
   // What is left must not cross other groups; all in one group is fine, which then holds the new group.
   const homes = members.map((id) => groupAncestors(byId.get(id), byId)[0]);
+  const outside = members.find((id, index) => homes[index] === undefined && named.includes(id));
+  if (new Set(homes).size > 1 && outside !== undefined) {
+    const index = homes.findIndex((home) => home !== undefined);
+    throw new StoryError(
+      `"${nameOf(outside)}" is in no group while "${nameOf(members[index] as string)}" is in the group "${nameOf(homes[index] as string)}", so the new box would cross it. Leave "${nameOf(outside)}" out, or group by members instead.`,
+    );
+  }
   if (new Set(homes).size > 1) {
     const index = homes.findIndex((home) => home !== undefined);
     const id = members[index] as string;
@@ -291,6 +305,30 @@ export function membersOfSteps(story: Story, steps: number[], named: string[] = 
     );
   }
   return members;
+}
+
+/**
+ * The ids that member references stand for next to these steps. A name that
+ * several work objects share (one per sentence) means the copies these steps
+ * use, so a shared work object can be named before the story has ids.
+ */
+export function namedForSteps(story: Story, refs: string[], steps: number[]): string[] {
+  const inSteps = new Set(
+    narrate(story.toDocument())
+      .filter((step) => steps.includes(step.number))
+      .flatMap((step) => step.elementIds),
+  );
+  return refs.flatMap((ref) => {
+    const ids = story.idsOf(ref);
+    if (ids.length <= 1 || story.get(ref)) {
+      return ids;
+    }
+    const used = ids.filter((id) => inSteps.has(id));
+    if (used.length === 0) {
+      throw new StoryError(`"${ref}" names ${ids.length} elements and these steps use none of them; pass an id from get_story.`);
+    }
+    return used;
+  });
 }
 
 function withContext<T>(context: string, action: () => T): T {

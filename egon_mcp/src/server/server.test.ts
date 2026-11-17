@@ -314,6 +314,22 @@ describe('egon-mcp server', () => {
     expect(ordering?.members).toEqual(['Order']);
   });
 
+  it('settles a shared work object through members next to steps in add_group', async () => {
+    await ok('build_story', {
+      title: 'Shared',
+      sentences: [
+        { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+        { actor: 'Mechanic', activity: 'notes', workObject: 'Part request', to: [{ activity: 'for', actor: 'Clerk' }] },
+        { actor: 'Clerk', activity: 'reads', workObject: 'Part request', reuseWorkObject: true },
+      ],
+    });
+    expect((await call('add_group', { storyId: 'shared', name: 'Intake', steps: [1, 2] })).isError).toBe(true);
+    await ok('add_group', { storyId: 'shared', name: 'Intake', steps: [1, 2], members: ['Part request'] });
+    const story = await ok('get_story', { storyId: 'shared' });
+    const intake = (story['groups'] as { name: string; members: string[] }[]).find((group) => group.name === 'Intake');
+    expect(intake?.members.sort()).toEqual(['Bike', 'Part request']);
+  });
+
   it('reports a refused grouping by steps as an error', async () => {
     await ok('build_story', pizza);
     const refused = await call('add_group', { storyId: 'order-pizza', name: 'Nowhere', steps: [9] });

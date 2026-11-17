@@ -31,7 +31,7 @@ import {
   type WorkObjectElement,
 } from '../egon/types.js';
 import { boundsOf, DEFAULT_ANNOTATION_SIZE, edgeWaypoints, routeEdge, type Bounds } from './geometry.js';
-import { cornerInside, joinGroupAt, settleMembership, takeIn, takeWholeGroups } from './membership.js';
+import { cornerInside, groupAt, joinGroupAt, settleMembership, takeIn, takeWholeGroups } from './membership.js';
 
 export class StoryError extends Error {
   override name = 'StoryError';
@@ -253,11 +253,26 @@ export class Story {
     const given = this.givenPosition(input);
     // Every group that is all among the members goes in whole, so none is left empty, and a member
     // inside another member goes along with it.
-    const ids = takeWholeGroups(
+    let ids = takeWholeGroups(
       resolved.map((member) => member.id),
       this.doc.elements,
     );
+    // A box drawn with x and y inside a group may hold that group's own contents; it does not take
+    // up the group it sits in, or one around it.
+    if (given) {
+      const host = groupAt({ ...given, type: GROUP_TYPE, id: '', name: '' } as StoryElement, this.doc.elements);
+      const hosts = host ? [host.id, ...groupAncestors(host, new Map(this.doc.elements.map((element) => [element.id, element])))] : [];
+      if (ids.some((id) => hosts.includes(id))) {
+        ids = resolved.map((member) => member.id);
+      }
+    }
     const members = ids.map((id) => this.find(id) as ShapeElement);
+    // A note on a member that sat in the same group as the member moves along with it.
+    const notesAlong = this.doc.elements.filter(isConnection).flatMap((link) => {
+      const member = members.find((candidate) => candidate.id === link.source && !isGroup(candidate));
+      const note = this.find(link.target);
+      return member && note && isTextAnnotation(note) && note['parent'] === member['parent'] && !members.includes(note as ShapeElement) ? [note as ShapeElement] : [];
+    });
     const only = members.length === 1 ? members[0] : undefined;
     if (!given && only && isGroup(only) && !resolved.some((member) => member.id === only.id)) {
       throw new StoryError(
@@ -266,7 +281,7 @@ export class Story {
     }
     const fitted = members.length > 0 && !given;
     if (fitted) {
-      bounds = enclose(members.map((member) => boundsOf(member)), GROUP_PADDING);
+      bounds = enclose([...members, ...notesAlong].map((member) => boundsOf(member)), GROUP_PADDING);
       checkCoordinates(bounds);
     } else {
       // A box without members or position goes below the story, so it takes in nothing.
@@ -301,13 +316,7 @@ export class Story {
     const shared = chains[0]?.find((id) => chains.every((chain) => chain.includes(id)));
     // Groups go first so Egon draws them underneath the elements they contain.
     this.doc.elements.unshift(group);
-    // Egon records group membership on each member (domainStoryUpdater). A note on a member that sat
-    // in the same group as the member moves along with it.
-    const notesAlong = this.doc.elements.filter(isConnection).flatMap((link) => {
-      const member = members.find((candidate) => candidate.id === link.source && !isGroup(candidate));
-      const note = this.find(link.target);
-      return member && note && isTextAnnotation(note) && note['parent'] === member['parent'] && !members.includes(note as ShapeElement) ? [note] : [];
-    });
+    // Egon records group membership on each member (domainStoryUpdater).
     for (const member of [...members, ...notesAlong]) {
       member['parent'] = group.id;
     }

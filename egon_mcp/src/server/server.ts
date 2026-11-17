@@ -7,7 +7,7 @@ import { IconCatalog } from '../icons/catalog.js';
 import { renderStorySvg } from '../render/svg.js';
 import { autoLayout } from '../story/layout.js';
 import { narrate, narrativeMarkdown } from '../story/narrate.js';
-import { addSentence, buildStory, membersOfSteps } from '../story/sentences.js';
+import { addSentence, buildStory, membersOfSteps, namedForSteps } from '../story/sentences.js';
 import { Story, StoryError } from '../story/story.js';
 import { validateStory } from '../story/validate.js';
 import { describeStory, summarizeEntry } from './describe.js';
@@ -85,7 +85,7 @@ const steps = z
   .array(z.number().int().positive())
   .min(1)
   .describe(
-    'Step numbers as narrate_story shows them (parallel sentences share one): the work objects of those sentences go into the group and their actors stay outside, the usual way to mark a subdomain. An existing group made only of the work objects of these steps, their notes and notes on the group goes in whole. If the work objects all sit in one group, the new group nests inside it and that group grows to fit. A work object that also serves a sentence outside these steps is refused unless you pass its id in members too, which puts it here; one that already sits in a group other than the one the new group nests in stays where it is. Also refused: steps that are exactly an existing group, and work objects spread over different groups, where the new box would cross one.',
+    'Step numbers as narrate_story shows them (parallel sentences share one): the work objects of those sentences go into the group and their actors stay outside, the usual way to mark a subdomain. An existing group made only of the work objects of these steps, their notes and notes on the group goes in whole. If the work objects all sit in one group, the new group nests inside it and that group grows to fit. A work object that also serves a sentence outside these steps is refused unless you pass it in members too (by name, meaning the copy these steps use, or by id), which puts it here; one that already sits in a group other than the one the new group nests in, or one around that, stays where it is. Also refused: steps that are exactly an existing group, and work objects spread over different groups, where the new box would cross one.',
   );
 const groupSpec = z.object({
   name: z.string().describe('Label of the box; every group needs members or steps.'),
@@ -425,7 +425,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Add group',
       description:
-        'Draws a box around elements that belong together, such as a department or subdomain. To mark a subdomain on a coarse story, pass the step numbers of its sentences as steps: their work objects go in and their actors stay outside, since an actor often takes part in several subdomains. With members or steps and no x and y, the box fits around them and holds them and nothing else. Other shapes the box happens to cover get a validate_story warning, and open_story would put those in no group into the smallest group box over their top-left corner when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn with x and y inside another group goes into that group, and a box fitted around members goes into the innermost group that already holds all of them, which grows to fit it. An existing group goes in whole when everything it holds is among the members, a note counting with the element it is attached to or with the group itself; otherwise its chosen members move one by one, each with its notes. Members that are exactly one existing group you did not name are refused.',
+        'Draws a box around elements that belong together, such as a department or subdomain. To mark a subdomain on a coarse story, pass the step numbers of its sentences as steps: their work objects go in and their actors stay outside, since an actor often takes part in several subdomains. With members or steps and no x and y, the box fits around them and holds them and nothing else. Other shapes the box happens to cover get a validate_story warning, and open_story would put those in no group into the smallest group box over their top-left corner when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn with x and y inside another group goes into that group, and a box fitted around members goes into the innermost group that already holds all of them, which grows to fit it. An existing group goes in whole when everything it holds is among the members, a note counting with the element it is attached to or with the group itself; otherwise its chosen members move one by one, each with its notes. Without x and y, members that are exactly one existing group you did not name are refused.',
       inputSchema: {
         storyId,
         name: z.string().describe('Label in the top-left corner of the box.'),
@@ -443,7 +443,13 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
         ...edit(id, (entry) =>
           entry.story.addGroup({
             name,
-            ...(members || numbers ? { members: [...(members ?? []), ...(numbers ? membersOfSteps(entry.story, numbers, (members ?? []).flatMap((ref) => entry.story.idsOf(ref))) : [])] } : {}),
+            ...(members || numbers
+              ? {
+                  members: numbers
+                    ? ((named: string[]) => [...named, ...membersOfSteps(entry.story, numbers, named)])(namedForSteps(entry.story, members ?? [], numbers))
+                    : (members ?? []),
+                }
+              : {}),
             ...(picked ? { color: picked } : {}),
             ...(left !== undefined ? { x: left } : {}),
             ...(top !== undefined ? { y: top } : {}),

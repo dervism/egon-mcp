@@ -122,7 +122,10 @@ export function blockerIn(groupId: string, ids: string[], elements: StoryElement
   const inside = contentsOf(groupId, elements);
   const groupsHere = new Set([groupId, ...inside.filter((id) => isGroup(byId.get(id) as StoryElement))]);
   const notesOnGroups = new Set(
-    elements.filter(isConnection).filter((link) => groupsHere.has(link.source)).map((link) => link.target),
+    elements
+      .filter(isConnection)
+      .filter((link) => groupsHere.has(link.source) && isTextAnnotation(byId.get(link.target) ?? ({ type: '' } as StoryElement)))
+      .map((link) => link.target),
   );
   const blocker = inside.find((id) => !isGroup(byId.get(id) as StoryElement) && !chosen.has(id) && !notesOnGroups.has(id));
   return blocker === undefined ? undefined : byId.get(blocker);
@@ -132,20 +135,31 @@ export function blockerIn(groupId: string, ids: string[], elements: StoryElement
  * The members for a new group, with every existing group whose contents are
  * all chosen taken in whole instead of one by one, outermost first, so no
  * group is left empty and inner groups may be drawn before outer ones. A group
- * passed as a member stays as it is. A group that holds anything else, such as
+ * passed alone stays as it is, so a box can be drawn around it. A group that holds anything else, such as
  * an actor of a subdomain, is not taken; its chosen members move one by one.
  */
 export function takeWholeGroups(ids: string[], elements: StoryElement[]): string[] {
   const byId = new Map(elements.map((element) => [element.id, element]));
   const whole = (groupId: string) =>
     contentsOf(groupId, elements).some((id) => !isGroup(byId.get(id) as StoryElement)) && blockerIn(groupId, ids, elements) === undefined;
-  const picked: string[] = [];
-  for (const id of ids) {
-    const member = isGroup(byId.get(id) as StoryElement) ? id : (groupAncestors(byId.get(id), byId).filter(whole).at(-1) ?? id);
-    if (!picked.includes(member)) {
-      picked.push(member);
+  const pick = (promoteGroups: boolean) => {
+    const picked: string[] = [];
+    for (const id of ids) {
+      const keep = !promoteGroups && isGroup(byId.get(id) as StoryElement);
+      const member = keep ? id : (groupAncestors(byId.get(id), byId).filter(whole).at(-1) ?? id);
+      if (!picked.includes(member)) {
+        picked.push(member);
+      }
     }
+    // A member inside another member goes along with it.
+    return picked.filter((id) => !groupAncestors(byId.get(id), byId).some((ancestor) => picked.includes(ancestor)));
+  };
+  // A named group is taken up into its parent like any member, except when that parent would be
+  // the only member: then the caller means a box around the named group itself.
+  const promoted = pick(true);
+  const only = promoted.length === 1 ? (promoted[0] as string) : undefined;
+  if (only && !ids.includes(only) && ids.some((id) => isGroup(byId.get(id) as StoryElement))) {
+    return pick(false);
   }
-  // A member inside another member goes along with it.
-  return picked.filter((id) => !groupAncestors(byId.get(id), byId).some((ancestor) => picked.includes(ancestor)));
+  return promoted;
 }
