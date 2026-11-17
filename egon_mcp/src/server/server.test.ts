@@ -170,6 +170,25 @@ describe('egon-mcp server', () => {
     expect(text(missing)).toMatch(/No open story/);
   });
 
+  it('leaves a story unchanged when an edit fails halfway', async () => {
+    await ok('create_story', { title: 'Atomic' });
+    const failed = await call('add_sentence', { storyId: 'atomic', actor: 'Customer', activity: 'eats', workObject: 'Pizza', number: 5 });
+    expect(failed.isError).toBe(true);
+    const story = await ok('get_story', { storyId: 'atomic' });
+    expect(story['actors']).toEqual([]);
+    expect(story['workObjects']).toEqual([]);
+
+    await ok('add_actor', { storyId: 'atomic', name: 'Ann' });
+    const rename = await call('update_element', { storyId: 'atomic', element: 'Ann', name: 'Bob', icon: 'NoSuchIcon' });
+    expect(rename.isError).toBe(true);
+    expect(((await ok('get_story', { storyId: 'atomic' }))['actors'] as { name: string }[])[0]?.name).toBe('Ann');
+  });
+
+  it('marks save_story as destructive because it can overwrite files', async () => {
+    const { tools } = await client.listTools();
+    expect(tools.find((tool) => tool.name === 'save_story')?.annotations?.destructiveHint).toBe(true);
+  });
+
   it('renumbers steps and moves an activity to another step', async () => {
     await ok('build_story', pizza);
     const story = await ok('get_story', { storyId: 'order-pizza' });
@@ -177,7 +196,10 @@ describe('egon-mcp server', () => {
     await ok('update_element', { storyId: 'order-pizza', element: bake.id, number: 1 });
     const narrative = text(await call('narrate_story', { storyId: 'order-pizza' }));
     expect(narrative).toContain('1. Pizza baker bakes Pizza.');
-    await ok('renumber_steps', { storyId: 'order-pizza' });
+    const removed = await ok('remove_element', { storyId: 'order-pizza', element: bake.id });
+    expect(removed['removed']).toHaveLength(1);
+    const renumbered = await ok('renumber_steps', { storyId: 'order-pizza' });
+    expect(renumbered['steps']).toEqual(['1. Customer tells Order to Clerk.', '2. Clerk writes Order slip for Pizza baker.']);
   });
 
   it('finds icons', async () => {

@@ -8,9 +8,10 @@ import { describe, expect, it } from 'vitest';
 
 const entry = fileURLToPath(new URL('../dist/index.js', import.meta.url));
 
-// Runs against the build output; `npm run build` first.
-describe.skipIf(!existsSync(entry))('egon-mcp over stdio', () => {
+// Runs against the build output; `npm test` builds first.
+describe('egon-mcp over stdio', () => {
   it('starts, builds a story and saves it into the workspace root', async () => {
+    expect(existsSync(entry), 'dist/index.js is missing; run "npm run build" or "npm test"').toBe(true);
     const root = mkdtempSync(join(tmpdir(), 'egon-e2e-'));
     const transport = new StdioClientTransport({ command: process.execPath, args: [entry, '--root', root], stderr: 'pipe' });
     const client = new Client({ name: 'e2e', version: '1.0.0' });

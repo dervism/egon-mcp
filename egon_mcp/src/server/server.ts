@@ -68,8 +68,11 @@ const sentenceSchema = {
   actor: z.string().describe('Name of the actor who acts. Created if missing.'),
   actorIcon: iconName.optional(),
   activity: z.string().describe('The verb, for example "orders" or "writes".'),
-  workObject: z.string().describe('Name of the work object. Created if missing.'),
+  workObject: z
+    .string()
+    .describe('Name of the work object. Each sentence draws a new one, as in Egon, unless this is the id of an existing work object or reuseWorkObject is true.'),
   workObjectIcon: iconName.optional(),
+  reuseWorkObject: z.boolean().optional().describe('Use the latest work object with this name instead of drawing a new one.'),
   to: z.array(recipientSchema).optional().describe('Actors who receive the work object.'),
   number: z.number().int().positive().optional().describe('Join an existing step (parallel activities) instead of adding a new one.'),
 };
@@ -122,12 +125,21 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     structuredContent: data,
   });
 
-  /** Applies a change to a story, marks it unsaved and returns `result`. */
+  /**
+   * Applies a change to a story and marks it unsaved. If the change throws,
+   * the story goes back to how it was, so a failed tool call changes nothing.
+   */
   const edit = <T>(id: string, change: (entry: ReturnType<Workspace['get']>) => T): T => {
     const entry = workspace.get(id);
-    const result = change(entry);
-    workspace.touch(id);
-    return result;
+    const snapshot = entry.story.toDocument();
+    try {
+      const result = change(entry);
+      workspace.touch(id);
+      return result;
+    } catch (error) {
+      entry.story.restore(snapshot);
+      throw error;
+    }
   };
 
   // ---------------------------------------------------------------- lifecycle
@@ -151,7 +163,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Build domain story from sentences',
       description:
-        'Creates a complete domain story in one call from numbered sentences ("Customer tells Order to Clerk"), creating actors and work objects by name, then lays it out. Each sentence becomes one step. Returns the storyId, the narrative and any validation issues.',
+        'Creates a complete domain story in one call from numbered sentences ("Customer tells Order to Clerk"), then lays it out. Each sentence becomes one step. Actors with the same name are one element; each sentence draws its own work object unless it sets reuseWorkObject. Returns the storyId, the narrative and any validation issues.',
       inputSchema: {
         title: titleField,
         description: descriptionField.optional(),
@@ -241,12 +253,16 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Save story to file',
       description:
-        'Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story is saved as "<title>.egn" or to the file it was opened from.',
-      inputSchema: { storyId, path: z.string().optional().describe('Target path relative to the workspace root.') },
-      annotations: { destructiveHint: false, idempotentHint: true },
+        'Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". Existing files that this server did not write are only replaced with overwrite: true.',
+      inputSchema: {
+        storyId,
+        path: z.string().optional().describe('Target path relative to the workspace root.'),
+        overwrite: z.boolean().optional().describe('Replace an existing file that this server did not write.'),
+      },
+      annotations: { destructiveHint: true, idempotentHint: true },
     },
-    run(({ storyId: id, path }) => {
-      const saved = workspace.save(id, path ? { path } : {});
+    run(({ storyId: id, path, overwrite }) => {
+      const saved = workspace.save(id, { ...(path ? { path } : {}), ...(overwrite ? { overwrite } : {}) });
       return json({ ...saved, workspaceRoot: workspace.root });
     }),
   );
@@ -388,7 +404,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Add sentence',
       description:
-        'Adds one domain story sentence as a new step: actor, verb, work object and optional recipients ("Customer tells Order to Clerk"). Creates actors and work objects that do not exist yet, matching names case-insensitively.',
+        'Adds one domain story sentence as a new step: actor, verb, work object and optional recipients ("Customer tells Order to Clerk"). Actors are matched by name (case-insensitive) or created; the work object is drawn new for this sentence unless reused.',
       inputSchema: { storyId, ...sentenceSchema },
     },
     run(({ storyId: id, ...sentence }) => {

@@ -1,5 +1,5 @@
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import { parseStoryFile } from '../egon/parse.js';
 import { fileNameFor, toEgnJson, type EgonFormat } from '../egon/serialize.js';
 import type { Scope } from '../egon/types.js';
@@ -18,7 +18,24 @@ export interface StoryEntry {
   story: Story;
   /** Path relative to the workspace root that the story was opened from or last saved to as .egn / .egn.svg. */
   path?: string;
+  /** File layout to keep when saving in place, for stories opened from Egon 4 files. */
+  layout?: EgonFormat;
   dirty: boolean;
+}
+
+export interface SaveOptions {
+  path?: string;
+  format?: SaveFormat;
+  /** Replace an existing file that this server did not write. */
+  overwrite?: boolean;
+}
+
+export interface SaveResult {
+  path: string;
+  format: SaveFormat;
+  bytes: number;
+  /** The .egn layout used, for .egn and .egn.svg files. */
+  layout?: EgonFormat;
 }
 
 const STORY_FILE = /\.(egn|dst)(\s*\(\d+\))?(\.svg)?$/i;
@@ -32,6 +49,8 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024;
  */
 export class Workspace {
   private readonly entries = new Map<string, StoryEntry>();
+  /** Absolute paths this workspace wrote, which it may overwrite again. */
+  private readonly written = new Set<string>();
   readonly root: string;
   /** Layout of written .egn files (docs/adr/0007-write-egon-3-file-layout.md). */
   readonly egonFormat: EgonFormat;
@@ -42,6 +61,11 @@ export class Workspace {
       throw new WorkspaceError(`The workspace root ${root} does not exist.`);
     }
     this.root = realpathSync(root);
+    if (parse(this.root).root === this.root) {
+      throw new WorkspaceError(
+        `Refusing to use the file system root ${this.root} as workspace. Start the server with --root <dir> or set EGON_MCP_ROOT.`,
+      );
+    }
   }
 
   create(input: { title: string; description?: string; scope?: Scope }): StoryEntry {
@@ -56,7 +80,11 @@ export class Workspace {
     const doc = parseStoryFile(readFileSync(absolute, 'utf8'), absolute);
     const relativePath = this.relative(absolute);
     const keepPath = /\.egn(\.svg)?$/i.test(relativePath) ? relativePath : undefined;
-    return this.add(Story.fromDocument(doc), keepPath, false);
+    const entry = this.add(Story.fromDocument(doc), keepPath, false);
+    if (doc.version.startsWith('4')) {
+      entry.layout = 'egon4';
+    }
+    return entry;
   }
 
   /** Registers a story that was built in memory, for example by build_story. */
@@ -92,33 +120,46 @@ export class Workspace {
     this.get(id).dirty = true;
   }
 
-  /** Writes a story to disk. The format follows the file extension. */
-  save(id: string, options: { path?: string; format?: SaveFormat }): { path: string; format: SaveFormat; bytes: number } {
+  /**
+   * Writes a story to disk. The format follows the file extension. Without a
+   * path, the story goes back to the file it came from, else to "<title>.egn".
+   * Existing files are only replaced if this workspace wrote them, if they are
+   * the story's own file, or with `overwrite`.
+   */
+  save(id: string, options: SaveOptions): SaveResult {
     const entry = this.get(id);
-    const format = options.format ?? (options.path ? formatFromPath(options.path) : 'egn');
-    const path = options.path ?? entry.path ?? fileNameFor(entry.story.title, extensionFor(format));
+    const path = options.path ?? entry.path ?? fileNameFor(entry.story.title, extensionFor(options.format ?? 'egn'));
+    const format = options.format ?? formatFromPath(path);
     if (formatFromPath(path) !== format) {
       throw new WorkspaceError(`The extension of ${path} does not match the format ${format}.`);
     }
     const absolute = this.resolveForWrite(path);
-    const content = this.serialize(entry.story, format);
+    const ownFile = entry.path !== undefined && this.lexicallyInside(entry.path) === absolute;
+    if (lexists(absolute) && !ownFile && !this.written.has(absolute) && !options.overwrite) {
+      throw new WorkspaceError(`${path} already exists. Pass overwrite: true to replace it, or choose another path.`);
+    }
+    const layout = entry.layout ?? this.egonFormat;
+    const content = this.serialize(entry.story, format, layout);
     mkdirSync(dirname(absolute), { recursive: true });
     writeFileSync(absolute, content);
+    this.written.add(absolute);
     const relativePath = this.relative(absolute);
+    const result: SaveResult = { path: relativePath, format, bytes: Buffer.byteLength(content) };
     if (format === 'egn' || format === 'egn.svg') {
       entry.path = relativePath;
       entry.dirty = false;
+      result.layout = layout;
     }
-    return { path: relativePath, format, bytes: Buffer.byteLength(content) };
+    return result;
   }
 
-  serialize(story: Story, format: SaveFormat): string {
+  serialize(story: Story, format: SaveFormat, layout: EgonFormat = this.egonFormat): string {
     const doc = story.toDocument();
     switch (format) {
       case 'egn':
-        return toEgnJson(doc, { format: this.egonFormat });
+        return toEgnJson(doc, { format: layout });
       case 'egn.svg':
-        return renderStorySvg(doc, { title: true, embedStory: true, whiteBackground: true, format: this.egonFormat });
+        return renderStorySvg(doc, { title: true, embedStory: true, whiteBackground: true, format: layout });
       case 'svg':
         return renderStorySvg(doc, { title: true, whiteBackground: true });
       case 'markdown':
@@ -166,6 +207,7 @@ export class Workspace {
       title
         .toLowerCase()
         .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '')
         .slice(0, 40) || 'story';
@@ -191,15 +233,22 @@ export class Workspace {
       throw new WorkspaceError(`Cannot write ${path}: use the extension .egn, .egn.svg, .svg or .md.`);
     }
     const candidate = this.lexicallyInside(path);
-    // Walk up to the nearest existing ancestor and make sure links do not lead out of the root.
-    let existing = candidate;
-    while (!existsSync(existing)) {
+    if (lexists(candidate) && lstatSync(candidate).isSymbolicLink()) {
+      throw new WorkspaceError(`${path} is a symbolic link. Write to a regular file inside the workspace root.`);
+    }
+    // Check the nearest existing ancestor, including dangling links, so that
+    // links cannot lead the write out of the root.
+    let existing = dirname(candidate);
+    while (!lexists(existing)) {
       existing = dirname(existing);
     }
-    this.assertInside(realpathSync(existing), path);
-    if (existsSync(candidate) && lstatSync(candidate).isSymbolicLink()) {
-      this.assertInside(realpathSync(candidate), path);
+    let real: string;
+    try {
+      real = realpathSync(existing);
+    } catch {
+      throw new WorkspaceError(`${path} goes through a broken symbolic link.`);
     }
+    this.assertInside(real, path);
     return candidate;
   }
 
@@ -221,7 +270,10 @@ export class Workspace {
 }
 
 export function formatFromPath(path: string): SaveFormat {
-  if (/\.(egn|dst)\.svg$/i.test(path)) {
+  if (/\.dst(\.svg)?$/i.test(path)) {
+    throw new WorkspaceError(`${path}: the server reads .dst files but writes only .egn, .egn.svg, .svg and .md.`);
+  }
+  if (/\.egn\.svg$/i.test(path)) {
     return 'egn.svg';
   }
   if (/\.egn$/i.test(path)) {
@@ -238,4 +290,14 @@ export function formatFromPath(path: string): SaveFormat {
 
 function extensionFor(format: SaveFormat): 'egn' | 'egn.svg' | 'svg' | 'md' {
   return format === 'markdown' ? 'md' : format;
+}
+
+/** Like existsSync, but true for dangling symbolic links too. */
+function lexists(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
 }

@@ -118,6 +118,33 @@ describe('parseStoryFile', () => {
     expect(doc.elements[0]?.type).toBe('domainStory:workObjectGas-station');
   });
 
+  it('rejects elements whose coordinates are not numbers, so they cannot inject markup', () => {
+    const file = (element: Record<string, unknown>) =>
+      JSON.stringify({ domain: { name: 'x', actors: {}, workObjects: {} }, dst: [element, { info: '' }, { version: '3.2.1' }] });
+    expect(() => parseStoryFile(file({ type: 'domainStory:group', id: 'shape_1', name: '', x: '0"/><script>', y: 0, width: 10, height: 10 }), 'a.egn')).toThrow(/shape_1.*x/);
+    expect(() => parseStoryFile(file({ type: 'domainStory:actorPerson', name: 'A', x: 0, y: 0 }), 'a.egn')).toThrow(/id/);
+    expect(() =>
+      parseStoryFile(file({ type: 'domainStory:activity', id: 'c', name: '', source: 's', target: 't', waypoints: [{ x: 'a', y: 1 }] }), 'a.egn'),
+    ).toThrow(/waypoint/);
+  });
+
+  it('coerces text fields and drops malformed optional fields', () => {
+    const doc = parseStoryFile(
+      JSON.stringify({
+        domain: { name: 'x', actors: {}, workObjects: {} },
+        dst: [
+          { type: 'domainStory:textAnnotation', id: 'shape_1', name: null, text: 42, x: '10', y: 5, width: 'wide', height: 30, pickedColor: { a: 1 } },
+          { info: 'd' },
+          { version: '3.2.1' },
+        ],
+      }),
+      'a.egn',
+    );
+    expect(doc.elements[0]).toMatchObject({ name: '', text: '42', x: 10, y: 5, height: 30 });
+    expect(doc.elements[0]).not.toHaveProperty('width');
+    expect(doc.elements[0]).not.toHaveProperty('pickedColor');
+  });
+
   it('rejects text that is not a domain story', () => {
     expect(() => parseStoryFile('not json', 'a.egn')).toThrow(StoryParseError);
     expect(() => parseStoryFile('{"hello": 1}', 'a.egn')).toThrow(StoryParseError);

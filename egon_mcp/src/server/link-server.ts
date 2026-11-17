@@ -18,6 +18,7 @@ interface Published {
  */
 export class LinkServer {
   private server: Server | undefined;
+  private starting: Promise<void> | undefined;
   private port: number | undefined;
   private readonly byStory = new Map<string, Published>();
   private readonly byToken = new Map<string, Published>();
@@ -34,7 +35,7 @@ export class LinkServer {
     entry = { token: entry?.token ?? randomBytes(16).toString('hex'), fileName, content };
     this.byStory.set(storyId, entry);
     this.byToken.set(entry.token, entry);
-    return `http://${this.host}:${this.port}/s/${entry.token}/${encodeURIComponent(fileName)}`;
+    return `http://${this.host}:${this.port}/s/${entry.token}/${urlFileName(fileName)}`;
   }
 
   unpublish(storyId: string): void {
@@ -46,18 +47,22 @@ export class LinkServer {
   }
 
   async stop(): Promise<void> {
+    await this.starting?.catch(() => undefined);
     const server = this.server;
     this.server = undefined;
+    this.starting = undefined;
     if (server) {
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   }
 
-  private async start(): Promise<void> {
-    if (this.server) {
-      return;
-    }
+  private start(): Promise<void> {
+    this.starting ??= this.listen();
+    return this.starting;
+  }
+
+  private async listen(): Promise<void> {
     const server = createServer((request, response) => this.handle(request, response));
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
@@ -83,7 +88,14 @@ export class LinkServer {
       response.writeHead(405, { Allow: 'GET, HEAD, OPTIONS' }).end();
       return;
     }
-    const match = /^\/s\/([0-9a-f]{32})\/[^/]+$/.exec(new URL(request.url ?? '/', 'http://localhost').pathname);
+    let pathname: string;
+    try {
+      pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    } catch {
+      response.writeHead(400, { 'Content-Type': 'text/plain' }).end('Bad request');
+      return;
+    }
+    const match = /^\/s\/([0-9a-f]{32})\/[^/]+$/.exec(pathname);
     const entry = match ? this.byToken.get(match[1] as string) : undefined;
     if (!entry) {
       response.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
@@ -99,6 +111,21 @@ export class LinkServer {
     response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     response.end(request.method === 'HEAD' ? undefined : body);
   }
+}
+
+/**
+ * The last URL segment, which Egon 3 turns into the story title by replacing
+ * "%20" with spaces and nothing else. Spaces are encoded, characters that
+ * would end or change the URL path are dropped, and other characters stay as
+ * they are so that titles like "für" survive (fetch encodes them on the wire).
+ */
+function urlFileName(fileName: string): string {
+  return fileName
+    .replace(/[#?%&+/\\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/ (?=\.egn$)/, '')
+    .trim()
+    .replace(/ /g, '%20');
 }
 
 /** The Egon app URL that loads `storyUrl` on start, optionally starting the replay. */

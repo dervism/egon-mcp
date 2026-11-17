@@ -16,3 +16,4 @@ Each file records one decision for egon-mcp. Fields hold one line each, two sent
 | [0010](0010-sentence-level-tools.md) | Offer sentence-level tools next to element-level tools | Accepted |
 | [0011](0011-skill-lives-in-repo.md) | Keep the agent skill in this repository | Accepted |
 | [0012](0012-independent-reviewer-agent.md) | Review changes with an independent agent | Accepted |
+| [0013](0013-new-work-object-per-sentence.md) | Draw a new work object for each sentence | Accepted |

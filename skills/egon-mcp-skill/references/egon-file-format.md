@@ -57,6 +57,7 @@ Other details:
 - `pickedColor` holds an optional color such as `#E53935`.
 - `multipleNumberAllowed: true` marks activities that share a step number.
 - The `<Icon>` part must be a built-in Egon icon or a key in the file's icon set. Spaces in icon names become dashes.
+- Built-in icons are stored as SVG text in the icon set, but Egon draws them from its own copy. Custom icons must be data URLs (`data:image/svg+xml;base64,...`); `add_custom_icon` stores them that way.
 - Egon draws activities from the waypoints in the file and does not recompute them, so moved shapes need new waypoints. `update_element` and `auto_layout` take care of that.
 - Egon's import drops activities whose `source` or `target` does not exist, and it can fail on more than one. `validate_story` reports these as `dangling-reference`.
 

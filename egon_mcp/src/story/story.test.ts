@@ -58,12 +58,16 @@ describe('adding actors and work objects', () => {
     const story = Story.create({ title: 'T' });
     story.addCustomIcon({ kind: 'workObject', name: 'Pizza', svg: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>' });
     expect(story.addWorkObject({ name: 'Margherita', icon: 'Pizza' }).type).toBe('domainStory:workObjectPizza');
+    // Egon only treats data URLs as custom icons (util.js, icon-css.service.ts).
+    expect(story.toDocument().iconSet.workObjects['Pizza']).toMatch(/^data:image\/svg\+xml;base64,/);
   });
 
   it('stores a picked color', () => {
     const story = Story.create({ title: 'T' });
     expect(story.addActor({ name: 'A', color: '#E53935' }).pickedColor).toBe('#E53935');
     expect(() => story.addActor({ name: 'B', color: 'red; stroke: x' })).toThrow(/color/);
+    expect(() => story.addActor({ name: 'C', color: 'rgb(1, 2, 3)' })).toThrow(/color/);
+    expect(story.addActor({ name: 'D', color: 'black' }).pickedColor).toBe('black');
   });
 });
 

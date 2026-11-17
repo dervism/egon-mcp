@@ -76,3 +76,11 @@ export function parseOptions(argv: string[], env: Record<string, string | undefi
     ...flags,
   };
 }
+
+/** A warning for roots that give the server more reach than intended. */
+export function rootWarning(root: string, home: string): string | undefined {
+  if (root === home) {
+    return `Warning: the workspace root is your home directory (${root}). Consider --root <dir> for a stories folder.`;
+  }
+  return undefined;
+}

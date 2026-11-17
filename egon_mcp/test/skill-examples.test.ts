@@ -56,7 +56,16 @@ describe('egon-mcp-skill', () => {
     expect(result.isError).toBeFalsy();
     expect(result.structuredContent.storyId).toBe('order-pizza-by-phone');
     expect(result.structuredContent.issues.filter((issue) => issue.severity === 'error')).toEqual([]);
-    expect(result.structuredContent.narrative).toContain('1. Customer orders Pizza order from Clerk.');
+    expect(result.structuredContent.narrative).toContain(
+      [
+        '1. Customer orders Pizza order from Clerk.',
+        '2. Clerk writes Order slip.',
+        '3. Clerk hands Order slip to Pizza baker.',
+        '4. Pizza baker bakes Pizza.',
+        '5. Clerk gives Pizza to Customer.',
+        '6. Customer pays Money to Clerk.',
+      ].join('\n'),
+    );
   });
 
   it('runs the interview example call by call', async () => {

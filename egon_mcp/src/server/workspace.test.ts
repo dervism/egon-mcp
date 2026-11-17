@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -85,6 +85,61 @@ describe('Workspace', () => {
     expect(() => workspace.open('link/secret.egn')).toThrow(/outside/);
     const entry = workspace.create({ title: 'T' });
     expect(() => workspace.save(entry.id, { path: 'link/written.egn' })).toThrow(/outside/);
+  });
+
+  it('refuses to write through a dangling symlink', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'egon-out-'));
+    symlinkSync(join(outside, 'escaped.egn'), join(root, 'story.egn'));
+    const entry = workspace.create({ title: 'T' });
+    expect(() => workspace.save(entry.id, { path: 'story.egn' })).toThrow(/symbolic link|outside/);
+    expect(existsSync(join(outside, 'escaped.egn'))).toBe(false);
+  });
+
+  it('refuses directories that are dangling symlinks', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'egon-out-'));
+    symlinkSync(join(outside, 'missing-dir'), join(root, 'linkdir'));
+    const entry = workspace.create({ title: 'T' });
+    expect(() => workspace.save(entry.id, { path: 'linkdir/story.egn' })).toThrow(/symbolic link|outside/);
+  });
+
+  it('saves an .egn.svg story back to its own file without a path', () => {
+    const entry = workspace.create({ title: 'Pic' });
+    workspace.save(entry.id, { path: 'pic.egn.svg' });
+    const reopened = workspace.open('pic.egn.svg');
+    expect(workspace.save(reopened.id, {})).toMatchObject({ path: 'pic.egn.svg', format: 'egn.svg' });
+  });
+
+  it('keeps the Egon 4 layout when saving an Egon 4 file in place', () => {
+    writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
+    const entry = workspace.open('four.egn');
+    expect(workspace.save(entry.id, {})).toMatchObject({ path: 'four.egn', layout: 'egon4' });
+    expect(JSON.parse(readFileSync(join(root, 'four.egn'), 'utf8')).domainStory.title).toBe('testTitle');
+  });
+
+  it('does not overwrite files it did not write unless asked to', () => {
+    writeFileSync(join(root, 'README.md'), 'keep me');
+    const entry = workspace.create({ title: 'T' });
+    expect(() => workspace.save(entry.id, { path: 'README.md' })).toThrow(/already exists/);
+    expect(readFileSync(join(root, 'README.md'), 'utf8')).toBe('keep me');
+    workspace.save(entry.id, { path: 'README.md', overwrite: true });
+    expect(readFileSync(join(root, 'README.md'), 'utf8')).toContain('# T');
+    // Files this workspace wrote may be overwritten again.
+    workspace.save(entry.id, { path: 'mine.svg' });
+    expect(() => workspace.save(entry.id, { path: 'mine.svg' })).not.toThrow();
+  });
+
+  it('refuses to write legacy .dst files', () => {
+    const entry = workspace.create({ title: 'T' });
+    expect(() => workspace.save(entry.id, { path: 'old.dst.svg' })).toThrow(/\.dst/);
+    expect(() => workspace.save(entry.id, { path: 'old.dst' })).toThrow(/\.dst|extension/);
+  });
+
+  it('builds ids without leftover accents', () => {
+    expect(workspace.create({ title: 'Bestellung für Pizza' }).id).toBe('bestellung-fur-pizza');
+  });
+
+  it('refuses the file system root as workspace', () => {
+    expect(() => new Workspace('/')).toThrow(/--root/);
   });
 
   it('refuses unsupported file types', () => {

@@ -51,6 +51,36 @@ describe('LinkServer', () => {
     expect((await fetch(url)).status).toBe(404);
   });
 
+  it('survives malformed request lines', async () => {
+    server = new LinkServer();
+    const url = await server.publish('s', 's.egn', () => '{}');
+    const { port } = new URL(url);
+    const { connect } = await import('node:net');
+    const reply = await new Promise<string>((resolve) => {
+      const socket = connect(Number(port), '127.0.0.1', () => socket.write('GET http://[ HTTP/1.1\r\nHost: x\r\n\r\n'));
+      let data = '';
+      socket.on('data', (chunk) => (data += chunk));
+      socket.on('close', () => resolve(data));
+      socket.on('error', () => resolve(data));
+      setTimeout(() => socket.destroy(), 500);
+    });
+    expect(reply).toMatch(/^HTTP\/1\.1 (400|404)/);
+    expect((await fetch(url)).status).toBe(200);
+  });
+
+  it('keeps non-ASCII titles readable for Egon and drops characters that break URLs', async () => {
+    server = new LinkServer();
+    const url = await server.publish('s', 'Bestellung für Pizza & Co #1.egn', () => '{}');
+    expect(url).toMatch(/\/Bestellung%20für%20Pizza%20Co%201\.egn$/);
+    expect((await fetch(url)).status).toBe(200);
+  });
+
+  it('starts only one HTTP server when stories are published at the same time', async () => {
+    server = new LinkServer();
+    const [a, b] = await Promise.all([server.publish('a', 'a.egn', () => '{}'), server.publish('b', 'b.egn', () => '{}')]);
+    expect(new URL(a).port).toBe(new URL(b).port);
+  });
+
   it('only accepts GET, HEAD and OPTIONS', async () => {
     server = new LinkServer();
     const url = await server.publish('s', 's.egn', () => '{}');

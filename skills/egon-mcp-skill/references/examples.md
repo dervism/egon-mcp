@@ -25,9 +25,18 @@ User: "When a customer calls to order a pizza, the clerk writes the order on a s
 }
 ```
 
-Then `validate_story` with `{ "storyId": "order-pizza-by-phone" }`, `narrate_story` to read it back, and `save_story` to write `Order pizza by phone.egn`.
+Then `validate_story` with `{ "storyId": "order-pizza-by-phone" }`, `narrate_story` to read it back, and `save_story` to write `Order pizza by phone.egn`. The narrative reads:
 
-Note that step 3 repeats "Order slip" from step 2, so the steps share one work object. Egon's replay then repeats "to Pizza baker" in both steps; if that reads wrong, name the second object differently.
+```
+1. Customer orders Pizza order from Clerk.
+2. Clerk writes Order slip.
+3. Clerk hands Order slip to Pizza baker.
+4. Pizza baker bakes Pizza.
+5. Clerk gives Pizza to Customer.
+6. Customer pays Money to Clerk.
+```
+
+Steps 2 and 3 each get their own "Order slip", and steps 4 and 5 their own "Pizza". That is how Egon users draw stories, and it keeps "to Pizza baker" out of step 2. Add `"reuseWorkObject": true` to a sentence to continue with the previous object of the same name instead.
 
 ## Interview step by step
 

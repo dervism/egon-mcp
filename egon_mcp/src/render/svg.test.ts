@@ -46,19 +46,23 @@ describe('renderStorySvg', () => {
     expect(XMLValidator.validate(withTitle)).toBe(true);
   });
 
-  it('embeds the icon of each actor and work object, recolored when a color is picked', () => {
+  it('embeds each icon as an image, recolored when a color is picked', () => {
     const svg = renderStorySvg(pizza().toDocument());
-    expect((svg.match(/<svg /g) ?? []).length).toBeGreaterThan(3);
-    expect(svg).toContain('#E53935');
+    const images = [...svg.matchAll(/<image [^>]*href="data:image\/svg\+xml;base64,([^"]+)"/g)].map((m) =>
+      Buffer.from(m[1] as string, 'base64').toString('utf8'),
+    );
+    expect(images.length).toBeGreaterThanOrEqual(3);
+    expect(images.some((icon) => icon.includes('#E53935'))).toBe(true);
   });
 
-  it('strips scripts and event handlers from icons in untrusted files', () => {
+  it('never inlines icon markup, so scripts in untrusted icons cannot run', () => {
     const doc = Story.create({ title: 'T' }).toDocument();
-    doc.iconSet.actors['Evil'] = '<svg viewBox="0 0 10 10" onload="alert(1)"><script>alert(2)</script><circle r="3"/></svg>';
+    doc.iconSet.actors['Evil'] =
+      '<svg viewBox="0 0 10 10" xmlns:s="http://www.w3.org/2000/svg"><s:script>alert(1)</s:script><a href="&#106;avascript:x"><circle r="3"/></a></svg>';
     doc.elements.push({ type: 'domainStory:actorEvil', id: 'shape_1', name: 'x', x: 0, y: 0 });
     const svg = renderStorySvg(doc);
-    expect(svg).not.toMatch(/<script|onload/i);
-    expect(svg).toContain('<circle');
+    expect(svg).not.toMatch(/script|javascript|&#106;/i);
+    expect(svg).toMatch(/<image [^>]*href="data:image\/svg\+xml;base64,/);
   });
 
   it('renders an Egon export', () => {

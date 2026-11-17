@@ -22,7 +22,7 @@ egon-mcp/
 
 ## Quick start
 
-Requires Node 22.13 or newer.
+Requires Node 22.18 or newer.
 
 ```bash
 git clone --recurse-submodules https://github.com/dervism/egon-mcp.git

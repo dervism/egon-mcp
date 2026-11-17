@@ -1,4 +1,4 @@
-import type { IconMap, IconSet, Scope, StoryDocument, StoryElement } from './types.js';
+import { ACTIVITY_TYPE, CONNECTION_TYPE, type IconMap, type IconSet, type Scope, type StoryDocument, type StoryElement } from './types.js';
 
 export class StoryParseError extends Error {
   override name = 'StoryParseError';
@@ -168,15 +168,90 @@ function defaultIconSet(): IconSet {
   return { name: 'default', actors: {}, workObjects: {} };
 }
 
+/**
+ * Copies an element, drops bpmn-io bookkeeping and checks field types, so
+ * that values from untrusted files are safe to use in rendered SVG.
+ */
 function cleanElement(raw: Record<string, unknown>): StoryElement {
   const element: Record<string, unknown> = { ...raw };
   for (const key of BPMN_BOOKKEEPING) {
     delete element[key];
   }
-  if (typeof element['name'] !== 'string') {
-    element['name'] = element['name'] === undefined || element['name'] === null ? '' : String(element['name']);
+  const type = element['type'] as string;
+  const id = element['id'];
+  if (typeof id !== 'string' || !id.trim()) {
+    throw new StoryParseError(`An element of type ${type} has no id.`);
+  }
+  element['name'] = element['name'] === undefined || element['name'] === null ? '' : String(element['name']);
+  if (element['text'] !== undefined && typeof element['text'] !== 'string') {
+    element['text'] = element['text'] === null ? '' : String(element['text']);
+  }
+  for (const key of ['pickedColor', 'parent']) {
+    if (element[key] !== undefined && typeof element[key] !== 'string') {
+      delete element[key];
+    }
+  }
+  if (type === ACTIVITY_TYPE || type === CONNECTION_TYPE) {
+    for (const key of ['source', 'target']) {
+      if (typeof element[key] !== 'string') {
+        throw new StoryParseError(`${id}: ${key} must be an element id.`);
+      }
+    }
+    if (!Array.isArray(element['waypoints'])) {
+      throw new StoryParseError(`${id}: waypoints must be a list of points.`);
+    }
+    element['waypoints'] = element['waypoints'].map((point, index) => readWaypoint(point, `${id}: waypoint ${index + 1}`));
+    if (type === ACTIVITY_TYPE) {
+      const number = finite(element['number']);
+      element['number'] = number === undefined ? null : number;
+    }
+  } else {
+    for (const key of ['x', 'y']) {
+      const value = finite(element[key]);
+      if (value === undefined) {
+        throw new StoryParseError(`${id}: ${key} must be a number.`);
+      }
+      element[key] = value;
+    }
+    for (const key of ['width', 'height']) {
+      if (element[key] !== undefined) {
+        const value = finite(element[key]);
+        if (value === undefined || value <= 0) {
+          delete element[key];
+        } else {
+          element[key] = value;
+        }
+      }
+    }
   }
   return element as StoryElement;
+}
+
+function readWaypoint(value: unknown, where: string): { x: number; y: number; original?: { x: number; y: number } } {
+  if (!isRecord(value)) {
+    throw new StoryParseError(`${where} is not a point.`);
+  }
+  const x = finite(value['x']);
+  const y = finite(value['y']);
+  if (x === undefined || y === undefined) {
+    throw new StoryParseError(`${where} needs numeric x and y.`);
+  }
+  const point: { x: number; y: number; original?: { x: number; y: number } } = { x, y };
+  const original = value['original'];
+  if (isRecord(original)) {
+    const ox = finite(original['x']);
+    const oy = finite(original['y']);
+    if (ox !== undefined && oy !== undefined) {
+      point.original = { x: ox, y: oy };
+    }
+  }
+  return point;
+}
+
+/** A finite number, also from a numeric string; undefined otherwise. */
+function finite(value: unknown): number | undefined {
+  const number = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+  return Number.isFinite(number) ? number : undefined;
 }
 
 function parseJson(text: string, what: string): unknown {

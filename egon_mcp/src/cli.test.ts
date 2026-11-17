@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseOptions } from './cli.js';
+import { parseOptions, rootWarning } from './cli.js';
 
 describe('parseOptions', () => {
   it('defaults the workspace root to the current directory', () => {
@@ -39,5 +39,12 @@ describe('parseOptions', () => {
   it('rejects unknown flags and non-http Egon URLs', () => {
     expect(() => parseOptions(['--nope'], {}, '/work')).toThrow(/Unknown option/);
     expect(() => parseOptions(['--egon-url', 'javascript:alert(1)'], {}, '/work')).toThrow(/http/);
+  });
+});
+
+describe('rootWarning', () => {
+  it('warns when the workspace is the home directory', () => {
+    expect(rootWarning('/Users/ann', '/Users/ann')).toMatch(/home directory/);
+    expect(rootWarning('/Users/ann/stories', '/Users/ann')).toBeUndefined();
   });
 });

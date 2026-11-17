@@ -70,7 +70,8 @@ export interface ElementUpdate {
 /** Grid that new shapes snap to when the caller gives no position. */
 const GRID = { originX: 100, originY: 100, cellWidth: 200, cellHeight: 175, columns: 6 };
 const GROUP_PADDING = 40;
-const COLOR_PATTERN = /^(#[0-9a-fA-F]{3,8}|[a-zA-Z]+|rgba?\([\d\s.,%]+\))$/;
+/** Hex or a plain color name; the renderer accepts exactly these. */
+const COLOR_PATTERN = /^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,20})$/;
 const CUSTOM_ICON_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 /**
@@ -106,6 +107,11 @@ export class Story {
 
   toDocument(): StoryDocument {
     return structuredClone(this.doc);
+  }
+
+  /** Puts the story back to a snapshot taken with toDocument, for example after a failed edit. */
+  restore(snapshot: StoryDocument): void {
+    this.doc = structuredClone(snapshot);
   }
 
   get title(): string {
@@ -162,7 +168,8 @@ export class Story {
     if (/<script|\son[a-z]+\s*=|javascript:|<foreignObject/i.test(svg)) {
       throw new StoryError('Custom icon SVGs must not contain scripts, event handlers or foreignObject.');
     }
-    this.iconMapFor(input.kind)[name] = svg;
+    // Egon treats only data URLs as custom icons (util.js, icon-css.service.ts).
+    this.iconMapFor(input.kind)[name] = `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`;
   }
 
   addActivity(input: ActivityInput): ActivityElement {

@@ -9,9 +9,15 @@ export interface SentenceInput {
   actorIcon?: string;
   /** The verb of the sentence, for example "orders" or "writes". */
   activity: string;
-  /** Name of the work object the actor works with. Created when missing. */
+  /**
+   * Name of the work object the actor works with. Each sentence draws a new
+   * work object, as Egon users do, unless this is the id of an existing work
+   * object or `reuseWorkObject` is set.
+   */
   workObject: string;
   workObjectIcon?: string;
+  /** Use the latest work object with this name instead of drawing a new one. */
+  reuseWorkObject?: boolean;
   /** Actors who receive the work object, for example `{ activity: "to", actor: "Clerk" }`. */
   to?: { actor: string; activity?: string; actorIcon?: string }[];
   /** Puts the sentence into an existing step instead of appending a new one. */
@@ -46,18 +52,19 @@ export interface BuildStoryInput {
 }
 
 /**
- * Adds one domain story sentence ("Customer tells Order to Clerk"), creating
- * the actors and work objects that do not exist yet. Without an explicit
- * icon, a new element uses the built-in icon of the same name if there is one
- * (an "Email" work object gets the Email icon), else Person or Document.
+ * Adds one domain story sentence ("Customer tells Order to Clerk"). Actors are
+ * shared across sentences and matched by name; each sentence gets its own work
+ * object unless told to reuse one. Without an explicit icon, a new element uses
+ * the built-in icon of the same name if there is one (an "Email" work object
+ * gets the Email icon), else Person or Document.
  */
 export function addSentence(story: Story, input: SentenceInput): SentenceResult {
   const created: StoryElement[] = [];
-  const actor = findOrCreate(story, 'actor', input.actor, input.actorIcon, created);
-  const workObject = findOrCreate(story, 'workObject', input.workObject, input.workObjectIcon, created);
+  const actor = findOrCreateActor(story, input.actor, input.actorIcon, created);
+  const workObject = workObjectFor(story, input, created);
   const recipients = (input.to ?? []).map((recipient) => ({
     activity: recipient.activity ?? '',
-    actor: findOrCreate(story, 'actor', recipient.actor, recipient.actorIcon, created),
+    actor: findOrCreateActor(story, recipient.actor, recipient.actorIcon, created),
   }));
 
   const main = story.addActivity({
@@ -91,12 +98,19 @@ export function buildStory(input: BuildStoryInput): Story {
   });
   for (const group of input.groups ?? []) {
     withContext(`group "${group.name}"`, () =>
-      story.addGroup({ name: group.name, members: group.members, ...(group.color ? { color: group.color } : {}) }),
+      story.addGroup({
+        name: group.name,
+        members: group.members.flatMap((member) => idsFor(story, member)),
+        ...(group.color ? { color: group.color } : {}),
+      }),
     );
   }
   for (const annotation of input.annotations ?? []) {
     withContext('annotation', () =>
-      story.addAnnotation({ text: annotation.text, ...(annotation.attachTo ? { attachTo: annotation.attachTo } : {}) }),
+      story.addAnnotation({
+        text: annotation.text,
+        ...(annotation.attachTo ? { attachTo: idsFor(story, annotation.attachTo)[0] as string } : {}),
+      }),
     );
   }
   if (input.layout !== false) {
@@ -105,33 +119,72 @@ export function buildStory(input: BuildStoryInput): Story {
   return story;
 }
 
-function findOrCreate(
+function findOrCreateActor(story: Story, name: string, icon: string | undefined, created: StoryElement[]): ShapeElement {
+  const existing = sameName(story, name, 'actor');
+  if (existing.length > 0) {
+    return existing[0] as ShapeElement;
+  }
+  return create(story, 'actor', name, icon, created);
+}
+
+function workObjectFor(story: Story, input: SentenceInput, created: StoryElement[]): ShapeElement {
+  const byId = story.get(input.workObject);
+  if (byId && isWorkObject(byId)) {
+    return byId as ShapeElement;
+  }
+  if (input.reuseWorkObject) {
+    const existing = sameName(story, input.workObject, 'workObject');
+    if (existing.length > 0) {
+      return existing[existing.length - 1] as ShapeElement;
+    }
+  }
+  return create(story, 'workObject', input.workObject, input.workObjectIcon, created);
+}
+
+/** Actors or work objects with this name, after checking the name is not used by the other kind. */
+function sameName(story: Story, name: string, kind: 'actor' | 'workObject'): StoryElement[] {
+  const wanted = name.trim().toLowerCase();
+  if (!wanted) {
+    throw new StoryError(`Every sentence needs a name for its ${kind === 'actor' ? 'actor' : 'work object'}.`);
+  }
+  const matches = story.elements().filter((element) => element.name.trim().toLowerCase() === wanted);
+  const otherKind = matches.find((element) => (kind === 'actor' ? isWorkObject(element) : isActor(element)));
+  if (otherKind) {
+    throw new StoryError(
+      `"${name}" is already a ${isActor(otherKind) ? 'actor' : 'work object'} in this story and cannot also be a ${kind === 'actor' ? 'actor' : 'work object'}.`,
+    );
+  }
+  return matches.filter((element) => (kind === 'actor' ? isActor(element) : isWorkObject(element)));
+}
+
+function create(
   story: Story,
   kind: 'actor' | 'workObject',
   name: string,
   icon: string | undefined,
   created: StoryElement[],
 ): ShapeElement {
-  const wanted = name.trim().toLowerCase();
-  if (!wanted) {
-    throw new StoryError(`Every sentence needs a name for its ${kind === 'actor' ? 'actor' : 'work object'}.`);
-  }
-  const sameName = story.elements().filter((element) => element.name.trim().toLowerCase() === wanted);
-  const match = sameName.find((element) => (kind === 'actor' ? isActor(element) : isWorkObject(element)));
-  if (match) {
-    return match as ShapeElement;
-  }
-  const other = sameName.find((element) => isActor(element) || isWorkObject(element));
-  if (other) {
-    throw new StoryError(
-      `"${name}" is already a ${isActor(other) ? 'actor' : 'work object'} in this story and cannot also be a ${kind === 'actor' ? 'actor' : 'work object'}.`,
-    );
-  }
   const chosenIcon = icon ?? IconCatalog.builtIn().get(name)?.name;
   const input = { name: name.trim(), ...(chosenIcon ? { icon: chosenIcon } : {}) };
   const element = kind === 'actor' ? story.addActor(input) : story.addWorkObject(input);
   created.push(element);
   return element;
+}
+
+/** The id itself, or every actor and work object with that name. */
+function idsFor(story: Story, ref: string): string[] {
+  if (story.get(ref)) {
+    return [ref];
+  }
+  const wanted = ref.trim().toLowerCase();
+  const ids = story
+    .elements()
+    .filter((element) => (isActor(element) || isWorkObject(element)) && element.name.trim().toLowerCase() === wanted)
+    .map((element) => element.id);
+  if (ids.length === 0) {
+    throw new StoryError(`There is no actor or work object named "${ref}".`);
+  }
+  return ids;
 }
 
 function shapeInput(spec: ShapeSpec) {

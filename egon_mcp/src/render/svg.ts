@@ -150,27 +150,33 @@ function drawNode(node: ShapeElement, doc: StoryDocument, catalog: IconCatalog):
   );
 }
 
-/** Returns the icon as a nested <svg> element placed in `box`. */
+/**
+ * Returns the icon as an <image> with a data URL. Browsers do not run scripts
+ * or load external resources from SVG images, so icons from untrusted files
+ * cannot inject anything into the rendered story.
+ */
 function iconSvg(name: string, doc: StoryDocument, catalog: IconCatalog, color: string | undefined, box: Bounds): string {
   // Egon prefers a built-in icon over a same-named entry in the file.
   let source = catalog.get(name)?.svg ?? doc.iconSet.actors[name] ?? doc.iconSet.workObjects[name] ?? '';
   const place = `x="${round(box.x)}" y="${round(box.y)}" width="${round(box.width)}" height="${round(box.height)}"`;
+  if (/^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(source)) {
+    return `<image ${place} href="${attr(source)}"/>`;
+  }
   if (source.startsWith('data:image/svg+xml')) {
     source = decodeDataUrl(source);
-  } else if (/^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(source)) {
-    return `<image ${place} href="${attr(source)}"/>`;
   }
   if (!/^\s*<svg[\s>]/i.test(source)) {
     return `<rect ${place} fill="none" stroke="${color ?? 'black'}" stroke-dasharray="3, 3"/>`;
   }
-  let svg = sanitizeSvg(source.trim());
+  let svg = source.trim();
+  if (!/\sxmlns\s*=/.test(svg.slice(0, svg.indexOf('>')))) {
+    svg = svg.replace(/^<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+  }
   if (color) {
     svg = recolor(svg, color);
   }
-  return svg.replace(/^<svg\b([^>]*)>/i, (_match, attributes: string) => {
-    const kept = attributes.replace(/\s(width|height|x|y)\s*=\s*("[^"]*"|'[^']*')/gi, '');
-    return `<svg ${place}${kept}>`;
-  });
+  const dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`;
+  return `<image ${place} href="${dataUrl}" preserveAspectRatio="xMidYMid meet"/>`;
 }
 
 /** Egon's applyColorToIcon: replace every fill, or add one when the icon has none. */
@@ -185,17 +191,6 @@ function recolor(svg: string, color: string): string {
     return `fill:${color}`;
   });
   return changed ? result : result.replace(/^<svg\b/i, `<svg fill="${color}"`);
-}
-
-/** Removes scripts, event handlers and external content from an icon. */
-export function sanitizeSvg(svg: string): string {
-  return svg
-    .replace(/<\?xml[^>]*\?>/gi, '')
-    .replace(/<!DOCTYPE[^>]*>/gi, '')
-    .replace(/<script\b[\s\S]*?(<\/script\s*>|$)/gi, '')
-    .replace(/<foreignObject\b[\s\S]*?(<\/foreignObject\s*>|$)/gi, '')
-    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/\s(xlink:)?href\s*=\s*("\s*javascript:[^"]*"|'\s*javascript:[^']*')/gi, '');
 }
 
 function decodeDataUrl(url: string): string {

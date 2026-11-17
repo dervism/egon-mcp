@@ -48,7 +48,7 @@ Rules to follow while you write the sentences:
 1. Actors do things: people, roles, groups, systems. Work objects are what they work with: documents, calls, emails, money, goods, information.
 2. Never connect two actors. Egon refuses it. Name the work object they exchange instead, such as a call, a message or a form ("Customer calls Waiter" becomes "Customer orders Pizza from Waiter", or uses a Call work object).
 3. Tell one concrete case, usually the happy path. Put variations, rules and open questions into annotations, or into a second story. Do not branch.
-4. Use the domain's words, in the present tense, and the same name for the same thing in every sentence. `build_story` matches names case-insensitively, so "order" and "Order" become one element.
+4. Use the domain's words, in the present tense, and the same name for the same thing in every sentence. Actors with the same name (case-insensitive) are one element. Work objects are drawn again in each sentence, as Egon users do, so a recipient in step 3 does not leak into step 1. Set `reuseWorkObject: true`, or pass the work object's id, when a sentence should continue with the very same object.
 5. Keep stories to about 10 to 20 steps. Split longer processes into several stories and say how they connect.
 6. Use the same step number for things that happen in parallel (`number` on `add_sentence` or `add_activity`).
 7. A work object can turn into another one ("Clerk turns Order into Invoice"). Use `add_activity` from the first work object to the second for that.
@@ -83,8 +83,9 @@ Then read `narrate_story` and compare it with what the user said. Each line must
 
 ## Save and show
 
-- `save_story` without a path writes `<title>.egn`. The extension picks the format: `.egn` (Egon file), `.egn.svg` (picture that Egon can import), `.svg` (picture only), `.md` (sentences).
-- Egon 3 (the public app) reads the title from the file name, so keep the file name equal to the title. Scope survives only when the server runs with `--egon-format egon4`.
+- `save_story` without a path writes back to the file the story came from, or to `<title>.egn`. The extension picks the format: `.egn` (Egon file), `.egn.svg` (picture that Egon can import), `.svg` (picture only), `.md` (sentences). Legacy `.dst` files can be opened but not written.
+- `save_story` will not replace a file it did not write. Ask the user before passing `overwrite: true`.
+- Egon 3 (the public app) reads the title from the file name, so keep the file name equal to the title. Scope survives only in the Egon 4 layout: when the server runs with `--egon-format egon4`, or when the story was opened from an Egon 4 file (saving in place keeps that layout).
 - `open_in_egon` returns an Egon link that loads the story from the running server. Give the user the `egonUrl`. The link works only on the same machine while the server runs, and it always shows the latest state, so edits only need a reload.
 - If the browser blocks the local link (Chrome may ask for local network access; some browsers refuse), save the story and tell the user to use "Import file" in Egon.
 - Image formats: `export_story` with `svg` returns the SVG text, which you can write to a file or show if the client renders SVG.
@@ -99,7 +100,8 @@ Tool errors explain the problem and usually the fix:
 | `ambiguous` | Several elements share the name; use the id from `get_story`. |
 | `no element with the id or name` | Check spelling with `get_story`. |
 | `Unknown icon` | Pick one of the suggested names or call `search_icons`. |
-| `outside the workspace root` | Use a path relative to the root; ask the user to move the file or restart the server with another `--root`. |
+| `outside the workspace root`, `symbolic link` | Use a plain path relative to the root; ask the user to move the file or restart the server with another `--root`. |
+| `already exists` | Pick another path, or ask the user whether to pass `overwrite: true`. |
 | `No open story` | Use `list_stories`; stories are lost when the server restarts unless saved. |
 
 ## References

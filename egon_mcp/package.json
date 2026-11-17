@@ -12,13 +12,13 @@
     "dist"
   ],
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.18"
   },
   "scripts": {
     "generate:icons": "node --disable-warning=ExperimentalWarning scripts/generate-icons.mjs",
     "prebuild": "npm run generate:icons",
     "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
-    "pretest": "npm run generate:icons",
+    "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",

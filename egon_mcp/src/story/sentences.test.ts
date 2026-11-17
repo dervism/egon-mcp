@@ -19,13 +19,32 @@ describe('addSentence', () => {
     expect(narrate(story.toDocument())[0]?.sentence).toBe('Customer tells Order to Clerk.');
   });
 
-  it('reuses elements that already exist, matching names case-insensitively', () => {
+  it('reuses actors by name but draws a new work object for each sentence, as in Egon practice', () => {
     const story = Story.create({ title: 'T' });
     addSentence(story, { actor: 'Customer', activity: 'tells', workObject: 'Order', to: [{ activity: 'to', actor: 'Clerk' }] });
-    const second = addSentence(story, { actor: 'clerk', activity: 'confirms', workObject: 'order' });
+    const second = addSentence(story, { actor: 'clerk', activity: 'passes', workObject: 'Order', to: [{ activity: 'to', actor: 'Baker' }] });
+    expect(second.created.map((e) => e.name)).toEqual(['Order', 'Baker']);
+    expect(story.elements().filter(isActor)).toHaveLength(3);
+    expect(story.elements().filter(isWorkObject)).toHaveLength(2);
+    expect(narrate(story.toDocument()).map((s) => s.sentence)).toEqual([
+      'Customer tells Order to Clerk.',
+      'Clerk passes Order to Baker.',
+    ]);
+  });
+
+  it('reuses the latest work object of that name when asked to', () => {
+    const story = Story.create({ title: 'T' });
+    addSentence(story, { actor: 'Clerk', activity: 'writes', workObject: 'Order slip' });
+    const second = addSentence(story, { actor: 'Clerk', activity: 'signs', workObject: 'order slip', reuseWorkObject: true });
     expect(second.created).toEqual([]);
-    expect(story.elements().filter(isActor)).toHaveLength(2);
     expect(story.elements().filter(isWorkObject)).toHaveLength(1);
+  });
+
+  it('reuses a work object given by id', () => {
+    const story = Story.create({ title: 'T' });
+    const first = addSentence(story, { actor: 'Clerk', activity: 'writes', workObject: 'Order slip' });
+    const slip = first.created.find((e) => e.name === 'Order slip')!;
+    expect(addSentence(story, { actor: 'Clerk', activity: 'signs', workObject: slip.id }).created).toEqual([]);
   });
 
   it('uses the given icons for new elements and a matching built-in icon by name otherwise', () => {
@@ -80,6 +99,21 @@ describe('buildStory', () => {
     ]);
     expect(doc.elements.find((e) => e.name === 'Pizza baker')?.pickedColor).toBe('#FB8C00');
     expect(validateStory(doc)).toEqual([]);
+  });
+
+  it('puts every instance of a name into a group and attaches annotations to the first one', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [
+        { actor: 'Clerk', activity: 'writes', workObject: 'Slip' },
+        { actor: 'Clerk', activity: 'stamps', workObject: 'Slip' },
+      ],
+      groups: [{ name: 'Desk', members: ['Clerk', 'Slip'] }],
+      annotations: [{ text: 'Paper', attachTo: 'Slip' }],
+    });
+    const group = story.elements().find((e) => e.type === 'domainStory:group')!;
+    expect(story.elements().filter((e) => e['parent'] === group.id)).toHaveLength(3);
+    expect(story.elements().filter((e) => e.type === 'domainStory:connection')).toHaveLength(1);
   });
 
   it('names the failing sentence in errors', () => {
