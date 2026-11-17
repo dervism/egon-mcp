@@ -8,8 +8,18 @@ import { dirname, join } from 'node:path';
 export const BUILD_INFO_FILE = 'build-info.json';
 /** The record while tsc runs; finishBuildRecord renames it to BUILD_INFO_FILE. */
 export const PENDING_BUILD_INFO_FILE = 'build-info.pending.json';
-/** Folders below src/ that the build copies into dist/ as they are. */
-export const ASSET_DIRS = ['icons/generated'];
+/**
+ * Folders below src/ that the build copies into dist/ as they are, the files
+ * the server cannot run without, and how to make them when they are missing.
+ */
+export const ASSETS = [
+  {
+    dir: 'icons/generated',
+    required: ['builtin-icons.json'],
+    // npm runs this as the prebuild step, but skips it when scripts are ignored.
+    hint: 'run "npm run generate:icons"',
+  },
+];
 
 /**
  * Files that change what tsc emits: the package and compiler settings, and the
@@ -57,10 +67,10 @@ export function sourceHash(packageDir: string): string {
   for (const file of sourceFiles(srcDir)) {
     add(`src/${file}`, join(srcDir, file));
   }
-  for (const assets of ASSET_DIRS) {
-    const dir = join(srcDir, assets);
-    for (const file of existsSync(dir) ? walk(dir) : []) {
-      add(`src/${assets}/${file}`, join(dir, file));
+  for (const { dir } of ASSETS) {
+    const from = join(srcDir, dir);
+    for (const file of existsSync(from) ? walk(from) : []) {
+      add(`src/${dir}/${file}`, join(from, file));
     }
   }
   return hash.digest('hex');
@@ -74,8 +84,8 @@ export function sourceHash(packageDir: string): string {
 export function startBuildRecord(packageDir: string): void {
   const dist = join(packageDir, 'dist');
   rmSync(join(dist, BUILD_INFO_FILE), { force: true });
-  for (const assets of ASSET_DIRS) {
-    rmSync(join(dist, assets), { recursive: true, force: true });
+  for (const { dir } of ASSETS) {
+    rmSync(join(dist, dir), { recursive: true, force: true });
   }
   mkdirSync(dist, { recursive: true });
   writeFileSync(join(dist, PENDING_BUILD_INFO_FILE), `${JSON.stringify({ sourceHash: sourceHash(packageDir) }, null, 2)}\n`);
@@ -85,25 +95,36 @@ export function startBuildRecord(packageDir: string): void {
  * Copies the asset folders from src/ into cleared folders in dist/, file by
  * file from the same walk sourceHash uses, so dist/ holds exactly what was
  * hashed: links copied as the files they point to, nothing hidden or stale.
- * Fails when an asset folder is missing.
+ * Fails when a required file is missing, since the server cannot run without it.
  */
 export function copyAssets(packageDir: string): void {
-  for (const assets of ASSET_DIRS) {
-    const from = join(packageDir, 'src', assets);
-    const to = join(packageDir, 'dist', assets);
+  for (const { dir, required, hint } of ASSETS) {
+    const from = join(packageDir, 'src', dir);
+    const to = join(packageDir, 'dist', dir);
     rmSync(to, { recursive: true, force: true });
-    if (!existsSync(from)) {
-      // The server cannot run without its assets, so the build must not count as complete.
-      throw new Error(`src/${assets} is missing; run "npm run generate:icons" or "npm run build".`);
+    const files = existsSync(from) ? walk(from) : [];
+    for (const file of required) {
+      if (!files.includes(file)) {
+        throw new Error(`src/${dir}/${file} is missing; ${hint}.`);
+      }
     }
-    for (const file of walk(from)) {
+    for (const file of files) {
       mkdirSync(dirname(join(to, file)), { recursive: true });
       copyFileSync(join(from, file), join(to, file));
     }
   }
 }
 
-/** Last build step, once tsc and the asset copy succeeded: the note becomes the record. */
+/**
+ * Last build step, after tsc succeeded: copies the assets, then records the
+ * build. Missing assets stop it before the record is written.
+ */
+export function completeBuild(packageDir: string): void {
+  copyAssets(packageDir);
+  finishBuildRecord(packageDir);
+}
+
+/** Turns the note from startBuildRecord into the record; completeBuild calls it once the assets are in place. */
 export function finishBuildRecord(packageDir: string): void {
   const dist = join(packageDir, 'dist');
   renameSync(join(dist, PENDING_BUILD_INFO_FILE), join(dist, BUILD_INFO_FILE));

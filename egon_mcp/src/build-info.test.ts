@@ -4,6 +4,7 @@ import { join, relative, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   BUILD_INFO_FILE,
+  completeBuild,
   copyAssets,
   finishBuildRecord,
   PENDING_BUILD_INFO_FILE,
@@ -165,9 +166,13 @@ describe('copyAssets', () => {
     expect(copiedFiles()).toEqual(['builtin-icons.json']);
   });
 
-  it('fails when an asset folder is missing, so the build stops before writing its record', () => {
+  it('fails when a file the server needs is missing, even if its folder is there', () => {
+    const hint = /src\/icons\/generated\/builtin-icons\.json is missing; run "npm run generate:icons"/;
+    rmSync(join(generated, 'builtin-icons.json'));
+    writeFileSync(join(generated, '.DS_Store'), 'finder');
+    expect(() => copyAssets(packageDir)).toThrow(hint);
     rmSync(generated, { recursive: true });
-    expect(() => copyAssets(packageDir)).toThrow(/src\/icons\/generated is missing.*npm run generate:icons/);
+    expect(() => copyAssets(packageDir)).toThrow(hint);
   });
 
   it.runIf(links)('copies links as the files they point to and skips dangling ones', () => {
@@ -204,6 +209,17 @@ describe('build record', () => {
     expect(existsSync(record())).toBe(false);
     // So a build that never copies the assets cannot pass on an earlier copy.
     expect(existsSync(join(dist(), 'icons', 'generated'))).toBe(false);
+  });
+
+  it('completes a build by copying the assets first, so missing ones leave no record', () => {
+    startBuildRecord(packageDir);
+    rmSync(join(generated, 'builtin-icons.json'));
+    expect(() => completeBuild(packageDir)).toThrow(/builtin-icons\.json is missing/);
+    expect(existsSync(record())).toBe(false);
+    writeFileSync(join(generated, 'builtin-icons.json'), '[]');
+    completeBuild(packageDir);
+    expect(existsSync(record())).toBe(true);
+    expect(existsSync(join(dist(), 'icons', 'generated', 'builtin-icons.json'))).toBe(true);
   });
 
   it('refuses to finish a build that was never started', () => {
