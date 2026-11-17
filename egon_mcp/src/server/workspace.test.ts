@@ -1,4 +1,4 @@
-import { existsSync, linkSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -13,7 +13,9 @@ let workspace: Workspace;
 const caseInsensitive = (() => {
   const dir = mkdtempSync(join(tmpdir(), 'egon-case-'));
   writeFileSync(join(dir, 'probe'), '');
-  return existsSync(join(dir, 'PROBE'));
+  const result = existsSync(join(dir, 'PROBE'));
+  rmSync(dir, { recursive: true });
+  return result;
 })();
 
 beforeEach(() => {
@@ -201,6 +203,40 @@ describe('Workspace', () => {
     const entry = workspace.open('four.egn');
     rmSync(join(root, 'four.egn'));
     expect(workspace.save(entry.id, {}).layout).toBe('egon4');
+  });
+
+  it('takes the layout from the file being replaced, not from what was there before', () => {
+    writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
+    workspace.open('four.egn');
+    // Someone swaps the file for an Egon 3 file outside the server.
+    writeFileSync(join(root, 'swap.egn'), workspace.serialize(Story.create({ title: 'Three' }), 'egn', 'egon3'));
+    renameSync(join(root, 'swap.egn'), join(root, 'four.egn'));
+    const other = workspace.create({ title: 'Other' });
+    expect(workspace.save(other.id, { path: 'four.egn', overwrite: true }).layout).toBe('egon3');
+  });
+
+  it('uses the server layout for a new file at a path an earlier story used', () => {
+    writeFileSync(join(root, 'four.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
+    workspace.close(workspace.open('four.egn').id);
+    rmSync(join(root, 'four.egn'));
+    const fresh = workspace.create({ title: 'Fresh' });
+    expect(workspace.save(fresh.id, { path: 'four.egn' }).layout).toBe('egon3');
+  });
+
+  it('refuses to replace a file that changed on disk since the story opened or wrote it', () => {
+    const original = readEgonFixture('egn_export_version_4_0_0.json');
+    writeFileSync(join(root, 'mine.egn'), original);
+    const opened = workspace.open('mine.egn');
+    writeFileSync(join(root, 'mine.egn'), original + '\n');
+    expect(() => workspace.save(opened.id, {})).toThrow(new RegExp(`changed on disk since story "${opened.id}" opened or wrote it`));
+
+    const written = workspace.create({ title: 'Written' });
+    workspace.save(written.id, {});
+    writeFileSync(join(root, 'swap.egn'), 'edited elsewhere');
+    renameSync(join(root, 'swap.egn'), join(root, 'Written.egn'));
+    expect(() => workspace.save(written.id, {})).toThrow(/changed on disk/);
+    workspace.save(written.id, { overwrite: true });
+    expect(() => workspace.save(written.id, {})).not.toThrow();
   });
 
   it('remembers the layout of a file after the story that opened it is closed', () => {

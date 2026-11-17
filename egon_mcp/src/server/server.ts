@@ -253,15 +253,15 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Save story to file',
       description:
-        'Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". An existing file is only replaced if this story was the last to open or write it, or with overwrite: true.',
+        'Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". An existing file is only replaced if this story was the last to open or write it and it has not changed on disk since, or with overwrite: true.',
       inputSchema: {
         storyId,
         path: z.string().optional().describe('Target path relative to the workspace root.'),
-        overwrite: z.boolean().optional().describe('Replace an existing file even if this story was not the last to open or write it. Ask the user first.'),
+        overwrite: z.boolean().optional().describe('Replace an existing file even if another story opened or wrote it last or it changed on disk. Ask the user first.'),
         layout: z
           .enum(['egon3', 'egon4'])
           .optional()
-          .describe('.egn layout: egon3 works in egon.io 3.x and Egon 4; egon4 also keeps title and scope. Default: the layout of the file being replaced if this server session opened or wrote it, else the server setting.'),
+          .describe('.egn layout: egon3 works in egon.io 3.x and Egon 4; egon4 also keeps title and scope. Default: the layout of the Egon file being replaced, else the layout the story was opened with when saving back to its own file, else the server setting.'),
       },
       annotations: { destructiveHint: true, idempotentHint: true },
     },

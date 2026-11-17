@@ -18,7 +18,16 @@ export interface StoryEntry {
   story: Story;
   /** Path relative to the workspace root that the story was opened from or last saved to as .egn / .egn.svg. */
   path?: string;
+  /** The .egn layout of that file, used when saving back after the file was deleted or moved. */
+  layout?: EgonFormat;
   dirty: boolean;
+}
+
+/** Who may replace a file without `overwrite`, and the file's state when that story last read or wrote it. */
+interface Ownership {
+  storyId: string;
+  mtimeNs: bigint;
+  size: bigint;
 }
 
 export interface SaveOptions {
@@ -49,13 +58,8 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024;
  */
 export class Workspace {
   private readonly entries = new Map<string, StoryEntry>();
-  /** File identity (see fileKey) to the id of the story that last opened or wrote it; only that story may replace it. */
-  private readonly owners = new Map<string, string>();
-  /**
-   * The .egn layout of every file this session opened or wrote, by file
-   * identity and by path, so the layout survives links and deleted files.
-   */
-  private readonly fileLayouts = new Map<string, EgonFormat>();
+  /** File identity (see fileKey) to the story that last opened or wrote it; only that story may replace it. */
+  private readonly owners = new Map<string, Ownership>();
   readonly root: string;
   /** Layout of written .egn files (docs/adr/0007-write-egon-3-file-layout.md). */
   readonly egonFormat: EgonFormat;
@@ -86,9 +90,8 @@ export class Workspace {
     const relativePath = this.relative(absolute);
     const keepPath = /\.egn(\.svg)?$/i.test(relativePath) ? relativePath : undefined;
     const entry = this.add(Story.fromDocument(doc), keepPath, false);
-    const key = fileKey(absolute);
-    this.owners.set(key, entry.id);
-    this.rememberLayout(absolute, key, doc.version.startsWith('4') ? 'egon4' : 'egon3');
+    entry.layout = layoutOf(doc.version);
+    this.claim(absolute, entry.id);
     return entry;
   }
 
@@ -120,9 +123,9 @@ export class Workspace {
     this.get(id);
     this.entries.delete(id);
     // Ids are reused, so a later story with the same title must not inherit these files.
-    for (const [path, owner] of this.owners) {
-      if (owner === id) {
-        this.owners.delete(path);
+    for (const [key, owner] of this.owners) {
+      if (owner.storyId === id) {
+        this.owners.delete(key);
       }
     }
   }
@@ -135,8 +138,9 @@ export class Workspace {
    * Writes a story to disk. The format follows the file extension. Without a
    * path, the story goes back to the file it came from, else to "<title>.egn".
    * An existing file is only replaced if this story was the last to open or
-   * write it, or with `overwrite`. Without `layout`, a file this session
-   * opened or wrote keeps its .egn layout (ADR 15).
+   * write it and nobody changed it since, or with `overwrite`. Without
+   * `layout`, an existing Egon file keeps its layout, and a story saved back to
+   * its own file that has gone keeps the layout it was opened with (ADR 15).
    */
   save(id: string, options: SaveOptions): SaveResult {
     const entry = this.get(id);
@@ -146,30 +150,26 @@ export class Workspace {
       throw new WorkspaceError(`The extension of ${path} does not match the format ${format}.`);
     }
     const absolute = this.resolveForWrite(path);
-    const existingKey = lexists(absolute) ? fileKey(absolute) : undefined;
-    const owner = existingKey ? this.owners.get(existingKey) : undefined;
-    if (existingKey && owner !== id && !options.overwrite) {
-      // close() forgets a story's files, so an owner is always an open story.
-      const takenOver = owner !== undefined ? `, and story "${owner}" opened or wrote it last` : '';
-      throw new WorkspaceError(`${path} already exists${takenOver}. Pass overwrite: true to replace it, or choose another path.`);
+    const egonFile = format === 'egn' || format === 'egn.svg';
+    const exists = lexists(absolute);
+    if (exists && !options.overwrite) {
+      this.assertMayReplace(absolute, path, entry);
     }
+    const ownFile = entry.path !== undefined && this.lexicallyInside(entry.path) === absolute;
     const layout =
       options.layout ??
-      (existingKey ? this.fileLayouts.get(existingKey) : undefined) ??
-      this.fileLayouts.get(pathKey(absolute)) ??
+      (exists && egonFile ? layoutOfFile(absolute) : undefined) ??
+      (!exists && ownFile ? entry.layout : undefined) ??
       this.egonFormat;
     const content = this.serialize(entry.story, format, layout);
     mkdirSync(dirname(absolute), { recursive: true });
     writeFileSync(absolute, content);
-    const key = fileKey(absolute);
-    this.owners.set(key, id);
-    if (format === 'egn' || format === 'egn.svg') {
-      this.rememberLayout(absolute, key, layout);
-    }
+    this.claim(absolute, id);
     const relativePath = this.relative(absolute);
     const result: SaveResult = { path: relativePath, format, bytes: Buffer.byteLength(content) };
-    if (format === 'egn' || format === 'egn.svg') {
+    if (egonFile) {
       entry.path = relativePath;
+      entry.layout = layout;
       entry.dirty = false;
       result.layout = layout;
     }
@@ -216,9 +216,29 @@ export class Workspace {
     return found;
   }
 
-  private rememberLayout(absolute: string, key: string, layout: EgonFormat): void {
-    this.fileLayouts.set(key, layout);
-    this.fileLayouts.set(pathKey(absolute), layout);
+  /** Records that this story may replace the file as it is now. */
+  private claim(absolute: string, storyId: string): void {
+    const stats = statSync(absolute, { bigint: true });
+    this.owners.set(fileKey(absolute), { storyId, mtimeNs: stats.mtimeNs, size: stats.size });
+  }
+
+  private assertMayReplace(absolute: string, path: string, entry: StoryEntry): void {
+    const stats = statSync(absolute, { bigint: true });
+    const owner = this.owners.get(fileKey(absolute));
+    const unchanged = owner !== undefined && owner.mtimeNs === stats.mtimeNs && owner.size === stats.size;
+    if (owner?.storyId === entry.id && unchanged) {
+      return;
+    }
+    const advice = 'Pass overwrite: true to replace it, or choose another path.';
+    // close() forgets a story's files, so an owner is always an open story.
+    if (owner && owner.storyId !== entry.id && unchanged) {
+      throw new WorkspaceError(`${path} already exists, and story "${owner.storyId}" opened or wrote it last. ${advice}`);
+    }
+    const ownFile = entry.path !== undefined && this.lexicallyInside(entry.path) === absolute;
+    if (owner?.storyId === entry.id || ownFile) {
+      throw new WorkspaceError(`${path} changed on disk since story "${entry.id}" opened or wrote it. ${advice}`);
+    }
+    throw new WorkspaceError(`${path} already exists. ${advice}`);
   }
 
   private add(story: Story, path: string | undefined, dirty: boolean): StoryEntry {
@@ -332,14 +352,26 @@ function lexists(path: string): boolean {
 
 /**
  * One key per file however it is reached (symbolic or hard links, another
- * letter case): device and inode, plus the birth time where the file system
- * records one, so a reused inode number is a new file. The file must exist.
+ * letter case): device and inode. Ownership also checks modification time and
+ * size, so a new file on a reused inode number is not mistaken for the old one.
  */
 function fileKey(absolute: string): string {
   const stats = statSync(absolute, { bigint: true });
-  return `file:${stats.dev}:${stats.ino}:${stats.birthtimeNs}`;
+  return `${stats.dev}:${stats.ino}`;
 }
 
-function pathKey(absolute: string): string {
-  return `path:${absolute}`;
+function layoutOf(version: string): EgonFormat {
+  return version.startsWith('4') ? 'egon4' : 'egon3';
+}
+
+/** The layout of an existing Egon file, or undefined if it is not one or cannot be read. */
+function layoutOfFile(absolute: string): EgonFormat | undefined {
+  try {
+    if (statSync(absolute).size > MAX_FILE_BYTES) {
+      return undefined;
+    }
+    return layoutOf(parseStoryFile(readFileSync(absolute, 'utf8'), absolute).version);
+  } catch {
+    return undefined;
+  }
 }
