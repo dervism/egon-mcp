@@ -1,0 +1,677 @@
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
+import { StoryParseError } from '../egon/parse.js';
+import { fileNameFor, toEgnJson } from '../egon/serialize.js';
+import { IconCatalog } from '../icons/catalog.js';
+import { renderStorySvg } from '../render/svg.js';
+import { autoLayout } from '../story/layout.js';
+import { narrate, narrativeMarkdown } from '../story/narrate.js';
+import { addSentence, buildStory } from '../story/sentences.js';
+import { StoryError } from '../story/story.js';
+import { validateStory } from '../story/validate.js';
+import { describeStory, summarizeEntry } from './describe.js';
+import { DOMAIN_STORYTELLING_GUIDE } from './guide.js';
+import { egonAppUrl, LinkServer } from './link-server.js';
+import { registerPrompts } from './prompts.js';
+import { Workspace, WorkspaceError } from './workspace.js';
+
+export const SERVER_NAME = 'egon-mcp';
+export const SERVER_VERSION = '0.1.0';
+
+export interface EgonServerOptions {
+  /** Directory that file tools may read and write. */
+  root: string;
+  /** Egon app used by open_in_egon (default https://egon.io/app/). */
+  egonAppUrl?: string;
+}
+
+export interface EgonServer {
+  server: McpServer;
+  workspace: Workspace;
+  close(): Promise<void>;
+}
+
+const INSTRUCTIONS = `This server creates, edits, checks and renders domain stories for Egon.io (https://egon.io), the Domain Storytelling modeler.
+
+Typical flow: build_story (or create_story plus add_sentence) -> validate_story -> narrate_story to read it back -> save_story to write an .egn file -> open_in_egon to show it in the Egon app.
+Stories are referenced by storyId. Elements are referenced by id or by their exact name.
+Two actors cannot be connected directly; put the work object they exchange between them.
+Read egon://guide/domain-storytelling for the notation.`;
+
+const scopeSchema = z
+  .object({
+    granularity: z
+      .enum(['coarse-grained', 'medium-grained', 'fine-grained', 'cloud-level', 'kite-level', 'sea-level', 'fish-level', 'clam-level'])
+      .optional(),
+    pointInTime: z.enum(['as-is', 'to-be']).optional(),
+    domainPurity: z.enum(['pure', 'digitalized']).optional(),
+  })
+  .describe('Scope of the story as shown in Egon\'s properties panel.');
+
+const storyId = z.string().describe('Id of an open story, as returned by create_story, build_story, open_story or list_stories.');
+const elementRef = z.string().describe('Id of an element, or the exact name of an actor, work object, group or annotation text.');
+const color = z.string().describe('Color as hex, for example #1E88E5.');
+const iconName = z.string().describe('Name of a built-in Egon icon (see search_icons) or a custom icon added with add_custom_icon.');
+const x = z.number().describe('Left edge in Egon canvas pixels. Omit to place the element automatically.');
+const y = z.number().describe('Top edge in Egon canvas pixels. Omit to place the element automatically.');
+
+const recipientSchema = z.object({
+  actor: z.string().describe('Name of the actor who receives the work object.'),
+  activity: z.string().optional().describe('Label of the arrow to the recipient, for example "to" or "for".'),
+  actorIcon: iconName.optional(),
+});
+
+const sentenceSchema = {
+  actor: z.string().describe('Name of the actor who acts. Created if missing.'),
+  actorIcon: iconName.optional(),
+  activity: z.string().describe('The verb, for example "orders" or "writes".'),
+  workObject: z.string().describe('Name of the work object. Created if missing.'),
+  workObjectIcon: iconName.optional(),
+  to: z.array(recipientSchema).optional().describe('Actors who receive the work object.'),
+  number: z.number().int().positive().optional().describe('Join an existing step (parallel activities) instead of adding a new one.'),
+};
+
+const shapeSpec = z.object({ name: z.string(), icon: iconName.optional(), color: color.optional() });
+
+export function createEgonServer(options: EgonServerOptions): EgonServer {
+  const workspace = new Workspace(options.root);
+  const links = new LinkServer();
+  const catalog = IconCatalog.builtIn();
+  const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { instructions: INSTRUCTIONS });
+
+  const storiesChanged = () => {
+    if (server.isConnected()) {
+      server.sendResourceListChanged();
+    }
+  };
+
+  /** Runs a tool body and turns domain errors into MCP tool errors. */
+  const run =
+    <A>(body: (args: A) => Promise<CallToolResult> | CallToolResult) =>
+    async (args: A): Promise<CallToolResult> => {
+      try {
+        return await body(args);
+      } catch (error) {
+        if (error instanceof StoryError || error instanceof StoryParseError || error instanceof WorkspaceError) {
+          return { isError: true, content: [{ type: 'text', text: error.message }] };
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[egon-mcp] unexpected error: ${error instanceof Error ? error.stack : message}`);
+        return { isError: true, content: [{ type: 'text', text: `Unexpected error: ${message}` }] };
+      }
+    };
+
+  const json = (data: Record<string, unknown>): CallToolResult => ({
+    content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
+    structuredContent: data,
+  });
+
+  /** Applies a change to a story, marks it unsaved and returns `result`. */
+  const edit = <T>(id: string, change: (entry: ReturnType<Workspace['get']>) => T): T => {
+    const entry = workspace.get(id);
+    const result = change(entry);
+    workspace.touch(id);
+    return result;
+  };
+
+  // ---------------------------------------------------------------- lifecycle
+
+  server.registerTool(
+    'create_story',
+    {
+      title: 'Create domain story',
+      description: 'Creates a new, empty domain story with Egon\'s default icon set and returns its storyId. Use build_story instead to create a whole story from sentences in one call.',
+      inputSchema: { title: z.string(), description: z.string().optional(), scope: scopeSchema.optional() },
+    },
+    run(({ title, description, scope }) => {
+      const entry = workspace.create({ title, ...(description !== undefined ? { description } : {}), ...(scope ? { scope } : {}) });
+      storiesChanged();
+      return json({ storyId: entry.id, title });
+    }),
+  );
+
+  server.registerTool(
+    'build_story',
+    {
+      title: 'Build domain story from sentences',
+      description:
+        'Creates a complete domain story in one call from numbered sentences ("Customer tells Order to Clerk"), creating actors and work objects by name, then lays it out. Each sentence becomes one step. Returns the storyId, the narrative and any validation issues.',
+      inputSchema: {
+        title: z.string(),
+        description: z.string().optional(),
+        scope: scopeSchema.optional(),
+        actors: z.array(shapeSpec).optional().describe('Actors to create first, to choose their icon or color.'),
+        workObjects: z.array(shapeSpec).optional().describe('Work objects to create first, to choose their icon or color.'),
+        sentences: z.array(z.object(sentenceSchema)).min(1).describe('The steps of the story in order.'),
+        groups: z.array(z.object({ name: z.string(), members: z.array(z.string()), color: color.optional() })).optional(),
+        annotations: z.array(z.object({ text: z.string(), attachTo: z.string().optional() })).optional(),
+        layout: z.boolean().optional().describe('Arrange elements automatically (default true).'),
+      },
+    },
+    run((input) => {
+      const story = buildStory(input as Parameters<typeof buildStory>[0]);
+      const entry = workspace.adopt(story);
+      storiesChanged();
+      const issues = validateStory(entry.story.toDocument());
+      return json({
+        storyId: entry.id,
+        title: entry.story.title,
+        narrative: narrativeMarkdown(entry.story.toDocument()),
+        issues,
+      });
+    }),
+  );
+
+  server.registerTool(
+    'open_story',
+    {
+      title: 'Open story file',
+      description: 'Opens an Egon story file (.egn, .egn.svg, or legacy .dst / .dst.svg) from the workspace directory and returns its storyId.',
+      inputSchema: { path: z.string().describe('Path relative to the workspace root, as listed by list_story_files.') },
+    },
+    run(({ path }) => {
+      const entry = workspace.open(path);
+      storiesChanged();
+      return json({ storyId: entry.id, title: entry.story.title, path: entry.path ?? path, elements: entry.story.elements().length });
+    }),
+  );
+
+  server.registerTool(
+    'import_story',
+    {
+      title: 'Import story from text',
+      description: 'Opens a story from the text of an .egn, .dst or .egn.svg file, for example one the user pasted. Use open_story for files in the workspace.',
+      inputSchema: {
+        content: z.string().describe('The full file content.'),
+        fileName: z.string().optional().describe('Original file name; decides how the content is read and gives the title for old files.'),
+      },
+    },
+    run(({ content, fileName }) => {
+      const entry = workspace.importText(content, fileName ?? 'imported.egn');
+      storiesChanged();
+      return json({ storyId: entry.id, title: entry.story.title, elements: entry.story.elements().length });
+    }),
+  );
+
+  server.registerTool(
+    'list_stories',
+    {
+      title: 'List open stories',
+      description: 'Lists the stories open in this session with their storyId, title, file path, size and whether they have unsaved changes.',
+      annotations: { readOnlyHint: true },
+    },
+    run(() => json({ stories: workspace.list().map(summarizeEntry) })),
+  );
+
+  server.registerTool(
+    'close_story',
+    {
+      title: 'Close story',
+      description: 'Closes an open story without saving it. Save first with save_story if it has unsaved changes.',
+      inputSchema: { storyId },
+      annotations: { destructiveHint: true },
+    },
+    run(({ storyId: id }) => {
+      const dirty = workspace.get(id).dirty;
+      workspace.close(id);
+      links.unpublish(id);
+      storiesChanged();
+      return json({ closed: id, discardedUnsavedChanges: dirty });
+    }),
+  );
+
+  server.registerTool(
+    'save_story',
+    {
+      title: 'Save story to file',
+      description:
+        'Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story is saved as "<title>.egn" or to the file it was opened from.',
+      inputSchema: { storyId, path: z.string().optional().describe('Target path relative to the workspace root.') },
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    run(({ storyId: id, path }) => {
+      const saved = workspace.save(id, path ? { path } : {});
+      return json({ ...saved, workspaceRoot: workspace.root });
+    }),
+  );
+
+  server.registerTool(
+    'list_story_files',
+    {
+      title: 'List story files',
+      description: 'Lists Egon story files (.egn, .egn.svg, .dst, .dst.svg) in the workspace directory, skipping node_modules and hidden folders.',
+      inputSchema: { directory: z.string().optional().describe('Subdirectory to search, relative to the workspace root.') },
+      annotations: { readOnlyHint: true },
+    },
+    run(({ directory }) => json({ workspaceRoot: workspace.root, files: workspace.listFiles(directory ?? '.') })),
+  );
+
+  // ------------------------------------------------------------------ reading
+
+  server.registerTool(
+    'get_story',
+    {
+      title: 'Get story contents',
+      description:
+        'Returns the story as actors, work objects, activities (with step numbers and names of both ends), groups, annotations, the numbered sentences and a count of validation issues.',
+      inputSchema: { storyId, includePositions: z.boolean().optional().describe('Also return x/y of each shape.') },
+      annotations: { readOnlyHint: true },
+    },
+    run(({ storyId: id, includePositions }) => json(describeStory(workspace.get(id), { positions: includePositions ?? false }))),
+  );
+
+  server.registerTool(
+    'narrate_story',
+    {
+      title: 'Narrate story',
+      description: 'Reads the story back as numbered sentences in Markdown, the way Egon\'s replay walks through it. Use it to check that the story says what the domain expert said.',
+      inputSchema: { storyId },
+      annotations: { readOnlyHint: true },
+    },
+    run(({ storyId: id }) => {
+      const doc = workspace.get(id).story.toDocument();
+      const markdown = narrativeMarkdown(doc);
+      return { content: [{ type: 'text', text: markdown }], structuredContent: { markdown, steps: narrate(doc) } };
+    }),
+  );
+
+  server.registerTool(
+    'validate_story',
+    {
+      title: 'Validate story',
+      description:
+        'Checks a story for problems: errors that break the import into Egon (dangling references, actor-to-actor activities, unknown icons) and warnings that hurt readability (unnamed elements, unlabeled activities, gaps in step numbers, unconnected or overlapping elements).',
+      inputSchema: { storyId },
+      annotations: { readOnlyHint: true },
+    },
+    run(({ storyId: id }) => {
+      const issues = validateStory(workspace.get(id).story.toDocument());
+      return json({
+        errors: issues.filter((issue) => issue.severity === 'error').length,
+        warnings: issues.filter((issue) => issue.severity === 'warning').length,
+        issues,
+      });
+    }),
+  );
+
+  // ------------------------------------------------------------------ editing
+
+  server.registerTool(
+    'set_story_info',
+    {
+      title: 'Set title, description or scope',
+      description: 'Changes the title, description or scope of a story. Pass scope: null to clear it.',
+      inputSchema: { storyId, title: z.string().optional(), description: z.string().optional(), scope: scopeSchema.nullable().optional() },
+    },
+    run(({ storyId: id, title, description, scope }) =>
+      json(
+        edit(id, (entry) => {
+          entry.story.setInfo({
+            ...(title !== undefined ? { title } : {}),
+            ...(description !== undefined ? { description } : {}),
+            ...(scope !== undefined ? { scope } : {}),
+          });
+          const doc = entry.story.toDocument();
+          return { title: doc.title, description: doc.description, scope: doc.scope ?? null };
+        }),
+      ),
+    ),
+  );
+
+  for (const kind of ['actor', 'work_object'] as const) {
+    const isActorKind = kind === 'actor';
+    server.registerTool(
+      `add_${kind}`,
+      {
+        title: isActorKind ? 'Add actor' : 'Add work object',
+        description: isActorKind
+          ? 'Adds an actor: a person, group or system that does something. The default icon is Person; use Group or System for those, or search_icons for others.'
+          : 'Adds a work object: something actors work with, such as a document, call, email or payment. The default icon is Document; search_icons finds others.',
+        inputSchema: { storyId, name: z.string(), icon: iconName.optional(), color: color.optional(), x: x.optional(), y: y.optional() },
+      },
+      run(({ storyId: id, name, icon, color: picked, x: left, y: top }) => {
+        const input = {
+          name,
+          ...(icon ? { icon } : {}),
+          ...(picked ? { color: picked } : {}),
+          ...(left !== undefined ? { x: left } : {}),
+          ...(top !== undefined ? { y: top } : {}),
+        };
+        const element = edit(id, (entry) => (isActorKind ? entry.story.addActor(input) : entry.story.addWorkObject(input)));
+        return json({ ...element });
+      }),
+    );
+  }
+
+  server.registerTool(
+    'add_activity',
+    {
+      title: 'Add activity',
+      description:
+        'Draws an activity arrow between two elements. From an actor to a work object it gets the next step number. From a work object to an actor it names the recipient and has no number. Two actors cannot be connected directly.',
+      inputSchema: {
+        storyId,
+        from: elementRef,
+        to: elementRef,
+        label: z.string().describe('The verb or preposition shown on the arrow.'),
+        number: z.number().int().positive().optional().describe('Join an existing step to show parallel activities.'),
+        color: color.optional(),
+      },
+    },
+    run(({ storyId: id, from, to, label, number, color: picked }) =>
+      json({
+        ...edit(id, (entry) =>
+          entry.story.addActivity({ from, to, label, ...(number !== undefined ? { number } : {}), ...(picked ? { color: picked } : {}) }),
+        ),
+      }),
+    ),
+  );
+
+  server.registerTool(
+    'add_sentence',
+    {
+      title: 'Add sentence',
+      description:
+        'Adds one domain story sentence as a new step: actor, verb, work object and optional recipients ("Customer tells Order to Clerk"). Creates actors and work objects that do not exist yet, matching names case-insensitively.',
+      inputSchema: { storyId, ...sentenceSchema },
+    },
+    run(({ storyId: id, ...sentence }) => {
+      const result = edit(id, (entry) => addSentence(entry.story, sentence as Parameters<typeof addSentence>[1]));
+      return json({ number: result.number, created: result.created.map(({ id: elementId, name, type }) => ({ id: elementId, name, type })), activityIds: result.activityIds });
+    }),
+  );
+
+  server.registerTool(
+    'add_group',
+    {
+      title: 'Add group',
+      description: 'Draws a box around elements that belong together, such as a department or subdomain. With members the box fits around them; otherwise give x, y, width and height.',
+      inputSchema: {
+        storyId,
+        name: z.string(),
+        members: z.array(elementRef).optional(),
+        color: color.optional(),
+        x: x.optional(),
+        y: y.optional(),
+        width: z.number().positive().optional(),
+        height: z.number().positive().optional(),
+      },
+    },
+    run(({ storyId: id, name, members, color: picked, x: left, y: top, width, height }) =>
+      json({
+        ...edit(id, (entry) =>
+          entry.story.addGroup({
+            name,
+            ...(members ? { members } : {}),
+            ...(picked ? { color: picked } : {}),
+            ...(left !== undefined ? { x: left } : {}),
+            ...(top !== undefined ? { y: top } : {}),
+            ...(width !== undefined ? { width } : {}),
+            ...(height !== undefined ? { height } : {}),
+          }),
+        ),
+      }),
+    ),
+  );
+
+  server.registerTool(
+    'add_annotation',
+    {
+      title: 'Add text annotation',
+      description: 'Adds a note, optionally attached to an element with a dashed line. Use it for variations, business rules and open questions.',
+      inputSchema: { storyId, text: z.string(), attachTo: elementRef.optional(), x: x.optional(), y: y.optional() },
+    },
+    run(({ storyId: id, text, attachTo, x: left, y: top }) => {
+      const result = edit(id, (entry) =>
+        entry.story.addAnnotation({
+          text,
+          ...(attachTo ? { attachTo } : {}),
+          ...(left !== undefined ? { x: left } : {}),
+          ...(top !== undefined ? { y: top } : {}),
+        }),
+      );
+      return json({ annotation: result.annotation, ...(result.connection ? { connection: result.connection } : {}) });
+    }),
+  );
+
+  server.registerTool(
+    'update_element',
+    {
+      title: 'Update element',
+      description:
+        'Changes an element: rename it, change its icon or color, move or resize it, edit an annotation\'s text, or move an activity to another step number (the other steps shift). Pass color: "" to reset the color.',
+      inputSchema: {
+        storyId,
+        element: elementRef,
+        name: z.string().optional(),
+        icon: iconName.optional(),
+        color: z.string().optional(),
+        x: z.number().optional(),
+        y: z.number().optional(),
+        width: z.number().positive().optional(),
+        height: z.number().positive().optional(),
+        number: z.number().int().positive().optional(),
+        text: z.string().optional(),
+      },
+    },
+    run(({ storyId: id, element, ...update }) => {
+      const cleaned = Object.fromEntries(Object.entries(update).filter(([, value]) => value !== undefined));
+      return json({ ...edit(id, (entry) => entry.story.updateElement(element, cleaned)) });
+    }),
+  );
+
+  server.registerTool(
+    'remove_element',
+    {
+      title: 'Remove element',
+      description: 'Removes an element. Removing an actor or work object also removes its activities; step numbers close up afterwards.',
+      inputSchema: { storyId, element: elementRef },
+      annotations: { destructiveHint: true },
+    },
+    run(({ storyId: id, element }) => {
+      const removed = edit(id, (entry) => entry.story.removeElement(element));
+      return json({ removed: removed.map(({ id: elementId, name, type }) => ({ id: elementId, name, type })) });
+    }),
+  );
+
+  server.registerTool(
+    'renumber_steps',
+    {
+      title: 'Renumber steps',
+      description: 'Closes gaps in the step numbers (1, 2, 3 ...) while keeping their order and parallel steps.',
+      inputSchema: { storyId },
+      annotations: { idempotentHint: true },
+    },
+    run(({ storyId: id }) => {
+      edit(id, (entry) => entry.story.compactNumbers());
+      return json({ steps: narrate(workspace.get(id).story.toDocument()).map((step) => `${step.number}. ${step.sentence}`) });
+    }),
+  );
+
+  server.registerTool(
+    'auto_layout',
+    {
+      title: 'Auto layout',
+      description: 'Arranges actors and work objects on a grid in reading order, refits groups, moves annotations next to their element and reroutes every arrow. Run it after adding many elements without positions.',
+      inputSchema: { storyId },
+      annotations: { idempotentHint: true },
+    },
+    run(({ storyId: id }) => {
+      edit(id, (entry) => autoLayout(entry.story));
+      const overlaps = validateStory(workspace.get(id).story.toDocument()).filter((issue) => issue.code === 'overlapping-shapes');
+      return json({ laidOut: true, remainingOverlaps: overlaps.length });
+    }),
+  );
+
+  server.registerTool(
+    'add_custom_icon',
+    {
+      title: 'Add custom icon',
+      description: 'Adds an icon that Egon does not ship, as an SVG. The story file carries the SVG, so Egon can draw it. The name must not clash with a built-in icon.',
+      inputSchema: {
+        storyId,
+        kind: z.enum(['actor', 'workObject']).describe('Whether the icon is offered for actors or work objects.'),
+        name: z.string().describe('Letters, digits, "-" and "_".'),
+        svg: z.string().describe('A complete <svg>...</svg> document, ideally with a 24x24 viewBox.'),
+      },
+    },
+    run(({ storyId: id, kind, name, svg }) => {
+      edit(id, (entry) => entry.story.addCustomIcon({ kind, name, svg }));
+      return json({ added: name, kind });
+    }),
+  );
+
+  // -------------------------------------------------------------------- icons
+
+  server.registerTool(
+    'search_icons',
+    {
+      title: 'Search icons',
+      description: 'Finds built-in Egon icons by name or keyword, for example "car", "invoice" or "phone". Use the returned name as icon in other tools.',
+      inputSchema: { query: z.string(), limit: z.number().int().positive().max(50).optional() },
+      annotations: { readOnlyHint: true },
+    },
+    run(({ query, limit }) =>
+      json({ icons: catalog.search(query, limit ?? 10).map((icon) => ({ name: icon.name, keywords: icon.keywords })) }),
+    ),
+  );
+
+  server.registerTool(
+    'list_icons',
+    {
+      title: 'List icons',
+      description: 'Lists the names of all built-in Egon icons, plus the default icon set Egon starts with.',
+      annotations: { readOnlyHint: true },
+    },
+    run(() => {
+      const defaults = catalog.defaultIconSet();
+      return json({
+        icons: catalog.names(),
+        defaultActors: Object.keys(defaults.actors),
+        defaultWorkObjects: Object.keys(defaults.workObjects),
+      });
+    }),
+  );
+
+  // ------------------------------------------------------------------- output
+
+  server.registerTool(
+    'export_story',
+    {
+      title: 'Export story',
+      description:
+        'Returns the story as text without writing a file: egn (Egon JSON), egn.svg (image with embedded story), svg (image only) or markdown (narrative). Use save_story to write a file instead.',
+      inputSchema: {
+        storyId,
+        format: z.enum(['egn', 'egn.svg', 'svg', 'markdown']),
+        title: z.boolean().optional().describe('For svg: draw the title and description above the story (default true).'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    run(({ storyId: id, format, title }) => {
+      const story = workspace.get(id).story;
+      let output: string;
+      if (format === 'svg' && title === false) {
+        output = renderStorySvg(story.toDocument(), { whiteBackground: true });
+      } else {
+        output = workspace.serialize(story, format);
+      }
+      return { content: [{ type: 'text', text: output }] };
+    }),
+  );
+
+  server.registerTool(
+    'open_in_egon',
+    {
+      title: 'Open in Egon',
+      description:
+        'Serves the story from a local link and returns an Egon app URL that loads it, so the user can see and edit it in the browser. The link always serves the latest state; reload Egon after further edits. Egon may ask the browser for permission to access the local network.',
+      inputSchema: { storyId, startReplay: z.boolean().optional().describe('Start Egon\'s step-by-step replay right away.') },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    run(async ({ storyId: id, startReplay }) => {
+      const entry = workspace.get(id);
+      const storyUrl = await links.publish(id, fileNameFor(entry.story.title, 'egn'), () =>
+        toEgnJson(workspace.get(id).story.toDocument()),
+      );
+      const url = egonAppUrl(storyUrl, {
+        startReplay: startReplay ?? false,
+        ...(options.egonAppUrl ? { appUrl: options.egonAppUrl } : {}),
+      });
+      return json({
+        egonUrl: url,
+        storyUrl,
+        note: 'Open egonUrl in a browser on this machine. The link works while this server runs. Use save_story to keep a file.',
+      });
+    }),
+  );
+
+  // ---------------------------------------------------------------- resources
+
+  server.registerResource(
+    'icons',
+    'egon://icons',
+    { title: 'Built-in Egon icons', description: 'Names and search keywords of every built-in icon.', mimeType: 'application/json' },
+    (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: 'application/json',
+          text: JSON.stringify(catalog.all().map((icon) => ({ name: icon.name, keywords: icon.keywords }))),
+        },
+      ],
+    }),
+  );
+
+  server.registerResource(
+    'domain-storytelling-guide',
+    'egon://guide/domain-storytelling',
+    { title: 'Domain Storytelling notation guide', description: 'Building blocks, sentence structure and good practice.', mimeType: 'text/markdown' },
+    (uri) => ({ contents: [{ uri: uri.href, mimeType: 'text/markdown', text: DOMAIN_STORYTELLING_GUIDE }] }),
+  );
+
+  const storyResource = (
+    name: string,
+    suffix: string,
+    mimeType: string,
+    title: string,
+    render: (id: string) => string,
+  ) =>
+    server.registerResource(
+      name,
+      new ResourceTemplate(`egon://stories/{storyId}/${suffix}`, {
+        list: () => ({
+          resources: workspace.list().map((entry) => ({
+            uri: `egon://stories/${entry.id}/${suffix}`,
+            name: `${entry.story.title} (${suffix})`,
+            mimeType,
+          })),
+        }),
+      }),
+      { title, mimeType },
+      (uri, variables) => {
+        const id = String(variables['storyId']);
+        return { contents: [{ uri: uri.href, mimeType, text: render(id) }] };
+      },
+    );
+
+  storyResource('story-egn', 'egn', 'application/json', 'Story as Egon .egn JSON', (id) => toEgnJson(workspace.get(id).story.toDocument()));
+  storyResource('story-narrative', 'narrative', 'text/markdown', 'Story as numbered sentences', (id) =>
+    narrativeMarkdown(workspace.get(id).story.toDocument()),
+  );
+  storyResource('story-svg', 'svg', 'image/svg+xml', 'Story as SVG image', (id) =>
+    renderStorySvg(workspace.get(id).story.toDocument(), { title: true, whiteBackground: true }),
+  );
+
+  registerPrompts(server);
+
+  return {
+    server,
+    workspace,
+    async close() {
+      await links.stop();
+      await server.close();
+    },
+  };
+}

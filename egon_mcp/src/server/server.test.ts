@@ -1,0 +1,256 @@
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { readEgonFixture } from '../../test/egon-fixtures.js';
+import { parseStoryFile } from '../egon/parse.js';
+import { createEgonServer, type EgonServer } from './server.js';
+
+let root: string;
+let egon: EgonServer;
+let client: Client;
+
+beforeEach(async () => {
+  root = mkdtempSync(join(tmpdir(), 'egon-mcp-'));
+  egon = createEgonServer({ root });
+  client = new Client({ name: 'test-client', version: '1.0.0' });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([egon.server.connect(serverTransport), client.connect(clientTransport)]);
+});
+
+afterEach(async () => {
+  await client.close();
+  await egon.close();
+});
+
+type ToolResult = { isError?: boolean; content: { type: string; text?: string }[]; structuredContent?: Record<string, unknown> };
+
+async function call(name: string, args: Record<string, unknown> = {}): Promise<ToolResult> {
+  return (await client.callTool({ name, arguments: args })) as ToolResult;
+}
+
+async function ok(name: string, args: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+  const result = await call(name, args);
+  if (result.isError) {
+    throw new Error(`${name} failed: ${result.content[0]?.text}`);
+  }
+  return result.structuredContent ?? {};
+}
+
+function text(result: ToolResult): string {
+  return result.content.map((part) => part.text ?? '').join('\n');
+}
+
+const pizza = {
+  title: 'Order pizza',
+  description: 'Happy path',
+  sentences: [
+    { actor: 'Customer', activity: 'tells', workObject: 'Order', to: [{ activity: 'to', actor: 'Clerk' }] },
+    { actor: 'Clerk', activity: 'writes', workObject: 'Order slip', to: [{ activity: 'for', actor: 'Pizza baker' }] },
+    { actor: 'Pizza baker', activity: 'bakes', workObject: 'Pizza', workObjectIcon: 'Dining' },
+  ],
+};
+
+describe('egon-mcp server', () => {
+  it('offers tools for the whole story lifecycle', async () => {
+    const { tools } = await client.listTools();
+    const names = tools.map((tool) => tool.name);
+    for (const name of [
+      'create_story',
+      'build_story',
+      'open_story',
+      'import_story',
+      'list_stories',
+      'close_story',
+      'save_story',
+      'list_story_files',
+      'get_story',
+      'narrate_story',
+      'validate_story',
+      'set_story_info',
+      'add_actor',
+      'add_work_object',
+      'add_activity',
+      'add_sentence',
+      'add_group',
+      'add_annotation',
+      'update_element',
+      'remove_element',
+      'renumber_steps',
+      'auto_layout',
+      'add_custom_icon',
+      'search_icons',
+      'list_icons',
+      'export_story',
+      'open_in_egon',
+    ]) {
+      expect(names).toContain(name);
+    }
+    for (const tool of tools) {
+      expect(tool.description?.length ?? 0).toBeGreaterThan(30);
+    }
+  });
+
+  it('builds a story from sentences, validates it and saves it as an .egn file', async () => {
+    const built = await ok('build_story', pizza);
+    expect(built['storyId']).toBe('order-pizza');
+    expect(built['narrative']).toContain('1. Customer tells Order to Clerk.');
+
+    const issues = await ok('validate_story', { storyId: 'order-pizza' });
+    expect(issues['errors']).toBe(0);
+
+    const saved = await ok('save_story', { storyId: 'order-pizza' });
+    expect(saved['path']).toBe('Order pizza.egn');
+    const doc = parseStoryFile(readFileSync(join(root, 'Order pizza.egn'), 'utf8'), 'Order pizza.egn');
+    expect(doc.elements.filter((e) => e.type === 'domainStory:activity')).toHaveLength(5);
+  });
+
+  it('edits a story element by element', async () => {
+    await ok('create_story', { title: 'Visit', description: 'A visit', scope: { pointInTime: 'to-be' } });
+    const customer = await ok('add_actor', { storyId: 'visit', name: 'Customer' });
+    await ok('add_work_object', { storyId: 'visit', name: 'Ticket', icon: 'Receipt' });
+    await ok('add_actor', { storyId: 'visit', name: 'Desk', icon: 'System' });
+    const activity = await ok('add_activity', { storyId: 'visit', from: 'Customer', to: 'Ticket', label: 'draws' });
+    expect(activity['number']).toBe(1);
+    await ok('add_activity', { storyId: 'visit', from: 'Ticket', to: 'Desk', label: 'at' });
+
+    const story = await ok('get_story', { storyId: 'visit' });
+    expect(story['actors']).toEqual([
+      expect.objectContaining({ id: customer['id'], name: 'Customer', icon: 'Person' }),
+      expect.objectContaining({ name: 'Desk', icon: 'System' }),
+    ]);
+    expect(story['activities']).toContainEqual(
+      expect.objectContaining({ number: 1, label: 'draws', from: 'Customer', to: 'Ticket' }),
+    );
+    expect(story['scope']).toEqual({ pointInTime: 'to-be' });
+
+    await ok('update_element', { storyId: 'visit', element: 'Customer', name: 'Guest', color: '#43A047' });
+    const narrative = await call('narrate_story', { storyId: 'visit' });
+    expect(text(narrative)).toContain('1. Guest draws Ticket at Desk.');
+
+    const removed = await ok('remove_element', { storyId: 'visit', element: 'Desk' });
+    expect(removed['removed']).toHaveLength(2);
+  });
+
+  it('adds sentences, groups, annotations and custom icons', async () => {
+    await ok('create_story', { title: 'Shop' });
+    const sentence = await ok('add_sentence', {
+      storyId: 'shop',
+      actor: 'Customer',
+      activity: 'pays with',
+      workObject: 'Card',
+      workObjectIcon: 'Credit-Card',
+      to: [{ activity: 'at', actor: 'Cashier' }],
+    });
+    expect(sentence['number']).toBe(1);
+    await ok('add_group', { storyId: 'shop', name: 'Checkout', members: ['Cashier'] });
+    await ok('add_annotation', { storyId: 'shop', text: 'Contactless only', attachTo: 'Card' });
+    await ok('add_custom_icon', {
+      storyId: 'shop',
+      kind: 'workObject',
+      name: 'Coupon',
+      svg: '<svg viewBox="0 0 24 24"><rect width="20" height="10"/></svg>',
+    });
+    await ok('add_work_object', { storyId: 'shop', name: 'Discount', icon: 'Coupon' });
+    await ok('auto_layout', { storyId: 'shop' });
+    const story = await ok('get_story', { storyId: 'shop' });
+    expect(story['groups']).toEqual([expect.objectContaining({ name: 'Checkout', members: ['Cashier'] })]);
+    expect(story['annotations']).toEqual([expect.objectContaining({ text: 'Contactless only', attachedTo: 'Card' })]);
+  });
+
+  it('returns tool errors with a helpful message instead of failing', async () => {
+    await ok('create_story', { title: 'T' });
+    const result = await call('add_activity', { storyId: 't', from: 'Nobody', to: 'Nothing', label: 'x' });
+    expect(result.isError).toBe(true);
+    expect(text(result)).toMatch(/no element/i);
+    const missing = await call('get_story', { storyId: 'nope' });
+    expect(missing.isError).toBe(true);
+    expect(text(missing)).toMatch(/No open story/);
+  });
+
+  it('renumbers steps and moves an activity to another step', async () => {
+    await ok('build_story', pizza);
+    const story = await ok('get_story', { storyId: 'order-pizza' });
+    const bake = (story['activities'] as { id: string; label: string }[]).find((a) => a.label === 'bakes')!;
+    await ok('update_element', { storyId: 'order-pizza', element: bake.id, number: 1 });
+    const narrative = text(await call('narrate_story', { storyId: 'order-pizza' }));
+    expect(narrative).toContain('1. Pizza baker bakes Pizza.');
+    await ok('renumber_steps', { storyId: 'order-pizza' });
+  });
+
+  it('finds icons', async () => {
+    const result = await ok('search_icons', { query: 'car' });
+    expect((result['icons'] as { name: string }[])[0]?.name).toBe('Car');
+    const all = await ok('list_icons');
+    expect((all['icons'] as string[]).length).toBeGreaterThan(100);
+  });
+
+  it('exports SVG and Markdown inline', async () => {
+    await ok('build_story', pizza);
+    const svg = await call('export_story', { storyId: 'order-pizza', format: 'svg' });
+    expect(text(svg)).toMatch(/^<svg/);
+    const egn = await call('export_story', { storyId: 'order-pizza', format: 'egn' });
+    expect(parseStoryFile(text(egn), 'x.egn').title).toBe('Order pizza');
+    const markdown = await call('export_story', { storyId: 'order-pizza', format: 'markdown' });
+    expect(text(markdown)).toContain('# Order pizza');
+  });
+
+  it('opens, imports and lists story files in the workspace', async () => {
+    writeFileSync(join(root, 'sample.egn'), readEgonFixture('egn_export_version_4_0_0.json'));
+    const files = await ok('list_story_files');
+    expect(files['files']).toEqual(['sample.egn']);
+    const opened = await ok('open_story', { path: 'sample.egn' });
+    expect(opened['title']).toBe('testTitle');
+    const imported = await ok('import_story', { content: readEgonFixture('dst_export_version_2_2_0.json'), fileName: 'old.dst' });
+    expect(imported['title']).toBe('old');
+    const list = await ok('list_stories');
+    expect((list['stories'] as unknown[]).length).toBe(2);
+    await ok('close_story', { storyId: opened['storyId'] });
+    expect(((await ok('list_stories'))['stories'] as unknown[]).length).toBe(1);
+  });
+
+  it('saves to other formats and refuses paths outside the workspace', async () => {
+    await ok('build_story', pizza);
+    await ok('save_story', { storyId: 'order-pizza', path: 'out/pizza.egn.svg' });
+    expect(existsSync(join(root, 'out/pizza.egn.svg'))).toBe(true);
+    const outside = await call('save_story', { storyId: 'order-pizza', path: '../escape.egn' });
+    expect(outside.isError).toBe(true);
+  });
+
+  it('opens a story in Egon through a local link', async () => {
+    await ok('build_story', pizza);
+    const result = await ok('open_in_egon', { storyId: 'order-pizza', startReplay: true });
+    expect(result['egonUrl']).toMatch(/^https:\/\/egon\.io\/app\/\?storyUrl=http%3A%2F%2F127\.0\.0\.1/);
+    expect(result['egonUrl']).toMatch(/startReplay=true$/);
+    const served = await fetch(result['storyUrl'] as string);
+    expect(parseStoryFile(await served.text(), 'x.egn').title).toBe('Order pizza');
+  });
+
+  it('exposes resources for stories, icons and the notation guide', async () => {
+    await ok('build_story', pizza);
+    const { resources } = await client.listResources();
+    const uris = resources.map((resource) => resource.uri);
+    expect(uris).toContain('egon://icons');
+    expect(uris).toContain('egon://guide/domain-storytelling');
+    expect(uris).toContain('egon://stories/order-pizza/narrative');
+    const narrative = await client.readResource({ uri: 'egon://stories/order-pizza/narrative' });
+    expect((narrative.contents[0] as { text: string }).text).toContain('Customer tells Order to Clerk');
+    const egn = await client.readResource({ uri: 'egon://stories/order-pizza/egn' });
+    expect((egn.contents[0] as { mimeType: string }).mimeType).toBe('application/json');
+    const guide = await client.readResource({ uri: 'egon://guide/domain-storytelling' });
+    expect((guide.contents[0] as { text: string }).text).toContain('work object');
+  });
+
+  it('offers prompts for modeling and reviewing domain stories', async () => {
+    const { prompts } = await client.listPrompts();
+    expect(prompts.map((prompt) => prompt.name)).toEqual(
+      expect.arrayContaining(['model_domain_story', 'review_domain_story', 'domain_story_interview']),
+    );
+    const prompt = await client.getPrompt({ name: 'model_domain_story', arguments: { process: 'Ordering pizza by phone' } });
+    const message = prompt.messages[0]?.content as { text: string };
+    expect(message.text).toContain('Ordering pizza by phone');
+    expect(message.text).toContain('build_story');
+  });
+});
