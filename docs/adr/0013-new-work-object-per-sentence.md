@@ -1,6 +1,6 @@
 # 13. Draw a new work object for each sentence
 
-- Status: Accepted, amended by [ADR 17](0017-group-by-steps-and-whole-groups.md)
+- Status: Accepted, amended by [ADR 19](0019-groups-hold-what-you-name.md)
 - Date: 2026-11-17
 - Context: Egon's replay continues a sentence along every outgoing arrow of its work object, so a work object shared by several sentences pulls later recipients into earlier steps.
 - Decision: build_story and add_sentence share actors by name but draw a new work object per sentence, copying icon and color from earlier ones of that name, unless the sentence passes an id, sets `reuseWorkObject`, or names a declared work object that is not used yet.

@@ -1,13 +1,13 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { parseStoryFile, StoryParseError } from '../egon/parse.js';
+import { StoryParseError } from '../egon/parse.js';
 import { fileNameFor, toEgnJson, type EgonFormat } from '../egon/serialize.js';
 import { IconCatalog } from '../icons/catalog.js';
 import { renderStorySvg } from '../render/svg.js';
 import { autoLayout } from '../story/layout.js';
 import { narrate, narrativeMarkdown } from '../story/narrate.js';
-import { addSentence, buildStory, membersOfSteps, namedForSteps } from '../story/sentences.js';
+import { addSentence, buildStory, groupBySteps } from '../story/sentences.js';
 import { Story, StoryError } from '../story/story.js';
 import { validateStory } from '../story/validate.js';
 import { describeStory, summarizeEntry } from './describe.js';
@@ -85,7 +85,7 @@ const steps = z
   .array(z.number().int().positive())
   .min(1)
   .describe(
-    'Step numbers as narrate_story shows them (parallel sentences share one): the work objects of those sentences go into the group and their actors stay outside, the usual way to mark a subdomain. An existing group made only of the work objects of these steps, their notes and notes on the group goes in whole. If the work objects all sit in one group, the new group nests inside it and that group grows to fit. A work object that also serves a sentence outside these steps is refused unless you pass it in members too (by name, meaning the copy these steps use, or by id), which puts it here; one that already sits in a group other than the one the new group nests in, or one around that, stays where it is. Also refused: steps that are exactly an existing group, steps without a work object, work objects spread over different groups, where the new box would cross one, and steps together with x and y.',
+    'Step numbers as narrate_story shows them (parallel sentences share one): the work objects that first appear in those sentences go into the group and their actors stay outside, the usual way to mark a subdomain. A work object that later sentences use too belongs to the step that drew it; name it in members to move it here (next to steps, a name means the copies these steps use). The group goes into the innermost group around these work objects, and takes them from there; one that sits in any other group stays there, unless all of that group comes along, and the result lists it in leftInOtherGroups. Refused when nothing is left to group, and together with x, y, width or height.',
   );
 const groupSpec = z.object({
   name: z.string().describe('Label of the box; every group needs members or steps.'),
@@ -173,7 +173,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
         actors: z.array(shapeSpec).optional().describe('Actors to create first, to choose their icon or color.'),
         workObjects: z.array(shapeSpec).optional().describe('Work objects to create first, to choose their icon or color. The first sentence that names one uses it, and a workObjectIcon on that sentence replaces its icon; later sentences draw new ones with the same icon and color.'),
         sentences: z.array(z.object(sentenceSchema)).min(1).describe('The steps of the story in order.'),
-        groups: z.array(groupSpec).optional().describe('Boxes around elements that belong together, by members or by steps as add_group takes them. A group that names members next to its steps is added first, so the groups of other steps leave a shared work object it names where it is, whatever the order of the list.'),
+        groups: z.array(groupSpec).optional().describe('Boxes around elements that belong together, by members or by steps as add_group takes them, in any order: a group named in another group\'s members is added first, and a group by steps takes in every group by steps whose steps are all among its own.'),
         annotations: z.array(annotationSpec).optional().describe('Notes for variations, rules and open questions.'),
         layout: z.boolean().optional().describe('Arrange elements automatically (default true).'),
       },
@@ -425,41 +425,41 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Add group',
       description:
-        'Draws a box around elements that belong together, such as a department or subdomain. To mark a subdomain on a coarse story, pass the step numbers of its sentences as steps: their work objects go in and their actors stay outside, since an actor often takes part in several subdomains. With members or steps and no x and y, the box fits around them and holds them and nothing else. Other shapes the box happens to cover get a validate_story warning, and open_story would put those in no group into the smallest group box over their top-left corner when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn with x and y inside another group goes into that group, and a box fitted around members goes into the innermost group that already holds all of them, which grows to fit it. An existing group goes in whole when everything it holds is among the members, a note counting with the element it is attached to or with the group itself; otherwise its chosen members move one by one, each with its notes. Without x and y, members that are exactly one existing group you did not name are refused.',
+        'Draws a box around elements that belong together, such as a department or subdomain. Give members, or the step numbers of sentences as steps, and the box fits around them, holding them and the notes attached to them. An existing group whose actors and work objects are all chosen goes in whole; to put an existing group inside the new one in any case, name it in members. Named members move in from any group. The new group goes into the innermost group around the work objects of its steps, or without steps around its members, and that group grows to fit; run auto_layout when members came from different places. Other shapes the box happens to cover get a validate_story warning, and open_story would put those in no group into the smallest group box over their top-left corner when it opens the saved file. Or give x and y (with width and height) and no members to draw a box where you want it: as in Egon, it goes into the group its corner lies in and takes in every shape whose top-left corner lies inside. Without either, the box goes below the story. Shapes added or moved into a box later join its group.',
       inputSchema: {
         storyId,
         name: z.string().describe('Label in the top-left corner of the box.'),
-        members: z.array(elementRef).optional().describe('Elements to put in the group, even outside the box. Without x and y the box fits around them.'),
+        members: z.array(elementRef).optional().describe('Elements to put in the group; a name means every element with that name. The box fits around them.'),
         steps: steps.optional(),
         color: color.optional(),
-        x: z.number().optional().describe('Left edge of the box, at most a billion pixels either way. Give x and y together; without them the box fits around the members, or goes below the story when there are none.'),
+        x: z.number().optional().describe('Left edge of the box, at most a billion pixels either way. Give x and y together, and not with members or steps.'),
         y: z.number().optional().describe('Top edge of the box, at most a billion pixels either way. Give x and y together.'),
         width: z.number().positive().optional().describe('Box width with x and y, at most a billion pixels; default 300.'),
         height: z.number().positive().optional().describe('Box height with x and y, at most a billion pixels; default 200.'),
       },
     },
     run(({ storyId: id, name, members, steps: numbers, color: picked, x: left, y: top, width, height }) => {
-      if (numbers && (left !== undefined || top !== undefined)) {
-        throw new StoryError('The steps fit the box around their work objects, and a box drawn with x and y would take in their actors too. Leave out x, y, width and height, or pass members instead of steps.');
-      }
       return json({
-        ...edit(id, (entry) =>
-          entry.story.addGroup({
-            name,
-            ...(members || numbers
-              ? {
-                  members: numbers
-                    ? ((named: string[]) => [...named, ...membersOfSteps(entry.story, numbers, named)])(namedForSteps(entry.story, members ?? [], numbers))
-                    : (members ?? []),
-                }
-              : {}),
-            ...(picked ? { color: picked } : {}),
-            ...(left !== undefined ? { x: left } : {}),
-            ...(top !== undefined ? { y: top } : {}),
-            ...(width !== undefined ? { width } : {}),
-            ...(height !== undefined ? { height } : {}),
-          }),
-        ),
+        ...edit(id, (entry) => {
+          if (!numbers) {
+            return entry.story.addGroup({
+              name,
+              ...(members ? { members } : {}),
+              ...(picked ? { color: picked } : {}),
+              ...(left !== undefined ? { x: left } : {}),
+              ...(top !== undefined ? { y: top } : {}),
+              ...(width !== undefined ? { width } : {}),
+              ...(height !== undefined ? { height } : {}),
+            });
+          }
+          if ([left, top, width, height].some((value) => value !== undefined)) {
+            throw new StoryError(
+              'The steps fit the box around their work objects, and a box drawn with x and y would take in their actors too. Leave out x, y, width and height, or pass members instead of steps.',
+            );
+          }
+          const { group, left: stayed } = groupBySteps(entry.story, { name, steps: numbers, members, color: picked });
+          return { ...group, ...(stayed.length > 0 ? { leftInOtherGroups: stayed } : {}) };
+        }),
       });
     }),
   );

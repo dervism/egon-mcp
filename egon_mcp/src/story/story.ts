@@ -13,7 +13,6 @@ import {
   iconNameOf,
   isActivity,
   isActor,
-  isConnection,
   isEdge,
   isGroup,
   isTextAnnotation,
@@ -31,7 +30,7 @@ import {
   type WorkObjectElement,
 } from '../egon/types.js';
 import { boundsOf, DEFAULT_ANNOTATION_SIZE, edgeWaypoints, routeEdge, type Bounds } from './geometry.js';
-import { cornerInside, groupAt, joinGroupAt, settleMembership, takeIn, takeWholeGroups } from './membership.js';
+import { cornerInside, joinGroupAt, membersFor, noteAnchors, settleMembership, takeIn, type StepPicks } from './membership.js';
 
 export class StoryError extends Error {
   override name = 'StoryError';
@@ -61,6 +60,8 @@ export interface ActivityInput {
 export interface GroupInput {
   name: string;
   members?: string[];
+  /** Work objects picked by step numbers (groupBySteps); unlike members, they stay in another group. */
+  fromSteps?: StepPicks;
   x?: number;
   y?: number;
   width?: number;
@@ -247,103 +248,91 @@ export class Story {
   }
 
   private applyAddGroup(input: GroupInput): GroupElement {
-    let bounds: Bounds;
+    const given = this.givenPosition(input);
+    if (given && (input.members?.length || input.fromSteps)) {
+      throw new StoryError(
+        'Give members to fit the box around them, or x and y to draw it where it should go and take in what it covers, as in Egon; not both.',
+      );
+    }
     // A name shared by several elements (work objects repeat per sentence) groups all of them.
     const resolved = (input.members ?? []).flatMap((ref) => this.resolveShapes(ref));
-    const given = this.givenPosition(input);
-    // A box drawn with x and y inside a group may hold that group's own contents; it does not take
-    // up the group it sits in, or one around it.
-    const host = given
-      ? groupAt({ ...given, width: input.width ?? 300, height: input.height ?? 200, type: GROUP_TYPE, id: '', name: '' } as StoryElement, this.doc.elements)
-      : undefined;
-    const hosts = host ? [host.id, ...groupAncestors(host, new Map(this.doc.elements.map((element) => [element.id, element])))] : [];
-    // Every other group that is all among the members goes in whole, so none is left empty, and a
-    // member inside another member goes along with it.
-    const ids = takeWholeGroups(
-      resolved.map((member) => member.id),
-      this.doc.elements,
-      hosts,
+    if (resolved.length > 0 || input.fromSteps) {
+      return this.fitGroup(input, resolved.map((member) => member.id));
+    }
+    // A box without members or position goes below the story, so it takes in nothing.
+    const bottom = Math.max(
+      GRID.originY - 60,
+      ...this.doc.elements.filter((element) => !isEdge(element)).map((element) => boundsOf(element as ShapeElement).y + boundsOf(element as ShapeElement).height),
     );
-    const members = ids.map((id) => this.find(id) as ShapeElement);
-    // A note on a member that sat in the same group as the member moves along with it.
-    const notesAlong = this.doc.elements.filter(isConnection).flatMap((link) => {
-      const member = members.find((candidate) => candidate.id === link.source && !isGroup(candidate));
-      const note = this.find(link.target);
-      return member && note && isTextAnnotation(note) && note['parent'] === member['parent'] && !members.includes(note as ShapeElement) ? [note as ShapeElement] : [];
-    });
-    const only = members.length === 1 ? members[0] : undefined;
-    if (!given && only && isGroup(only) && !resolved.some((member) => member.id === only.id)) {
+    const bounds = { x: given?.x ?? GRID.originX, y: given?.y ?? bottom + 60, width: input.width ?? 300, height: input.height ?? 200 };
+    checkCoordinates(bounds);
+    const group = this.newGroup(input, bounds);
+    // A box drawn with coordinates goes where it lies and takes in what it covers, as in Egon.
+    joinGroupAt(group, this.doc.elements);
+    takeIn(group, this.doc.elements);
+    return structuredClone(group);
+  }
+
+  /**
+   * A box fitted around members or step picks (ADR 19, membersFor): it holds
+   * them and the notes attached to them, goes into the group membersFor names,
+   * and that group and the ones around it grow to fit.
+   */
+  private fitGroup(input: GroupInput, ids: string[]): GroupElement {
+    const { host, members: memberIds, left } = membersFor(ids, this.doc.elements, input.fromSteps);
+    if (memberIds.length === 0) {
+      const nameOf = (id: string | undefined) => {
+        const element = id === undefined ? undefined : this.find(id);
+        return element?.name || id;
+      };
       throw new StoryError(
-        `${resolved.map((member) => `"${member.name || member['text'] || member.id}"`).join(', ')} ${resolved.length > 1 ? 'are' : 'is'} already the group "${only.name || only.id}". Pass the group itself to draw a box around it.`,
+        `Every work object of these steps already sits in another group (${left.map((id) => `"${nameOf(id)}" in "${nameOf(this.find(id)?.['parent'] as string)}"`).join(', ')}), so there is nothing to group. Name the ones that belong here in members: each one moves in, and a group that holds only named elements comes along whole.`,
       );
     }
-    const fitted = members.length > 0 && !given;
-    if (fitted) {
-      bounds = enclose([...members, ...notesAlong].map((member) => boundsOf(member)), GROUP_PADDING);
-      checkCoordinates(bounds);
-    } else {
-      // A box without members or position goes below the story, so it takes in nothing.
-      const bottom = Math.max(
-        GRID.originY - 60,
-        ...this.doc.elements.filter((element) => !isEdge(element)).map((element) => boundsOf(element as ShapeElement).y + boundsOf(element as ShapeElement).height),
-      );
-      bounds = { x: given?.x ?? GRID.originX, y: given?.y ?? bottom + 60, width: input.width ?? 300, height: input.height ?? 200 };
-      checkCoordinates(bounds);
+    const members = memberIds.map((id) => this.find(id) as ShapeElement);
+    // A note goes with the element of its link of lowest id.
+    const notes = [...noteAnchors(this.doc.elements)].flatMap(([noteId, anchor]) =>
+      members.some((member) => member.id === anchor.id && !isGroup(member)) && !memberIds.includes(noteId) ? [this.find(noteId) as ShapeElement] : [],
+    );
+    const bounds = enclose([...members, ...notes].map((member) => boundsOf(member)), GROUP_PADDING);
+    checkCoordinates(bounds);
+    const group = this.newGroup(input, bounds);
+    for (const member of [...members, ...notes]) {
+      member['parent'] = group.id;
     }
-    const group: GroupElement = {
-      type: GROUP_TYPE,
-      name: input.name,
-      id: this.newId('shape'),
-      ...bounds,
-    };
+    if (host === undefined) {
+      return structuredClone(group);
+    }
+    group['parent'] = host;
+    // The groups around grow where needed, so each stays larger than what it holds.
+    const byId = new Map(this.doc.elements.map((element) => [element.id, element]));
+    let inner: Bounds = bounds;
+    for (const id of [host, ...groupAncestors(byId.get(host), byId)]) {
+      const outer = byId.get(id) as ShapeElement;
+      const box = union(boundsOf(outer), {
+        x: inner.x - GROUP_PADDING,
+        y: inner.y - GROUP_PADDING,
+        width: inner.width + 2 * GROUP_PADDING,
+        height: inner.height + 2 * GROUP_PADDING,
+      });
+      try {
+        this.setGeometry(outer, box);
+      } catch (error) {
+        throw new StoryError(`The group "${outer.name || outer.id}" would have to grow past a billion pixels to hold the new group. ${(error as Error).message}`);
+      }
+      inner = box;
+    }
+    return structuredClone(group);
+  }
+
+  private newGroup(input: GroupInput, bounds: Bounds): GroupElement {
+    const group: GroupElement = { type: GROUP_TYPE, name: input.name, id: this.newId('shape'), ...bounds };
     if (input.color !== undefined) {
       group.pickedColor = this.checkColor(input.color);
     }
-    for (const member of members.filter(isGroup)) {
-      const box = boundsOf(member);
-      if (box.width * box.height >= bounds.width * bounds.height) {
-        const named = resolved.some((candidate) => candidate.id === member.id);
-        throw new StoryError(
-          `The group "${member.name || member.id}" goes into the new box whole${named ? '' : ', since everything in it is among the members'}, but it is not smaller than the box. Draw a larger box, or leave out x, y, width and height to fit the box around the members.`,
-        );
-      }
-    }
-    // A box fitted around members goes into the innermost group that holds all of them, not into
-    // whatever group its corner happens to land in before a layout.
-    const byId = new Map(this.doc.elements.map((element) => [element.id, element]));
-    const chains = members.map((member) => groupAncestors(member, byId));
-    const shared = chains[0]?.find((id) => chains.every((chain) => chain.includes(id)));
     // Groups go first so Egon draws them underneath the elements they contain.
     this.doc.elements.unshift(group);
-    // Egon records group membership on each member (domainStoryUpdater).
-    for (const member of [...members, ...notesAlong]) {
-      member['parent'] = group.id;
-    }
-    if (fitted && shared) {
-      group['parent'] = shared;
-      // The groups around grow where needed, so each stays larger than what it holds.
-      let inner: Bounds = bounds;
-      for (const id of [shared, ...groupAncestors(byId.get(shared), byId)]) {
-        const outer = byId.get(id) as ShapeElement;
-        const box = union(boundsOf(outer), {
-          x: inner.x - GROUP_PADDING,
-          y: inner.y - GROUP_PADDING,
-          width: inner.width + 2 * GROUP_PADDING,
-          height: inner.height + 2 * GROUP_PADDING,
-        });
-        try {
-          this.setGeometry(outer, box);
-        } catch (error) {
-          throw new StoryError(`The group "${outer.name || outer.id}" would have to grow past a billion pixels to hold the new group. ${(error as Error).message}`);
-        }
-        inner = box;
-      }
-    } else if (!fitted) {
-      // A box drawn with coordinates goes where it lies and takes in what it covers, as in Egon.
-      joinGroupAt(group, this.doc.elements);
-      takeIn(group, this.doc.elements);
-    }
-    return structuredClone(group);
+    return group;
   }
 
   addAnnotation(input: AnnotationInput): { annotation: TextAnnotationElement; connection?: ConnectionElement } {

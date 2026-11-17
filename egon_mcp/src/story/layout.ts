@@ -1,6 +1,7 @@
-import { compareIds, groupAncestors, isActivity, isActor, isConnection, isGroup, isTextAnnotation, isWorkObject, type ShapeElement, type StoryElement } from '../egon/types.js';
+import { compareIds, groupAncestors, isActivity, isActor, isGroup, isTextAnnotation, isWorkObject, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { boundsOf, type Bounds } from './geometry.js';
 import { wrap } from '../render/svg.js';
+import { noteAnchors } from './membership.js';
 import { narrate } from './narrate.js';
 import { StoryError, type Story } from './story.js';
 
@@ -368,25 +369,6 @@ function joinNotesToGroups(story: Story): void {
       story.setParent(annotation.id, wanted as string | undefined);
     }
   }
-}
-
-/**
- * The element each note is attached to. Egon lets several elements link to one
- * note; the link with the lowest id counts, so the choice does not depend on
- * the order of elements in a file.
- */
-export function noteAnchors(elements: StoryElement[]): Map<string, StoryElement> {
-  const byId = new Map(elements.map((element) => [element.id, element]));
-  const anchors = new Map<string, StoryElement>();
-  const links = elements.filter(isConnection).sort((a, b) => compareIds(a.id, b.id));
-  for (const link of links) {
-    const note = byId.get(link.target);
-    const anchor = byId.get(link.source);
-    if (note && anchor && isTextAnnotation(note) && !anchors.has(note.id)) {
-      anchors.set(note.id, anchor);
-    }
-  }
-  return anchors;
 }
 
 /**

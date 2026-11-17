@@ -265,6 +265,9 @@ describe('egon-mcp server', () => {
     const result = await call('add_group', { storyId: 'steps-box', name: 'Intake', steps: [1], x: 0, y: 0, width: 2000, height: 1000 });
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toMatch(/steps fit the box around their work objects/);
+    // A size alone is refused too, and an unknown story is named first.
+    expect((await call('add_group', { storyId: 'steps-box', name: 'Intake', steps: [1], width: 2000 })).content[0]?.text).toMatch(/steps fit the box/);
+    expect((await call('add_group', { storyId: 'nowhere', name: 'Intake', steps: [1], x: 0, y: 0 })).content[0]?.text).toMatch(/No open story/);
   });
 
   it('warns on save about shapes that will join a group when the file is opened again', async () => {
@@ -324,7 +327,7 @@ describe('egon-mcp server', () => {
     expect(ordering?.members).toEqual(['Order']);
   });
 
-  it('settles a shared work object through members next to steps in add_group', async () => {
+  it('gives a shared work object to the step that drew it in add_group', async () => {
     await ok('build_story', {
       title: 'Shared',
       sentences: [
@@ -333,8 +336,9 @@ describe('egon-mcp server', () => {
         { actor: 'Clerk', activity: 'reads', workObject: 'Part request', reuseWorkObject: true },
       ],
     });
-    expect((await call('add_group', { storyId: 'shared', name: 'Intake', steps: [1, 2] })).isError).toBe(true);
-    await ok('add_group', { storyId: 'shared', name: 'Intake', steps: [1, 2], members: ['Part request'] });
+    await ok('add_group', { storyId: 'shared', name: 'Intake', steps: [1, 2] });
+    const purchasing = await call('add_group', { storyId: 'shared', name: 'Purchasing', steps: [3] });
+    expect(purchasing.content[0]?.text).toMatch(/Step 3 has no work object of its own/);
     const story = await ok('get_story', { storyId: 'shared' });
     const intake = (story['groups'] as { name: string; members: string[] }[]).find((group) => group.name === 'Intake');
     expect(intake?.members.sort()).toEqual(['Bike', 'Part request']);
@@ -350,7 +354,7 @@ describe('egon-mcp server', () => {
   it('tells agents how shapes get into a group', async () => {
     const { tools } = await client.listTools();
     const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';
-    expect(describe('add_group')).toMatch(/fits around them and holds them and nothing else/);
+    expect(describe('add_group')).toMatch(/the box fits around them/);
     expect(describe('add_group')).toMatch(/open_story would put those in no group into the smallest group box/);
     expect(describe('save_story')).toMatch(/groupChangesOnOpen/);
     expect(describe('add_group')).toMatch(/takes in every shape whose top-left corner lies inside/);

@@ -136,8 +136,8 @@ describe('validateStory', () => {
   it('accepts groups nested in each other', () => {
     const story = Story.create({ title: 'T' });
     const a = story.addActor({ name: 'A', x: 100, y: 100 });
-    const inner = story.addGroup({ name: 'Inner', members: [a.id], x: 60, y: 60, width: 160, height: 160 });
-    story.addGroup({ name: 'Outer', members: [inner.id], x: 20, y: 20, width: 260, height: 260 });
+    const inner = story.addGroup({ name: 'Inner', members: [a.id] });
+    story.addGroup({ name: 'Outer', members: [inner.id] });
     expect(codes(story.toDocument())).not.toContain('overlapping-groups');
     expect(codes(story.toDocument())).not.toContain('group-encloses-non-member');
   });
