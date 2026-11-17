@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getSystemErrorMessage } from 'node:util';
@@ -22,13 +22,9 @@ let builtInCatalog: IconCatalog | undefined;
  */
 export function readErrorReason(error: unknown): string {
   const { code, errno, message } = (error ?? {}) as NodeJS.ErrnoException;
-  // libuv error numbers are negative; getSystemErrorMessage throws for others.
-  if (typeof errno === 'number' && errno < 0) {
-    try {
-      return `${code}: ${getSystemErrorMessage(errno)}`;
-    } catch {
-      // Fall back to the message below.
-    }
+  // libuv error numbers are negative integers; getSystemErrorMessage throws for anything else.
+  if (Number.isSafeInteger(errno) && (errno as number) < 0) {
+    return `${code}: ${getSystemErrorMessage(errno as number)}`;
   }
   return typeof message === 'string' ? message : 'unknown error';
 }
@@ -36,12 +32,9 @@ export function readErrorReason(error: unknown): string {
 /** The closest existing ancestor of `path` if it is a file instead of a folder. */
 export function blockingAncestor(path: string): string | undefined {
   for (let dir = dirname(path); dir !== dirname(dir); dir = dirname(dir)) {
-    if (existsSync(dir)) {
-      try {
-        return statSync(dir).isDirectory() ? undefined : dir;
-      } catch {
-        return undefined;
-      }
+    const stats = statSync(dir, { throwIfNoEntry: false });
+    if (stats) {
+      return stats.isDirectory() ? undefined : dir;
     }
   }
   return undefined;
@@ -76,15 +69,14 @@ export class IconCatalog {
     try {
       content = readFileSync(file, 'utf8');
     } catch (error) {
-      let reason = readErrorReason(error);
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        // Windows reports a file standing where a folder should be as a missing path.
-        const blocker = blockingAncestor(path);
-        if (!blocker) {
-          throw new Error(`Built-in icon data ${path} is missing; ${fix}`);
-        }
-        reason = `${blocker} is a file, not a folder`;
+      const { code } = error as NodeJS.ErrnoException;
+      // A file standing where a folder should be shows as ENOTDIR on POSIX and as a
+      // missing path on Windows; both get a message that names it.
+      const blocker = code === 'ENOENT' || code === 'ENOTDIR' ? blockingAncestor(path) : undefined;
+      if (code === 'ENOENT' && !blocker) {
+        throw new Error(`Built-in icon data ${path} is missing; ${fix}`);
       }
+      const reason = blocker ? `${blocker} is a file, not a folder` : readErrorReason(error);
       throw new Error(
         `Built-in icon data ${path} cannot be read (${reason}). ` +
           `Fix what stops it from being read, such as access rights or a file or folder in the way, then ${fix}`,

@@ -92,11 +92,9 @@ describe('IconCatalog.fromFile', () => {
 
   it('covers a file in the way of a folder on the path', () => {
     writeFileSync(join(dir, 'generated'), 'not a folder');
-    // POSIX reports ENOTDIR; Windows reports a missing path, which blockingAncestor turns into the same advice.
-    expect(messageFor(join(dir, 'generated', 'builtin-icons.json'))).toMatch(
-      new RegExp(
-        `cannot be read \\((ENOTDIR: not a directory|.*generated is a file, not a folder)\\)\\. Fix what stops it from being read`,
-      ),
+    // POSIX reports ENOTDIR and Windows a missing path; both name the file in the way.
+    expect(messageFor(join(dir, 'generated', 'builtin-icons.json'))).toContain(
+      `cannot be read (${join(dir, 'generated')} is a file, not a folder). Fix what stops it from being read`,
     );
   });
 
@@ -147,8 +145,10 @@ describe('readErrorReason', () => {
   it('falls back to the message for errors without a system error number', () => {
     const tooLarge = Object.assign(new Error('File size (3000000000) is greater than 2 GiB'), { code: 'ERR_FS_FILE_TOO_LARGE' });
     expect(readErrorReason(tooLarge)).toBe('File size (3000000000) is greater than 2 GiB');
-    // getSystemErrorMessage throws for numbers libuv never uses, such as positive ones.
-    expect(readErrorReason(Object.assign(new Error('raw text'), { code: 'EACCES', errno: 13 }))).toBe('raw text');
+    // libuv error numbers are negative integers; getSystemErrorMessage throws for anything else.
+    for (const errno of [13, 0, -1.5, Number.NEGATIVE_INFINITY]) {
+      expect(readErrorReason(Object.assign(new Error('raw text'), { code: 'EACCES', errno })), String(errno)).toBe('raw text');
+    }
     expect(readErrorReason('not an error')).toBe('unknown error');
   });
 });

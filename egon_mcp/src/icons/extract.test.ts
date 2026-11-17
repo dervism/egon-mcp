@@ -53,6 +53,12 @@ builtInIcons.putEntry(new Entry(typeof process, 'Probe', []));`;
     expect(new Set(icons.map((icon) => icon.name)).size).toBe(icons.length);
   });
 
+  it('reads only icons with a name', () => {
+    expect(() => extractBuiltInIcons("const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', '', ['x']));\n")).toThrow(
+      /an icon name is not a non-empty string/,
+    );
+  });
+
   it('reads only keyword lists without holes', () => {
     expect(() => extractBuiltInIcons("const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', ['a', , 'b']));\n")).toThrow(
       /the keywords of A are not a list of strings/,
