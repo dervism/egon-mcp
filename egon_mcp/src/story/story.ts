@@ -57,6 +57,23 @@ export interface ActivityInput {
   color?: string;
 }
 
+export interface GroupInput {
+  name: string;
+  members?: string[];
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  color?: string;
+}
+
+export interface AnnotationInput {
+  text: string;
+  attachTo?: string;
+  x?: number;
+  y?: number;
+}
+
 export interface ElementUpdate {
   name?: string;
   icon?: string;
@@ -84,7 +101,7 @@ const CUSTOM_ICON_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
  */
 export class Story {
   /** The highest id number handed out or seen so far, per kind. */
-  private readonly highestIds = { shape: 9999n, connection: 9999n };
+  private readonly highestIds = { shape: 9999, connection: 9999 };
 
   private constructor(
     private doc: StoryDocument,
@@ -184,6 +201,10 @@ export class Story {
   }
 
   addActivity(input: ActivityInput): ActivityElement {
+    return this.atomic(() => this.applyAddActivity(input));
+  }
+
+  private applyAddActivity(input: ActivityInput): ActivityElement {
     const source = this.resolveNode(input.from);
     const target = this.resolveNode(input.to);
     if (source.id === target.id) {
@@ -222,7 +243,11 @@ export class Story {
     return structuredClone(activity);
   }
 
-  addGroup(input: { name: string; members?: string[]; x?: number; y?: number; width?: number; height?: number; color?: string }): GroupElement {
+  addGroup(input: GroupInput): GroupElement {
+    return this.atomic(() => this.applyAddGroup(input));
+  }
+
+  private applyAddGroup(input: GroupInput): GroupElement {
     let bounds: Bounds;
     // A name shared by several elements (work objects repeat per sentence) groups all of them.
     const members = (input.members ?? []).flatMap((ref) => this.resolveShapes(ref));
@@ -272,7 +297,11 @@ export class Story {
     return structuredClone(group);
   }
 
-  addAnnotation(input: { text: string; attachTo?: string; x?: number; y?: number }): {
+  addAnnotation(input: AnnotationInput): { annotation: TextAnnotationElement; connection?: ConnectionElement } {
+    return this.atomic(() => this.applyAddAnnotation(input));
+  }
+
+  private applyAddAnnotation(input: AnnotationInput): {
     annotation: TextAnnotationElement;
     connection?: ConnectionElement;
   } {
@@ -328,6 +357,31 @@ export class Story {
   }
 
   updateElement(ref: string, update: ElementUpdate): StoryElement {
+    return this.atomic(() => this.applyUpdate(ref, update));
+  }
+
+  /** Runs several edits as one: when one fails, none of them stays. */
+  transaction<T>(edit: () => T): T {
+    return this.atomic(edit);
+  }
+
+  /**
+   * Runs an edit and undoes all of it when it fails, ids handed out
+   * included, so a refused edit leaves the story as it was.
+   */
+  private atomic<T>(edit: () => T): T {
+    const doc = structuredClone(this.doc);
+    const ids = { ...this.highestIds };
+    try {
+      return edit();
+    } catch (error) {
+      this.doc = doc;
+      Object.assign(this.highestIds, ids);
+      throw error;
+    }
+  }
+
+  private applyUpdate(ref: string, update: ElementUpdate): StoryElement {
     const element = this.resolve(ref);
     if (update.name !== undefined) {
       element.name = update.name;
@@ -421,15 +475,17 @@ export class Story {
   }
 
   private setGeometry(shape: ShapeElement, update: Partial<Bounds>): void {
-    for (const key of ['x', 'y', 'width', 'height'] as const) {
-      const value = update[key];
-      if (value !== undefined) {
-        if (!Number.isFinite(value) || ((key === 'width' || key === 'height') && value <= 0)) {
-          throw new StoryError(`${key} must be a ${key === 'x' || key === 'y' ? 'finite' : 'positive'} number.`);
-        }
-        checkCoordinates({ [key]: value });
-        shape[key] = Math.round(value);
+    const keys = (['x', 'y', 'width', 'height'] as const).filter((key) => update[key] !== undefined);
+    // Check every value before changing any.
+    for (const key of keys) {
+      const value = update[key] as number;
+      if (!Number.isFinite(value) || ((key === 'width' || key === 'height') && value <= 0)) {
+        throw new StoryError(`${key} must be a ${key === 'x' || key === 'y' ? 'finite' : 'positive'} number.`);
       }
+      checkCoordinates({ [key]: value });
+    }
+    for (const key of keys) {
+      shape[key] = Math.round(update[key] as number);
     }
     if (isTextAnnotation(shape) && update.height !== undefined) {
       shape['number'] = shape.height;
@@ -510,6 +566,10 @@ export class Story {
   }
 
   private addShape(kind: IconKind, input: ShapeInput, defaultIcon: string): ShapeElement {
+    return this.atomic(() => this.applyAddShape(kind, input, defaultIcon));
+  }
+
+  private applyAddShape(kind: IconKind, input: ShapeInput, defaultIcon: string): ShapeElement {
     const type = this.typeFor(kind, input.icon ?? defaultIcon);
     const position = this.givenPosition(input) ?? this.nextFreeCell();
     const shape: ShapeElement = {
@@ -736,13 +796,14 @@ export class Story {
     const pattern = new RegExp(`^${kind}_(\\d+)$`);
     let highest = this.highestIds[kind];
     for (const element of this.doc.elements) {
-      const digits = pattern.exec(element.id)?.[1];
-      if (digits !== undefined && BigInt(digits) > highest) {
-        highest = BigInt(digits);
+      // Numbers longer than 15 digits cannot meet ours; counting past them would make ids too long to open again.
+      const digits = pattern.exec(element.id)?.[1]?.replace(/^0+(?=\d)/, '');
+      if (digits !== undefined && digits.length <= 15 && Number(digits) > highest) {
+        highest = Number(digits);
       }
     }
-    this.highestIds[kind] = highest + 1n;
-    return `${kind}_${highest + 1n}`;
+    this.highestIds[kind] = highest + 1;
+    return `${kind}_${highest + 1}`;
   }
 
   private checkColor(color: string): string {

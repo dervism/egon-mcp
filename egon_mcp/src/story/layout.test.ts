@@ -391,6 +391,13 @@ describe('autoLayout', () => {
     expect(xs).toEqual([...xs].sort((a, b) => a - b));
   });
 
+  it('names the element that is too large to lay out within a billion pixels', () => {
+    const story = Story.create({ title: 'T' });
+    story.addGroup({ name: 'Tall', x: 0, y: 0, width: 300, height: 1e9 });
+    story.addGroup({ name: 'Small', x: 5000, y: 0, width: 300, height: 300 });
+    expect(() => autoLayout(story)).toThrow(/"Tall" is too large/);
+  });
+
   it('lays out a file whose groups named each other as parent', () => {
     const text = JSON.stringify({
       domain: { name: 'default', actors: {}, workObjects: {} },

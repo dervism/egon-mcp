@@ -152,6 +152,12 @@ describe('parseStoryFile', () => {
     expect(doc.elements[0]?.['height']).toBeUndefined();
   });
 
+  it('accepts ids of up to 256 characters', () => {
+    const file = (id: string) => JSON.stringify({ domain: { name: 'default', actors: {}, workObjects: {} }, dst: [{ type: 'domainStory:actorPerson', id, name: 'A', x: 0, y: 0 }, { info: '' }, { version: '3.2.1' }] });
+    expect(parseStoryFile(file(`shape_${'9'.repeat(250)}`), 'a.egn').elements[0]?.id).toHaveLength(256);
+    expect(() => parseStoryFile(file(`shape_${'9'.repeat(251)}`), 'a.egn')).toThrow(/too long an id/);
+  });
+
   it('rejects ids longer than 256 characters', () => {
     const file = JSON.stringify({ domain: { name: 'default', actors: {}, workObjects: {} }, dst: [{ type: 'domainStory:actorPerson', id: `shape_${'1'.repeat(300)}`, name: 'A', x: 0, y: 0 }, { info: '' }, { version: '3.2.1' }] });
     expect(() => parseStoryFile(file, 'a.egn')).toThrow(/too long an id/);

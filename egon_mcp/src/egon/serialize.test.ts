@@ -68,7 +68,7 @@ describe('toEgnJson', () => {
     expect(ids).toEqual(['shape_9999', 'shape_10000']);
   });
 
-  it('sorts business objects by id, as Egon does on export', () => {
+  it('sorts business objects by the number in their id; Egon sorts the same ids as text', () => {
     for (const format of ['egon3', 'egon4'] as const) {
       const json = JSON.parse(toEgnJson(sampleStory().toDocument(), { format }));
       const elements = format === 'egon3' ? json.dst.slice(0, -2) : json.domainStory.businessObjects;

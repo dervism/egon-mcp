@@ -328,7 +328,8 @@ function round(value: number): number {
 }
 
 function text(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // % too: Egon's import turns %3C and %3E anywhere in the file into < and > before it looks for <DST>.
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/%/g, '&#37;');
 }
 
 function attr(value: string): string {

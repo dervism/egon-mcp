@@ -9,6 +9,7 @@ import {
   type ShapeElement,
   type StoryElement,
 } from '../egon/types.js';
+import { noteAnchors } from '../story/layout.js';
 import { narrate } from '../story/narrate.js';
 import { validateStory } from '../story/validate.js';
 import type { StoryEntry } from './workspace.js';
@@ -18,6 +19,7 @@ export function describeStory(entry: StoryEntry, options: { positions?: boolean 
   const doc = entry.story.toDocument();
   const byId = new Map(doc.elements.map((element) => [element.id, element]));
   const nameOf = (id: string) => byId.get(id)?.name || byId.get(id)?.['text'] || id;
+  const anchors = noteAnchors(doc.elements);
   const position = (element: StoryElement) =>
     options.positions ? { x: (element as ShapeElement).x, y: (element as ShapeElement).y } : {};
   const color = (element: StoryElement) => (element.pickedColor ? { color: element.pickedColor } : {});
@@ -59,11 +61,12 @@ export function describeStory(entry: StoryEntry, options: { positions?: boolean 
       ...position(group),
     })),
     annotations: doc.elements.filter(isTextAnnotation).map((annotation) => {
-      const link = doc.elements.find((element) => isConnection(element) && element.target === annotation.id);
+      // The same link auto_layout follows: with several, the one of lowest id.
+      const anchor = anchors.get(annotation.id);
       return {
         id: annotation.id,
         text: annotation.text ?? '',
-        ...(link && isConnection(link) ? { attachedTo: nameOf(link.source) } : {}),
+        ...(anchor ? { attachedTo: nameOf(anchor.id) } : {}),
         ...position(annotation),
       };
     }),

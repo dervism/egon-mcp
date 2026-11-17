@@ -63,7 +63,7 @@ Closes an open story without saving it. Save first with save_story if it has uns
 
 ## save_story
 
-Writes a story into the workspace directory. For .egn and .egn.svg files, groupChangesOnOpen in the result lists the group changes open_story would make when it opens the file again: a shape inside a group box that is not in a group joins that group. Egon itself only reads who is in a group. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". An existing file is only replaced if this story opened or wrote it and nobody changed it since, or with overwrite: true.
+Writes a story into the workspace directory. For .egn and .egn.svg files it opens the written file the way open_story would: groupChangesOnOpen lists the group changes that would make, such as a shape in no group joining the smallest group box over its top-left corner, and reopenError says why the file would not open. Egon itself only reads who is in a group. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". An existing file is only replaced if this story opened or wrote it and nobody changed it since, or with overwrite: true.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -173,7 +173,7 @@ Adds one domain story sentence as a new step: actor, verb, work object and optio
 
 ## add_group
 
-Draws a box around elements that belong together, such as a department or subdomain. With members and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put those in no group into this one when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.
+Draws a box around elements that belong together, such as a department or subdomain. With members and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and open_story would put those in no group into the smallest group box over their top-left corner when it opens the saved file. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Without members or position, the box goes below the story. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -181,10 +181,10 @@ Draws a box around elements that belong together, such as a department or subdom
 | `name` | string | yes | Label in the top-left corner of the box. |
 | `members` | array of string | no | Elements to put in the group, even outside the box. Without x and y the box fits around them. |
 | `color` | string | no | Color as hex, for example #1E88E5. |
-| `x` | number | no | Left edge of the box. Give x and y together; without them the box fits around the members, or goes below the story when there are none. |
-| `y` | number | no | Top edge of the box. Give x and y together. |
-| `width` | number | no | Box width with x and y; default 300. |
-| `height` | number | no | Box height with x and y; default 200. |
+| `x` | number | no | Left edge of the box, at most a billion pixels either way. Give x and y together; without them the box fits around the members, or goes below the story when there are none. |
+| `y` | number | no | Top edge of the box, at most a billion pixels either way. Give x and y together. |
+| `width` | number | no | Box width with x and y, at most a billion pixels; default 300. |
+| `height` | number | no | Box height with x and y, at most a billion pixels; default 200. |
 
 ## add_annotation
 

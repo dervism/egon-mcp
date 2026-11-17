@@ -280,6 +280,21 @@ describe('group checks', () => {
     expect(flagged.some((message) => message.includes('"Edge"'))).toBe(false);
   });
 
+  it('names the element a note is attached to by the link of lowest id, as auto_layout does', () => {
+    const story = Story.create({ title: 'T' });
+    const alice = story.addActor({ name: 'Alice', x: 0, y: 0 });
+    const bob = story.addActor({ name: 'Bob', x: 500, y: 0 });
+    const note = story.addAnnotation({ text: 'shared', x: 300, y: 300 }).annotation;
+    const doc = story.toDocument();
+    // Egon sorts ids as text, so connection_10005 comes before connection_9999 in its files.
+    doc.elements.push(
+      { type: 'domainStory:connection', id: 'connection_10005', name: '', source: alice.id, target: note.id, waypoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }] },
+      { type: 'domainStory:connection', id: 'connection_9999', name: '', source: bob.id, target: note.id, waypoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }] },
+    );
+    const view = describeStory({ story: Story.fromDocument(doc) } as unknown as StoryEntry);
+    expect(view.annotations[0]?.attachedTo).toBe('Bob');
+  });
+
   it('lists annotation members of a group by their text', () => {
     const story = Story.create({ title: 'T' });
     const annotation = story.addAnnotation({ text: 'every month', x: 0, y: 0 }).annotation;

@@ -108,4 +108,13 @@ describe('renderStorySvg', () => {
     const laneY = bent.waypoints[1]!.y;
     expect(svg).toMatch(new RegExp(`<tspan x="[\\d.]+" y="${laneY + 15}">detour</tspan>`));
   });
+
+  it('keeps labels that spell %3CDST%3E from breaking the embedded story', () => {
+    const story = Story.create({ title: 'Tricky' });
+    story.addActor({ name: '%3CDST%3E' });
+    story.addWorkObject({ name: 'a %3C/DST%3E b' });
+    const svg = renderStorySvg(story.toDocument(), { embedStory: true });
+    const names = parseStoryFile(svg, 'tricky.egn.svg').elements.map((element) => element.name);
+    expect(names).toEqual(expect.arrayContaining(['%3CDST%3E', 'a %3C/DST%3E b']));
+  });
 });

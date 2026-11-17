@@ -53,7 +53,7 @@ In `.egn.svg` files the JSON sits in a comment after `</svg>`: `<!-- <DST> {...}
 
 Other details:
 
-- Ids look like `shape_1234` and `connection_1234` and must be valid CSS identifiers. Egon draws them at random below 10000. egon-mcp numbers its own from `shape_10000` and `connection_10000` up, so the order elements were added in survives Egon's sort by id; sentences that share a step number are read in that order.
+- Ids look like `shape_1234` and `connection_1234` and must be valid CSS identifiers. Egon draws them at random below 10000. egon-mcp numbers its own from `shape_10000` and `connection_10000` up, so the order elements were added in survives a save; sentences that share a step number are read in that order. Egon sorts ids as text, which keeps that order while egon-mcp's ids have five digits.
 - `pickedColor` holds an optional color such as `#E53935`.
 - `multipleNumberAllowed: true` marks activities that share a step number.
 - The `<Icon>` part must be a built-in Egon icon or a key in the file's icon set. Spaces in icon names become dashes.
@@ -64,6 +64,10 @@ Other details:
 - The story's description (`info` in the Egon 3 layout) is where story-level assumptions go, such as "happy path; customer without subscription". Notes about single elements are text annotations.
 - An activity may have an empty label. Classic stories label every activity with a verb, but the message-flow variant leaves arrows unlabeled on purpose; `validate_story` then warns with `unlabeled-activity`.
 - The example stories from the Domain Storytelling book, in [WPS/egon.io-examples](https://github.com/WPS/egon.io-examples), are `.egn` and `.dst` files. When checked in November 2026, all 44 English stories there opened with `open_story`.
+
+## Limits egon-mcp adds
+
+`open_story` refuses a file with an id longer than 256 characters or a coordinate beyond a billion pixels either way, and drops a width or height beyond that, falling back to the default size. The tools refuse such values too, so every file egon-mcp writes opens again.
 
 ## Rules Egon enforces when editing
 

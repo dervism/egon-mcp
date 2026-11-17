@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readEgonFixture } from '../../test/egon-fixtures.js';
 import { parseStoryFile } from '../egon/parse.js';
+import { toEgnJson } from '../egon/serialize.js';
 import { EGON_FORMAT_VERSION, type ActivityElement } from '../egon/types.js';
 import { Story, StoryError } from './story.js';
 
@@ -66,15 +67,25 @@ describe('element ids, continued', () => {
     expect(story.addActor({ name: 'B' }).id).not.toBe(first.id);
   });
 
-  it('stay unique next to ids too large for a plain number', () => {
-    const story = fileWith([{ type: 'domainStory:actorPerson', id: 'shape_9007199254740993', name: 'A', x: 0, y: 0 }]);
+  it('stay short and unique next to very long ids, so the saved file opens again', () => {
+    const long = `shape_${'9'.repeat(250)}`;
+    const story = fileWith([{ type: 'domainStory:actorPerson', id: long, name: 'A', x: 0, y: 0 }]);
     const ids = [story.addActor({ name: 'B' }).id, story.addActor({ name: 'C' }).id];
-    expect(new Set([...ids, 'shape_9007199254740993']).size).toBe(3);
-    expect(ids[0]).toBe('shape_9007199254740994');
+    expect(ids).toEqual(['shape_10000', 'shape_10001']);
+    const reopened = Story.fromDocument(parseStoryFile(toEgnJson(story.toDocument()), 'story.egn'));
+    expect(reopened.elements().map((element) => element.id).sort()).toEqual([...ids, long].sort());
   });
 });
 
 describe('positions', () => {
+  it('leave an element untouched when an update is refused', () => {
+    const story = Story.create({ title: 'T' });
+    const actor = story.addActor({ name: 'A', x: 100, y: 100 });
+    expect(() => story.updateElement(actor.id, { name: 'Renamed', x: 5e9 })).toThrow(/billion/);
+    expect(() => story.updateElement(actor.id, { x: 500, y: 5e9 })).toThrow(/billion/);
+    expect(story.get(actor.id)).toMatchObject({ name: 'A', x: 100, y: 100 });
+  });
+
   it('want both x and y, or neither', () => {
     const story = Story.create({ title: 'T' });
     expect(() => story.addActor({ name: 'A', x: 100 })).toThrow(/both x and y/);

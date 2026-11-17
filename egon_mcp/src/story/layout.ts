@@ -1,7 +1,7 @@
 import { compareIds, groupAncestors, isActor, isConnection, isGroup, isTextAnnotation, isWorkObject, type ShapeElement, type StoryElement } from '../egon/types.js';
 import { boundsOf, type Bounds } from './geometry.js';
 import { narrate } from './narrate.js';
-import type { Story } from './story.js';
+import { StoryError, type Story } from './story.js';
 
 const CELL_WIDTH = 220;
 const CELL_HEIGHT = 200;
@@ -35,6 +35,29 @@ interface BlockRow {
  * Running it twice changes nothing.
  */
 export function autoLayout(story: Story): void {
+  story.transaction(() => {
+    try {
+      layOut(story);
+    } catch (error) {
+      if (error instanceof StoryError && /billion/.test(error.message)) {
+        throw new StoryError(
+          `auto_layout cannot fit the story within a billion pixels: "${largestName(story)}" is too large. Make it smaller with update_element first.`,
+        );
+      }
+      throw error;
+    }
+  });
+}
+
+/** The name of the element with the largest box, which is what pushes the layout too far. */
+function largestName(story: Story): string {
+  const shapes = story.elements().filter((element) => typeof element['x'] === 'number') as ShapeElement[];
+  const size = (shape: ShapeElement) => Math.max(boundsOf(shape).width, boundsOf(shape).height);
+  const largest = shapes.sort((a, b) => size(b) - size(a))[0];
+  return largest ? largest.name || (largest['text'] as string | undefined) || largest.id : '';
+}
+
+function layOut(story: Story): void {
   joinNotesToGroups(story);
   const doc = story.toDocument();
   const byId = new Map(doc.elements.map((element) => [element.id, element]));
@@ -252,7 +275,7 @@ function joinNotesToGroups(story: Story): void {
  * note; the link with the lowest id counts, so the choice does not depend on
  * the order of elements in a file.
  */
-function noteAnchors(elements: StoryElement[]): Map<string, StoryElement> {
+export function noteAnchors(elements: StoryElement[]): Map<string, StoryElement> {
   const byId = new Map(elements.map((element) => [element.id, element]));
   const anchors = new Map<string, StoryElement>();
   const links = elements.filter(isConnection).sort((a, b) => compareIds(a.id, b.id));

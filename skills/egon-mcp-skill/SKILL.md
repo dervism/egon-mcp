@@ -120,7 +120,7 @@ Run `validate_story` after building or editing. Fix every error; the file would 
 - `unconnected-element`: connect it or remove it. Parts of a story that do not connect are often a gap in the story; ask the user why.
 - `numbering-gap`: call `renumber_steps`.
 - `overlapping-shapes`, `overlapping-groups`: call `auto_layout`, which keeps the members of each group together in a block of their own.
-- `group-encloses-non-member`: decide whether the element belongs in the group. If it does, set its `x` and `y` with `update_element` (its current position will do): a shape placed somewhere joins the smallest box that covers its top-left corner, so this works unless a smaller group's box covers it too. If not, call `auto_layout`, which moves it out of the box. Left as it is, a shape in no group joins the group when `open_story` opens the saved file; `save_story` lists such changes in `groupChangesOnOpen`.
+- `group-encloses-non-member`: decide whether the element belongs in the group. If it does, set its `x` and `y` with `update_element` (its current position will do): a shape placed somewhere joins the smallest box that covers its top-left corner, so this works unless a smaller group's box covers it too. If not, call `auto_layout`, which moves it out of the box. Left as it is, a shape in no group joins the smallest group box over its top-left corner when `open_story` opens the saved file; `save_story` lists such changes in `groupChangesOnOpen`.
 
 Then read `narrate_story` and compare it with what the user said. Each line must read as a correct sentence. Show the user the numbered sentences and retell the whole story from the start: is anything missing, is anything wrong, do all the experts agree? Retelling is where forgotten details come up; put them on the sentence they belong to.
 
@@ -174,8 +174,9 @@ Tool errors explain the problem and usually the fix:
 | `cannot be read` | A file this story opened or wrote is now unreadable or too large to check. Ask the user, then save elsewhere or pass `overwrite: true`. |
 | `changed on disk` | The file was edited or replaced outside the server, or by a story that is closed now. Tell the user, then reopen it with `open_story`, save elsewhere, or pass `overwrite: true` if they agree to lose those changes. |
 | `No open story` | Use `list_stories`; stories are lost when the server restarts unless saved. |
-| `within a billion pixels`, `no free spot` | Give smaller coordinates, or pass `x` and `y` instead of letting the server pick a spot. When `open_story` says it, the file has coordinates no drawing needs; ask the user to fix it in Egon. |
-| `too long an id` | The file was not written by Egon. Ask the user where it came from. |
+| `within a billion pixels`, `no free spot` | Give smaller coordinates, or pass `x` and `y` instead of letting the server pick a spot. From `add_group` with members, a member lies near the limit; move it first. From `auto_layout`, make the element it names smaller. From `open_story`, a coordinate in the file is missing, not a number or larger than any drawing needs; ask the user to fix it in Egon. |
+| `too long an id` | An id in the file is over 256 characters, which Egon never writes. Ask the user where the file came from. |
+| `reopenError` in a `save_story` result | The file was written but `open_story` would refuse it; the message says why. Fix the story and save again. |
 
 ## References
 
