@@ -1,5 +1,7 @@
-// Node loads this file before tsc runs (scripts/record-sources.mjs, through type
-// stripping), so it must stay erasable TypeScript and import only node: modules.
+// Node also loads this file without tsc, through type stripping: before the build
+// (scripts/record-sources.mjs) and in the icon generator (scripts/generate-icons.mjs).
+// So it must stay erasable TypeScript and import only node: modules. The server
+// uses isIconList from it too (src/icons/catalog.ts).
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -13,12 +15,14 @@ export const PENDING_BUILD_INFO_FILE = 'build-info.pending.json';
  * the server cannot run without with a check that one is usable, and how to
  * make them again.
  */
+/** How to make the icon data again; npm skips the prebuild step that runs generate:icons when scripts are ignored. */
+export const ICON_FIX = 'run "npm run generate:icons", then "npm run build"';
+
 export const ASSETS: { dir: string; required: { file: string; usable: (content: string) => boolean }[]; hint: string }[] = [
   {
     dir: 'icons/generated',
     required: [{ file: 'builtin-icons.json', usable: isIconList }],
-    // npm runs generate:icons as the prebuild step, but skips it when scripts are ignored.
-    hint: 'run "npm run generate:icons", then "npm run build"',
+    hint: ICON_FIX,
   },
 ];
 

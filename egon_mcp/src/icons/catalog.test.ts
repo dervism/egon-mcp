@@ -1,8 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_ICON_NAMES, IconCatalog } from './catalog.js';
 
 describe('IconCatalog', () => {
@@ -45,33 +45,36 @@ describe('IconCatalog', () => {
 });
 
 describe('IconCatalog.fromFile', () => {
+  const fix = 'run "npm run generate:icons", then "npm run build"';
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'egon-catalog-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it('names the file and both steps that bring missing icon data back', () => {
-    expect(() => IconCatalog.fromFile(new URL('file:///nonexistent/builtin-icons.json'))).toThrow(
-      /\/nonexistent\/builtin-icons\.json is missing\. Run "npm run generate:icons", then "npm run build"/,
+    expect(() => IconCatalog.fromFile(pathToFileURL(join(dir, 'missing', 'builtin-icons.json')))).toThrow(
+      `${join(dir, 'missing', 'builtin-icons.json')} is missing; ${fix}`,
     );
   });
 
-  it('refuses a file that is cut off or not in the shape the server reads', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'egon-catalog-'));
-    try {
-      const file = join(dir, 'builtin-icons.json');
-      for (const content of ['[{ "name": "Per', '[{ "name": "Person", "svg": "<svg/>" }]']) {
-        writeFileSync(file, content);
-        expect(() => IconCatalog.fromFile(pathToFileURL(file)), content).toThrow(
-          /builtin-icons\.json is not usable\. Run "npm run generate:icons", then "npm run build"/,
-        );
-      }
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
+  it('refuses a file that is cut off, not in the shape the server reads, or not a file', () => {
+    const file = join(dir, 'builtin-icons.json');
+    for (const content of ['[{ "name": "Per', '[{ "name": "Person", "svg": "<svg/>" }]']) {
+      writeFileSync(file, content);
+      expect(() => IconCatalog.fromFile(pathToFileURL(file)), content).toThrow(`${file} is not usable; ${fix}`);
     }
+    rmSync(file);
+    mkdirSync(file);
+    expect(() => IconCatalog.fromFile(pathToFileURL(file))).toThrow(`${file} is not usable; ${fix}`);
   });
 
-  it('is how the server loads its built-in icons', async () => {
-    vi.resetModules();
-    const fresh = await import('./catalog.js');
-    const fromFile = vi.spyOn(fresh.IconCatalog, 'fromFile');
-    fresh.IconCatalog.builtIn();
-    expect(fromFile).toHaveBeenCalledTimes(1);
-    vi.restoreAllMocks();
+  it('applies to the built-in icons the server loads', () => {
+    const file = join(dir, 'builtin-icons.json');
+    writeFileSync(file, '[]');
+    expect(() => IconCatalog.builtIn(pathToFileURL(file))).toThrow(`${file} is not usable; ${fix}`);
+    expect(IconCatalog.builtIn().names().length).toBeGreaterThan(100);
   });
 });

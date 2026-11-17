@@ -25,7 +25,7 @@ Two tests run the built code in `dist/`, which `npm test` builds first: the stdi
 | `src/server` | MCP tools, resources and prompts, the workspace sandbox, and the local link server for `open_in_egon`. |
 | `src/docs` | Generator for the skill's tool reference. |
 | `src/cli.ts`, `src/index.ts` | Command line options and the stdio entry point. |
-| `src/build-info.ts` | Hashes the build inputs, copies the asset folders into `dist/` and writes the build record in `dist/build-info.json`; Node loads it before tsc runs. |
+| `src/build-info.ts` | Hashes the build inputs, copies the asset folders into `dist/`, writes the build record in `dist/build-info.json`, and holds the icon file check that the generator, the build and the server share. Node loads it without tsc too. |
 
 Tests sit next to the code (`*.test.ts`), plus `test/` for end-to-end and skill tests. Egon's own sample exports in the submodule serve as fixtures.
 

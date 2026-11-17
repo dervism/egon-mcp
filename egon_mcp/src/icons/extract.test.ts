@@ -59,7 +59,7 @@ describe('writeIconFile', () => {
     const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
     try {
       const file = join(dir, 'builtin-icons.json');
-      writeIconFile(file, extractBuiltInIcons(sample));
+      writeIconFile(file, extractBuiltInIcons(sample), isIconList);
       expect(JSON.parse(readFileSync(file, 'utf8')).map((icon: { name: string }) => icon.name)).toEqual(['Person', 'Car']);
       expect(readdirSync(dir)).toEqual(['builtin-icons.json']);
     } finally {
@@ -72,7 +72,7 @@ describe('writeIconFile', () => {
     try {
       const file = join(dir, 'builtin-icons.json');
       writeFileSync(file, 'previous');
-      expect(() => writeIconFile(file, [])).toThrow(/No built-in icons found/);
+      expect(() => writeIconFile(file, [], isIconList)).toThrow(/No built-in icons found/);
       expect(readFileSync(file, 'utf8')).toBe('previous');
       expect(readdirSync(dir)).toEqual(['builtin-icons.json']);
     } finally {
@@ -90,7 +90,7 @@ describe('writeIconFile, interrupted', () => {
       // A hard link shares the file's content: a write into the file would show
       // through it, while a new file renamed into place leaves it untouched.
       linkSync(file, join(dir, 'witness'));
-      writeIconFile(file, extractBuiltInIcons(sample));
+      writeIconFile(file, extractBuiltInIcons(sample), isIconList);
       expect(readFileSync(join(dir, 'witness'), 'utf8')).toBe('previous');
       expect(readFileSync(file, 'utf8')).toContain('"Person"');
     } finally {
@@ -104,7 +104,7 @@ describe('writeIconFile, interrupted', () => {
       const file = join(dir, 'builtin-icons.json');
       // A folder in the way makes the final rename fail, and the error names the temporary file.
       mkdirSync(join(file, 'blocker'), { recursive: true });
-      expect(() => writeIconFile(file, extractBuiltInIcons(sample))).toThrow(/[\\/]\.builtin-icons\.json\.\d+\.tmp/);
+      expect(() => writeIconFile(file, extractBuiltInIcons(sample), isIconList)).toThrow(/[\\/]\.builtin-icons\.json\.\d+\.tmp/);
       expect(readdirSync(dir)).toEqual(['builtin-icons.json']);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -116,7 +116,7 @@ describe('generateIconFile', () => {
   it('extracts and writes the icons, and returns how many', () => {
     const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
     try {
-      expect(generateIconFile(sample, join(dir, 'builtin-icons.json'))).toBe(2);
+      expect(generateIconFile(sample, join(dir, 'builtin-icons.json'), isIconList)).toBe(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -126,11 +126,34 @@ describe('generateIconFile', () => {
     const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
     try {
       const file = join(dir, 'builtin-icons.json');
-      expect(() => generateIconFile('const = ;', file)).toThrow(
+      expect(() => generateIconFile('const = ;', file, isIconList)).toThrow(
         /Cannot read Egon's built-in icons \(.+\); its format may have changed\./,
       );
-      // Sources may throw values that are not Error objects.
-      expect(() => generateIconFile("throw 'boom'", file)).toThrow(/Cannot read Egon's built-in icons \(boom\)/);
+      // Sources may throw values that are not Error objects, or cannot even be turned into text.
+      expect(() => generateIconFile("throw 'boom'", file, isIconList)).toThrow(/Cannot read Egon's built-in icons \(boom\)/);
+      expect(() => generateIconFile('throw Object.create(null)', file, isIconList)).toThrow(
+        /Cannot read Egon's built-in icons \(\[object Object\]\)/,
+      );
+      expect(existsSync(file)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses entries that are not plain strings, which is how a change in Egon shows', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
+    try {
+      const file = join(dir, 'builtin-icons.json');
+      const changed = [
+        // Egon passing one object instead of value, key and keywords.
+        "const icons = new Dictionary();\nicons.putEntry(new Entry({ svg: '<svg/>', name: 'A', keywords: [] }));\n",
+        "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 7, []));\n",
+        "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', 'a, b'));\n",
+        "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', 'A', [1]));\n",
+      ];
+      for (const source of changed) {
+        expect(() => generateIconFile(source, file, isIconList), source).toThrow(/its format may have changed/);
+      }
       expect(existsSync(file)).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -141,10 +164,12 @@ describe('generateIconFile', () => {
     const dir = mkdtempSync(join(tmpdir(), 'egon-icons-'));
     try {
       const file = join(dir, 'builtin-icons.json');
-      const unnamed = "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', '', ['x']));\n";
-      expect(() => generateIconFile(unnamed, file, isIconList)).toThrow(
+      expect(() => writeIconFile(file, extractBuiltInIcons(sample), () => false)).toThrow(
         /do not have the shape the server reads; its format may have changed/,
       );
+      // An empty name is caught while reading Egon's source already.
+      const unnamed = "const icons = new Dictionary();\nicons.putEntry(new Entry('<svg/>', '', ['x']));\n";
+      expect(() => generateIconFile(unnamed, file, isIconList)).toThrow(/its format may have changed/);
       expect(existsSync(file)).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });

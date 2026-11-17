@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { isIconList } from '../build-info.js';
+import { ICON_FIX, isIconList } from '../build-info.js';
 import type { IconMap, IconSet } from '../egon/types.js';
 import type { BuiltInIcon } from './extract.js';
 
@@ -23,22 +23,33 @@ export class IconCatalog {
     }
   }
 
-  /** The icons extracted from the egon.io submodule (see scripts/generate-icons.mjs). */
-  static builtIn(): IconCatalog {
+  /**
+   * The icons extracted from the egon.io submodule (see scripts/generate-icons.mjs),
+   * loaded once through fromFile. Tests may point it at another file.
+   */
+  static builtIn(file: URL = GENERATED_FILE): IconCatalog {
+    if (file !== GENERATED_FILE) {
+      return IconCatalog.fromFile(file);
+    }
     builtInCatalog ??= IconCatalog.fromFile(GENERATED_FILE);
     return builtInCatalog;
   }
 
   /** Reads an icon list as the icon generator writes it, after the same check the build makes. */
   static fromFile(file: URL): IconCatalog {
-    const fix = 'Run "npm run generate:icons", then "npm run build" in egon_mcp (needs the egon.io submodule).';
     const path = fileURLToPath(file);
+    const fix = `${ICON_FIX} in egon_mcp (needs the egon.io submodule).`;
     if (!existsSync(file)) {
-      throw new Error(`Built-in icon data ${path} is missing. ${fix}`);
+      throw new Error(`Built-in icon data ${path} is missing; ${fix}`);
     }
-    const content = readFileSync(file, 'utf8');
+    let content: string;
+    try {
+      content = readFileSync(file, 'utf8');
+    } catch {
+      content = '';
+    }
     if (!isIconList(content)) {
-      throw new Error(`Built-in icon data ${path} is not usable. ${fix}`);
+      throw new Error(`Built-in icon data ${path} is not usable; ${fix}`);
     }
     return new IconCatalog(JSON.parse(content) as BuiltInIcon[]);
   }

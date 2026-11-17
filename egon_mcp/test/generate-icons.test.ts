@@ -47,6 +47,18 @@ describe('scripts/generate-icons.mjs', () => {
     expect(existsSync(result.out)).toBe(false);
   });
 
+  it('takes both paths or none, so a stray argument cannot overwrite the real icon file', () => {
+    for (const args of [['only-source.ts'], ['--help'], ['a.ts', 'b.json', 'c']]) {
+      const result = spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', 'scripts/generate-icons.mjs', ...args], {
+        cwd: packageDir,
+        encoding: 'utf8',
+        timeout: 20_000,
+      });
+      expect(result.status, args.join(' ')).toBe(2);
+      expect(result.stderr).toMatch(/Usage: node scripts\/generate-icons\.mjs \[<egon source file> <output file>\]/);
+    }
+  });
+
   it('says how to get Egon\'s source when it is missing', () => {
     const result = generate(undefined);
     expect(result.status).toBe(1);
