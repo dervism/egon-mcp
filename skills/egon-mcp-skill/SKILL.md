@@ -176,6 +176,13 @@ Tool errors explain the problem and usually the fix:
 | `changed on disk` | The file was edited or replaced outside the server, or by a story that is closed now. Tell the user, then reopen it with `open_story`, save elsewhere, or pass `overwrite: true` if they agree to lose those changes. |
 | `No open story` | Use `list_stories`; stories are lost when the server restarts unless saved. |
 | `within a billion pixels`, `no free spot` | Give smaller coordinates, or pass `x` and `y` instead of letting the server pick a spot. From `add_group` with members, a member lies near the limit or the members lie too far apart; move them closer first. From `auto_layout`, make the element it names smaller. From `open_story`, a coordinate in the file is missing, not a number or larger than any drawing needs; ask the user to fix it in Egon. |
+| `would have to grow past a billion pixels` | The group the new group nests in lies near the limit. Move that group and its contents closer to the middle with `update_element`, then add the group again. |
+| `cannot go into a group of these steps` | A work object of these steps serves another step too. Pass its name in `members` next to the steps to put it in this group, give the other step its own copy, or group the other steps first. |
+| `already the group` | The members or steps are exactly an existing group. Pass the group itself to draw a box around it, rename that group, or choose other members or steps. |
+| `would cross it` | The work objects sit in different groups, so one box cannot hold them without cutting through another group. Choose steps that lie within one group, or change that group first. |
+| `nothing left to group` | Every work object of the steps serves other steps too and already sits in a group. Pass one in `members` to move it here, or choose other steps. |
+| `no work object` | The steps' activities lead nowhere, as in a damaged file. Repair the sentences with `add_activity` and `remove_element` first. |
+| `steps fit the box` | `steps` and `x`/`y` do not go together. Leave out the position, or name the members instead. |
 | `too long an id` | An id in the file is over 256 characters, which Egon never writes. Ask the user where the file came from. |
 | `reopenError` in a `save_story` result | The file was written but `open_story` would refuse it; the message says why. Fix the story and save again. A file over 20 MB cannot be checked for changes, so save to a new path and tell the user the old file can go. |
 

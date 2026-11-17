@@ -102,7 +102,11 @@ export function buildStory(input: BuildStoryInput): Story {
     input.sentences.forEach((sentence, index) => {
       withContext(`sentence ${index + 1}`, () => addSentence(story, sentence));
     });
-    for (const group of input.groups ?? []) {
+    // A group that names a shared work object next to its steps goes first, so a group of the other
+    // steps finds it settled whatever the order of the list.
+    const groups = input.groups ?? [];
+    const settles = (group: (typeof groups)[number]) => Boolean(group.steps?.length && group.members?.length);
+    for (const group of [...groups.filter(settles), ...groups.filter((group) => !settles(group))]) {
       if (!group.members?.length && !group.steps?.length) {
         throw new StoryError(`The group "${group.name}" needs members or steps.`);
       }
@@ -247,6 +251,9 @@ export function membersOfSteps(story: Story, steps: number[], named: string[] = 
       }
     }
   }
+  if (ids.length === 0 && named.length === 0) {
+    throw new StoryError(`${steps.length > 1 ? 'Steps' : 'Step'} ${steps.join(', ')} ${steps.length > 1 ? 'have' : 'has'} no work object, so there is nothing to group.`);
+  }
   // A work object shared with a sentence outside these steps cannot be in two groups. Naming it in
   // the same call decides that it belongs here. A group it already sits in decides too, unless that
   // group is the one the new box nests in, or one around it, which holds its other sentences as well.
@@ -287,7 +294,7 @@ export function membersOfSteps(story: Story, steps: number[], named: string[] = 
   if (new Set(homes).size > 1 && outside !== undefined) {
     const index = homes.findIndex((home) => home !== undefined);
     throw new StoryError(
-      `"${nameOf(outside)}" is in no group while "${nameOf(members[index] as string)}" is in the group "${nameOf(homes[index] as string)}", so the new box would cross it. Leave "${nameOf(outside)}" out, or group by members instead.`,
+      `"${nameOf(outside)}" is in no group while "${nameOf(members[index] as string)}" is in the group "${nameOf(homes[index] as string)}", so the new box would cross it. Leave "${nameOf(outside)}" out, or change or remove that group.`,
     );
   }
   if (new Set(homes).size > 1) {
@@ -295,13 +302,12 @@ export function membersOfSteps(story: Story, steps: number[], named: string[] = 
     const id = members[index] as string;
     const home = homes[index] as string;
     const blocker = blockerIn(home, [...ids, ...named], doc.elements);
-    const kind = (element: StoryElement) =>
-      isActor(element) ? 'the actor' : isWorkObject(element) ? 'the work object' : isGroup(element) ? 'the group' : 'the note';
+    const kind = (element: StoryElement) => (isActor(element) ? 'the actor' : isWorkObject(element) ? 'the work object' : 'the note');
     const holds = blocker
       ? `which also holds ${kind(blocker)} "${blocker.name || (blocker['text'] as string | undefined) || blocker.id}"`
       : 'while other work objects of these steps are in no group or another one';
     throw new StoryError(
-      `"${nameOf(id)}"${stepOf.has(id) ? ` in step ${stepOf.get(id)}` : ''} is in the group "${nameOf(home)}", ${holds}, so the new box would cross it. Change or remove that group, or group by members instead.`,
+      `"${nameOf(id)}"${stepOf.has(id) ? ` in step ${stepOf.get(id)}` : ''} is in the group "${nameOf(home)}", ${holds}, so the new box would cross it. Change or remove that group, or choose other steps.`,
     );
   }
   return members;

@@ -520,6 +520,32 @@ describe('autoLayout', () => {
     expectStableAfterReopening(story);
   });
 
+  it('keeps an actor beside deeply nested groups and its notes out of the outermost box', () => {
+    const story = buildStory({
+      title: 'Deep',
+      sentences: [
+        { actor: 'Clerk', activity: 'files', workObject: 'Form' },
+        { actor: 'Clerk', activity: 'checks', workObject: 'Order' },
+        { actor: 'Clerk', activity: 'books', workObject: 'Invoice' },
+        { actor: 'Clerk', activity: 'sends', workObject: 'Letter' },
+      ],
+      groups: [
+        { name: 'L4', steps: [1] },
+        { name: 'L3', steps: [1, 2] },
+        { name: 'L2', steps: [1, 2, 3] },
+        { name: 'L1', steps: [1, 2, 3, 4] },
+      ],
+      annotations: [{ text: 'Works part time and only on Mondays, Wednesdays and every other Friday.', attachTo: 'Clerk' }],
+    });
+    const elements = story.elements();
+    const outer = boundsOf(elements.find((element) => element.name === 'L1') as ShapeElement);
+    const clerk = boundsOf(elements.find((element) => element.name === 'Clerk') as ShapeElement);
+    const note = boundsOf(elements.find((element) => element.type === 'domainStory:textAnnotation') as ShapeElement);
+    expect(clerk.x + clerk.width).toBeLessThan(outer.x);
+    expect(note.x + note.width).toBeLessThan(outer.x);
+    expectStableAfterReopening(story);
+  });
+
   it('lays out a file whose groups named each other as parent', () => {
     const text = JSON.stringify({
       domain: { name: 'default', actors: {}, workObjects: {} },

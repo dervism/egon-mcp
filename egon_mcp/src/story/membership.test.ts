@@ -381,6 +381,9 @@ describe('taking groups in whole', () => {
       { type: 'domainStory:textAnnotation', id: 'n', text: 'about B', x: 1000, y: 900, width: 100, height: 30, parent: 'outer' },
       { type: 'domainStory:connection', id: 'c', source: 'b', target: 'n', waypoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }] },
     ]);
-    expect(takeWholeGroups(['inner', 'b'], elements)).toEqual(['outer']);
+    // Everything in "outer" is chosen: "a" with its group, and "b" with its note.
+    expect(takeWholeGroups(['a', 'b'], elements)).toEqual(['outer']);
+    // A named group is not taken up into the group around it when that would be the only member.
+    expect(takeWholeGroups(['inner', 'b'], elements)).toEqual(['inner', 'b']);
   });
 });

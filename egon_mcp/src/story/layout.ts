@@ -242,13 +242,21 @@ function layOut(story: Story): void {
   const outermost = groups
     .filter((group) => groupAncestors(group, byId).length === 0)
     .sort((a, b) => firstRank(a.id) - firstRank(b.id) || a.id.localeCompare(b.id));
+  // Actors placed beside a group take the first column, outside the box; when any group has
+  // such actors, every group block starts one column in, so the boxes line up. Nested boxes reach
+  // further left, so the blocks start further in when an actor or its notes would not fit.
+  const depthBelow = (groupId: string): number =>
+    Math.max(0, ...children(groupId).filter(isGroup).map((child) => 1 + depthBelow(child.id)));
+  const widest = Math.max(70, ...[...beside.keys()].map((id) => boundsOf(byId.get(id) as ShapeElement).width));
+  const deepest = Math.max(0, ...[...new Set(beside.values())].map(depthBelow));
+  let firstCol = beside.size > 0 ? 1 : 0;
+  while (firstCol > 0 && firstCol < MAX_COLUMNS - 1 && firstCol * CELL_WIDTH - GROUP_PADDING * (1 + deepest) < widest + 20) {
+    firstCol += 1;
+  }
   let blockRow = nextRow();
   const emptyGroups: string[] = [];
   for (const group of outermost) {
-    // Actors placed beside a group take the first column, outside the box; when any group has
-    // such actors, every group block starts one column in, so the boxes line up.
     const actors = [...beside].filter(([, home]) => home === group.id).map(([id]) => id).sort((a, b) => rank(a) - rank(b) || compareIds(a, b));
-    const firstCol = beside.size > 0 ? 1 : 0;
     const rows = blockRows(group.id, new Set(), MAX_COLUMNS - firstCol);
     if (rows.every((row) => row.ids.length === 0)) {
       emptyGroups.push(group.id);
@@ -256,8 +264,6 @@ function layOut(story: Story): void {
     }
     // The box's left edge is known ahead: the first member column, less the padding of every
     // nesting level. Notes are narrowed to the room before it and get as many rows as they need.
-    const depthBelow = (groupId: string): number =>
-      Math.max(0, ...children(groupId).filter(isGroup).map((child) => 1 + depthBelow(child.id)));
     const leftEdge = ORIGIN.x + firstCol * CELL_WIDTH - GROUP_PADDING * (1 + depthBelow(group.id));
     let besideRow = blockRow;
     for (const actor of actors) {
@@ -280,7 +286,7 @@ function layOut(story: Story): void {
   }
   // Groups without members get rows of their own at the very end.
   for (const id of emptyGroups) {
-    blockRow = placeRows([{ ids: [id], height: span(id).rows }, gap], blockRow, beside.size > 0 ? 1 : 0);
+    blockRow = placeRows([{ ids: [id], height: span(id).rows }, gap], blockRow, firstCol);
   }
 
   for (const [id, cell] of placed) {

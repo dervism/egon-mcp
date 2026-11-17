@@ -257,6 +257,16 @@ describe('egon-mcp server', () => {
     expect(describe('auto_layout')).toMatch(/A note goes into the group of the element it is attached to/);
   });
 
+  it('refuses steps together with x and y, since the box is fitted around the steps', async () => {
+    await ok('build_story', {
+      title: 'Steps box',
+      sentences: [{ actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] }],
+    });
+    const result = await call('add_group', { storyId: 'steps-box', name: 'Intake', steps: [1], x: 0, y: 0, width: 2000, height: 1000 });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toMatch(/steps fit the box around their work objects/);
+  });
+
   it('warns on save about shapes that will join a group when the file is opened again', async () => {
     await ok('create_story', { title: 'Covered' });
     await ok('add_actor', { storyId: 'covered', name: 'A', x: 100, y: 100 });

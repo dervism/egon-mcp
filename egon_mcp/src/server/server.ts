@@ -85,7 +85,7 @@ const steps = z
   .array(z.number().int().positive())
   .min(1)
   .describe(
-    'Step numbers as narrate_story shows them (parallel sentences share one): the work objects of those sentences go into the group and their actors stay outside, the usual way to mark a subdomain. An existing group made only of the work objects of these steps, their notes and notes on the group goes in whole. If the work objects all sit in one group, the new group nests inside it and that group grows to fit. A work object that also serves a sentence outside these steps is refused unless you pass it in members too (by name, meaning the copy these steps use, or by id), which puts it here; one that already sits in a group other than the one the new group nests in, or one around that, stays where it is. Also refused: steps that are exactly an existing group, and work objects spread over different groups, where the new box would cross one.',
+    'Step numbers as narrate_story shows them (parallel sentences share one): the work objects of those sentences go into the group and their actors stay outside, the usual way to mark a subdomain. An existing group made only of the work objects of these steps, their notes and notes on the group goes in whole. If the work objects all sit in one group, the new group nests inside it and that group grows to fit. A work object that also serves a sentence outside these steps is refused unless you pass it in members too (by name, meaning the copy these steps use, or by id), which puts it here; one that already sits in a group other than the one the new group nests in, or one around that, stays where it is. Also refused: steps that are exactly an existing group, steps without a work object, work objects spread over different groups, where the new box would cross one, and steps together with x and y.',
   );
 const groupSpec = z.object({
   name: z.string().describe('Label of the box; every group needs members or steps.'),
@@ -173,7 +173,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
         actors: z.array(shapeSpec).optional().describe('Actors to create first, to choose their icon or color.'),
         workObjects: z.array(shapeSpec).optional().describe('Work objects to create first, to choose their icon or color. The first sentence that names one uses it, and a workObjectIcon on that sentence replaces its icon; later sentences draw new ones with the same icon and color.'),
         sentences: z.array(z.object(sentenceSchema)).min(1).describe('The steps of the story in order.'),
-        groups: z.array(groupSpec).optional().describe('Boxes around elements that belong together.'),
+        groups: z.array(groupSpec).optional().describe('Boxes around elements that belong together, by members or by steps as add_group takes them. A group that names members next to its steps is added first, so the groups of other steps leave a shared work object it names where it is, whatever the order of the list.'),
         annotations: z.array(annotationSpec).optional().describe('Notes for variations, rules and open questions.'),
         layout: z.boolean().optional().describe('Arrange elements automatically (default true).'),
       },
@@ -438,8 +438,11 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
         height: z.number().positive().optional().describe('Box height with x and y, at most a billion pixels; default 200.'),
       },
     },
-    run(({ storyId: id, name, members, steps: numbers, color: picked, x: left, y: top, width, height }) =>
-      json({
+    run(({ storyId: id, name, members, steps: numbers, color: picked, x: left, y: top, width, height }) => {
+      if (numbers && (left !== undefined || top !== undefined)) {
+        throw new StoryError('The steps fit the box around their work objects, and a box drawn with x and y would take in their actors too. Leave out x, y, width and height, or pass members instead of steps.');
+      }
+      return json({
         ...edit(id, (entry) =>
           entry.story.addGroup({
             name,
@@ -457,8 +460,8 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
             ...(height !== undefined ? { height } : {}),
           }),
         ),
-      }),
-    ),
+      });
+    }),
   );
 
   server.registerTool(

@@ -5,7 +5,7 @@ import { parseStoryFile } from '../egon/parse.js';
 import { toEgnJson } from '../egon/serialize.js';
 import { isActor, isWorkObject } from '../egon/types.js';
 import { narrate } from './narrate.js';
-import { membersOfSteps, addSentence, buildStory } from './sentences.js';
+import { membersOfSteps, namedForSteps, addSentence, buildStory } from './sentences.js';
 import { Story } from './story.js';
 import { validateStory } from './validate.js';
 
@@ -599,3 +599,91 @@ describe('buildStory', () => {
   });
 });
 
+describe('grouping edge cases', () => {
+  const parentOf = (story: Story, id: string) => story.get(id)?.['parent'];
+
+  it('takes a nested group whole into an x/y box drawn inside the group around it', () => {
+    const story = Story.create({ title: 'T' });
+    const g = story.addGroup({ name: 'G', x: 0, y: 0, width: 3000, height: 3000 });
+    const a = story.addWorkObject({ name: 'A', x: 100, y: 100 });
+    const h = story.addGroup({ name: 'H', x: 500, y: 500, width: 400, height: 300 });
+    const b = story.addWorkObject({ name: 'B', x: 550, y: 550 });
+    expect([parentOf(story, a.id), parentOf(story, h.id), parentOf(story, b.id)]).toEqual([g.id, g.id, h.id]);
+    const sub = story.addGroup({ name: 'Sub', members: [a.id, b.id], x: 50, y: 50, width: 2000, height: 2000 });
+    expect([parentOf(story, sub.id), parentOf(story, a.id), parentOf(story, h.id), parentOf(story, b.id)]).toEqual([g.id, sub.id, sub.id, h.id]);
+    expect(validateStory(story.toDocument()).filter((issue) => issue.code === 'group-encloses-non-member')).toEqual([]);
+  });
+
+  it('finds the group an x/y box sits in by the size of the box', () => {
+    const story = Story.create({ title: 'T' });
+    const g = story.addGroup({ name: 'G', x: 0, y: 0, width: 250, height: 200 });
+    const a = story.addWorkObject({ name: 'A', x: 20, y: 20 });
+    const sub = story.addGroup({ name: 'Sub', members: [a.id], x: 10, y: 10, width: 150, height: 150 });
+    expect([parentOf(story, sub.id), parentOf(story, a.id)]).toEqual([g.id, sub.id]);
+  });
+
+  it('settles a shared work object named by a later group, whatever the order of the groups', () => {
+    const sentences = [
+      { actor: 'Customer', activity: 'brings', workObject: 'Bike', to: [{ activity: 'to', actor: 'Mechanic' }] },
+      { actor: 'Mechanic', activity: 'notes', workObject: 'Part request', to: [{ activity: 'for', actor: 'Clerk' }] },
+      { actor: 'Clerk', activity: 'reads', workObject: 'Part request', reuseWorkObject: true },
+      { actor: 'Clerk', activity: 'orders', workObject: 'Part' },
+    ];
+    const intake = { name: 'Intake', steps: [1, 2], members: ['Part request'] };
+    const purchasing = { name: 'Purchasing', steps: [3, 4] };
+    const homes = (story: Story) => {
+      const nameOf = (id: unknown) => story.elements().find((element) => element.id === id)?.name;
+      return story.elements().filter(isWorkObject).map((element) => `${element.name}:${nameOf(element['parent'])}`).sort();
+    };
+    const first = buildStory({ title: 'T', sentences, groups: [intake, purchasing] });
+    const second = buildStory({ title: 'T', sentences, groups: [purchasing, intake] });
+    expect(homes(second)).toEqual(homes(first));
+    expect(homes(first)).toContain('Part request:Intake');
+  });
+
+  it('refuses a name that none of the steps use', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [
+        { actor: 'Mechanic', activity: 'checks', workObject: 'Bike' },
+        { actor: 'Mechanic', activity: 'cleans', workObject: 'Bike' },
+        { actor: 'Clerk', activity: 'orders', workObject: 'Part' },
+      ],
+    });
+    expect(() => namedForSteps(story, ['Bike'], [3])).toThrow(/"Bike" names 2 elements and these steps use none of them/);
+  });
+
+  it('nests a box around a named group and a work object in the group that holds both', () => {
+    const story = Story.create({ title: 'T' });
+    const q = story.addGroup({ name: 'Q', x: 0, y: 0, width: 2000, height: 2000 });
+    const p = story.addGroup({ name: 'P', x: 100, y: 100, width: 400, height: 300 });
+    const inP = story.addWorkObject({ name: 'In P', x: 150, y: 150 });
+    const x = story.addWorkObject({ name: 'X', x: 800, y: 800 });
+    expect([parentOf(story, p.id), parentOf(story, inP.id), parentOf(story, x.id)]).toEqual([q.id, p.id, q.id]);
+    const both = story.addGroup({ name: 'Both', members: [p.id, x.id] });
+    expect([parentOf(story, both.id), parentOf(story, p.id), parentOf(story, x.id)]).toEqual([q.id, both.id, both.id]);
+  });
+
+  it('says why a group nobody named goes into an x/y box whole', () => {
+    const story = Story.create({ title: 'T' });
+    const a = story.addWorkObject({ name: 'A', x: 100, y: 100 });
+    story.addGroup({ name: 'G', members: [a.id] });
+    expect(() => story.addGroup({ name: 'Sub', members: [a.id], x: 2000, y: 0, width: 120, height: 120 })).toThrow(
+      /"G" goes into the new box whole, since everything in it is among the members/,
+    );
+  });
+
+  it('says so when the steps have no work object', () => {
+    const text = JSON.stringify({
+      domain: { name: 'default', actors: {}, workObjects: {} },
+      dst: [
+        { type: 'domainStory:actorPerson', id: 'a', name: 'Clerk', x: 100, y: 100 },
+        { type: 'domainStory:activity', id: 'c1', name: 'files', number: 1, source: 'a', target: 'gone', waypoints: [] },
+        { info: '' },
+        { version: '3.2.1' },
+      ],
+    });
+    const story = Story.fromDocument(parseStoryFile(text, 'story.egn'));
+    expect(() => membersOfSteps(story, [1])).toThrow(/Step 1 has no work object/);
+  });
+});

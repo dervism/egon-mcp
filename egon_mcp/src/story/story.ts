@@ -251,21 +251,19 @@ export class Story {
     // A name shared by several elements (work objects repeat per sentence) groups all of them.
     const resolved = (input.members ?? []).flatMap((ref) => this.resolveShapes(ref));
     const given = this.givenPosition(input);
-    // Every group that is all among the members goes in whole, so none is left empty, and a member
-    // inside another member goes along with it.
-    let ids = takeWholeGroups(
-      resolved.map((member) => member.id),
-      this.doc.elements,
-    );
     // A box drawn with x and y inside a group may hold that group's own contents; it does not take
     // up the group it sits in, or one around it.
-    if (given) {
-      const host = groupAt({ ...given, type: GROUP_TYPE, id: '', name: '' } as StoryElement, this.doc.elements);
-      const hosts = host ? [host.id, ...groupAncestors(host, new Map(this.doc.elements.map((element) => [element.id, element])))] : [];
-      if (ids.some((id) => hosts.includes(id))) {
-        ids = resolved.map((member) => member.id);
-      }
-    }
+    const host = given
+      ? groupAt({ ...given, width: input.width ?? 300, height: input.height ?? 200, type: GROUP_TYPE, id: '', name: '' } as StoryElement, this.doc.elements)
+      : undefined;
+    const hosts = host ? [host.id, ...groupAncestors(host, new Map(this.doc.elements.map((element) => [element.id, element])))] : [];
+    // Every other group that is all among the members goes in whole, so none is left empty, and a
+    // member inside another member goes along with it.
+    const ids = takeWholeGroups(
+      resolved.map((member) => member.id),
+      this.doc.elements,
+      hosts,
+    );
     const members = ids.map((id) => this.find(id) as ShapeElement);
     // A note on a member that sat in the same group as the member moves along with it.
     const notesAlong = this.doc.elements.filter(isConnection).flatMap((link) => {
@@ -304,8 +302,9 @@ export class Story {
     for (const member of members.filter(isGroup)) {
       const box = boundsOf(member);
       if (box.width * box.height >= bounds.width * bounds.height) {
+        const named = resolved.some((candidate) => candidate.id === member.id);
         throw new StoryError(
-          `The group "${member.name || member.id}" goes into the new box whole, but it is not smaller than the box. Draw a larger box, or leave out x, y, width and height to fit the box around the members.`,
+          `The group "${member.name || member.id}" goes into the new box whole${named ? '' : ', since everything in it is among the members'}, but it is not smaller than the box. Draw a larger box, or leave out x, y, width and height to fit the box around the members.`,
         );
       }
     }

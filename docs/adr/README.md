@@ -16,7 +16,8 @@ Each file records one decision for egon-mcp. Fields hold one line each, two sent
 | [0010](0010-sentence-level-tools.md) | Offer sentence-level tools next to element-level tools | Accepted, amended by 0013 |
 | [0011](0011-skill-lives-in-repo.md) | Keep the agent skill in this repository | Accepted |
 | [0012](0012-independent-reviewer-agent.md) | Review changes with an independent agent | Accepted |
-| [0013](0013-new-work-object-per-sentence.md) | Draw a new work object for each sentence | Accepted |
+| [0013](0013-new-work-object-per-sentence.md) | Draw a new work object for each sentence | Accepted, amended by 0017 |
 | [0014](0014-license-gpl-3-or-later.md) | License egon-mcp under GPL-3.0-or-later | Accepted |
 | [0015](0015-replace-files-only-while-unchanged.md) | Replace files only while they hold what the story last saw | Accepted |
-| [0016](0016-group-membership-by-position.md) | Decide group membership by position, as Egon does | Accepted |
+| [0016](0016-group-membership-by-position.md) | Decide group membership by position, as Egon does | Accepted, amended by 0017 |
+| [0017](0017-group-by-steps-and-whole-groups.md) | Group by steps, and take existing groups in whole | Accepted |
