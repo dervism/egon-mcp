@@ -6,7 +6,6 @@ import {
   type StoryDocument,
   type StoryElement,
 } from '../egon/types.js';
-import { compareKeys, readingPosition } from './geometry.js';
 
 export interface NarrativeStep {
   number: number;
@@ -25,16 +24,13 @@ export interface NarrativeStep {
  * activities until it reaches an actor, so "Customer tells Order to Clerk"
  * is one sentence. A work object reached in several steps repeats its onward
  * activities in each of them, as in Egon. Sentences that share a number, and
- * the onward arrows of one work object, are read in the order they are drawn:
- * top to bottom, then left to right. Element order cannot decide it, because
- * Egon and save_story write elements sorted by id.
+ * the onward arrows of one work object, are read in id order, which is the
+ * order they were added in: new ids count up, and Egon and save_story write
+ * elements sorted by id, so element order says nothing once a file is saved.
  */
 export function narrate(doc: StoryDocument): NarrativeStep[] {
   const byId = new Map(doc.elements.map((element) => [element.id, element]));
-  const drawn = (activity: ActivityElement) => [...readingPosition(byId.get(activity.source)), ...readingPosition(byId.get(activity.target))];
-  const activities = doc.elements
-    .filter(isActivity)
-    .sort((a, b) => compareKeys([...drawn(a), a.id], [...drawn(b), b.id]));
+  const activities = doc.elements.filter(isActivity).sort((a, b) => compareIds(a.id, b.id));
   const numbered = activities
     .filter((activity) => typeof activity.number === 'number' && isActorId(byId, activity.source))
     .sort((a, b) => (a.number as number) - (b.number as number));
@@ -112,6 +108,13 @@ function continueFrom(
   ordered.push(...leading);
   const joined = ordered.map((part, index) => (index === 0 ? part : startsWithAnd(part) ? ` ${part}` : ` and ${part}`)).join('');
   return `${displayName(element)} ${joined}`;
+}
+
+/** Compares ids such as connection_0042 by their number, so connection_10000 comes after connection_9999. */
+export function compareIds(a: string, b: string): number {
+  const [, prefixA = a, numberA = ''] = /^(.*?)(\d+)$/.exec(a) ?? [];
+  const [, prefixB = b, numberB = ''] = /^(.*?)(\d+)$/.exec(b) ?? [];
+  return prefixA.localeCompare(prefixB) || Number(numberA || -1) - Number(numberB || -1) || a.localeCompare(b);
 }
 
 function isActorId(byId: Map<string, StoryElement>, id: string): boolean {

@@ -29,6 +29,32 @@ describe('toEgnJson', () => {
     expect(json.domainStory).toMatchObject({ title: 'Order pizza', description: 'Happy path', version: '4.0.0' });
   });
 
+  it('writes a group after the group it is in, since Egon nests a group only in one it has already read', () => {
+    const doc = Story.fromDocument(
+      parseStoryFile(
+        JSON.stringify({
+          domain: { name: 'default', actors: {}, workObjects: {} },
+          dst: [
+            { type: 'domainStory:group', id: 'shape_9000', name: 'Outer', x: 0, y: 0, width: 1000, height: 1000 },
+            { type: 'domainStory:group', id: 'shape_5000', name: 'Middle', x: 50, y: 50, width: 600, height: 600, parent: 'shape_9000' },
+            { type: 'domainStory:group', id: 'shape_1000', name: 'Inner', x: 100, y: 100, width: 300, height: 300, parent: 'shape_5000' },
+            { type: 'domainStory:actorPerson', id: 'shape_0001', name: 'A', x: 150, y: 150, parent: 'shape_1000' },
+            { info: '' },
+            { version: '3.2.1' },
+          ],
+        }),
+        'story.egn',
+      ),
+    ).toDocument();
+    for (const format of ['egon3', 'egon4'] as const) {
+      const json = JSON.parse(toEgnJson(doc, { format }));
+      const elements: { id: string }[] = format === 'egon3' ? json.dst.slice(0, -2) : json.domainStory.businessObjects;
+      const at = (id: string) => elements.findIndex((element) => element.id === id);
+      expect(at('shape_9000')).toBeLessThan(at('shape_5000'));
+      expect(at('shape_5000')).toBeLessThan(at('shape_1000'));
+    }
+  });
+
   it('sorts business objects by id like Egon does on export', () => {
     for (const format of ['egon3', 'egon4'] as const) {
       const json = JSON.parse(toEgnJson(sampleStory().toDocument(), { format }));

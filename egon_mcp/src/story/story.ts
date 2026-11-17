@@ -221,7 +221,10 @@ export class Story {
     let bounds: Bounds;
     // A name shared by several elements (work objects repeat per sentence) groups all of them.
     const members = (input.members ?? []).flatMap((ref) => this.resolveShapes(ref));
-    const fitted = members.length > 0 && input.x === undefined && input.y === undefined;
+    if ((input.x === undefined) !== (input.y === undefined)) {
+      throw new StoryError('Give both x and y for the box, or neither.');
+    }
+    const fitted = members.length > 0 && input.x === undefined;
     if (fitted) {
       bounds = enclose(members.map((member) => boundsOf(member)), GROUP_PADDING);
     } else {
@@ -291,7 +294,17 @@ export class Story {
       number: DEFAULT_ANNOTATION_SIZE.height,
     };
     this.doc.elements.push(annotation);
-    joinGroupAt(annotation, this.doc.elements);
+    if (anchor && (input.x === undefined || input.y === undefined)) {
+      // A note placed next to its element belongs with that element, even if it lands in another group's box.
+      const anchorGroup = this.doc.elements.find((element) => element.id === anchor['parent']);
+      if (isGroup(anchor)) {
+        annotation['parent'] = anchor.id;
+      } else if (anchorGroup && isGroup(anchorGroup)) {
+        annotation['parent'] = anchorGroup.id;
+      }
+    } else {
+      joinGroupAt(annotation, this.doc.elements);
+    }
     if (!anchor) {
       return { annotation: structuredClone(annotation) };
     }
@@ -360,6 +373,14 @@ export class Story {
       // As in Egon, a shape moved into a group's box joins that group, and one moved out leaves it.
       joinGroupAt(shape, this.doc.elements);
       if (isGroup(shape)) {
+        // A group can only hold smaller groups.
+        const box = boundsOf(shape);
+        for (const child of this.doc.elements.filter((candidate) => isGroup(candidate) && candidate['parent'] === shape.id)) {
+          const inner = boundsOf(child as ShapeElement);
+          if (inner.width * inner.height >= box.width * box.height) {
+            joinGroupAt(child, this.doc.elements);
+          }
+        }
         takeIn(shape, this.doc.elements);
       }
     }
@@ -419,14 +440,10 @@ export class Story {
     }
     const removed = this.doc.elements.filter((candidate) => removedIds.has(candidate.id));
     this.doc.elements = this.doc.elements.filter((candidate) => !removedIds.has(candidate.id));
-    // As in Egon, the members of a removed group go to the group around it.
+    // The members of a removed group go to the group whose box holds them, so the file reopens the same.
     for (const other of this.doc.elements) {
       if (other['parent'] === element.id) {
-        if (typeof element['parent'] === 'string' && isGroup(element)) {
-          other['parent'] = element['parent'];
-        } else {
-          delete other['parent'];
-        }
+        joinGroupAt(other, this.doc.elements);
       }
     }
     if (removed.some((candidate) => isActivity(candidate))) {
@@ -663,32 +680,35 @@ export class Story {
       .filter((element) => !isEdge(element) && !isGroup(element))
       .map((element) => boundsOf(element as ShapeElement));
     const groups = this.doc.elements.filter(isGroup);
-    for (let index = 0; ; index += 1) {
-      const cell = {
-        x: GRID.originX + (index % GRID.columns) * GRID.cellWidth,
-        y: GRID.originY + Math.floor(index / GRID.columns) * GRID.cellHeight,
-        width: 75,
-        height: 75,
-      };
-      // A cell inside a group's box would put the new shape into that group.
-      if (!occupied.some((bounds) => intersects(bounds, cell, 30)) && !groups.some((group) => cornerInside(cell, group))) {
-        return { x: cell.x, y: cell.y };
+    for (let row = 0; ; ) {
+      // The first row where a column blocked only by group boxes can be free again.
+      let nextRow = Number.POSITIVE_INFINITY;
+      for (let column = 0; column < GRID.columns; column += 1) {
+        const cell = { x: GRID.originX + column * GRID.cellWidth, y: GRID.originY + row * GRID.cellHeight, width: 75, height: 75 };
+        // A cell inside a group's box would put the new shape into that group.
+        const covering = groups.filter((group) => cornerInside(cell, group));
+        if (covering.length > 0) {
+          const bottom = Math.min(...covering.map((group) => boundsOf(group).y + boundsOf(group).height));
+          nextRow = Math.min(nextRow, Math.floor((bottom - GRID.originY) / GRID.cellHeight) + 1);
+        } else if (occupied.some((bounds) => intersects(bounds, cell, 30))) {
+          nextRow = row + 1;
+        } else {
+          return { x: cell.x, y: cell.y };
+        }
       }
+      row = Math.max(row + 1, nextRow);
     }
   }
 
+  /**
+   * The next id above every id of that kind in the story. Egon and save_story
+   * write elements sorted by id, so rising ids keep the order they were added
+   * in, which the narrator uses for sentences that share a number.
+   */
   private newId(kind: 'shape' | 'connection'): string {
-    const taken = new Set(this.doc.elements.map((element) => element.id));
-    for (let digits = 4; ; digits += 1) {
-      for (let attempt = 0; attempt < 50; attempt += 1) {
-        const id = `${kind}_${Math.floor(Math.random() * 10 ** digits)
-          .toString()
-          .padStart(digits, '0')}`;
-        if (!taken.has(id)) {
-          return id;
-        }
-      }
-    }
+    const pattern = new RegExp(`^${kind}_(\\d+)$`);
+    const highest = Math.max(0, ...this.doc.elements.map((element) => Number(pattern.exec(element.id)?.[1] ?? 0)));
+    return `${kind}_${String(highest + 1).padStart(4, '0')}`;
   }
 
   private checkColor(color: string): string {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Story } from './story.js';
 import { narrate, narrativeMarkdown } from './narrate.js';
+import { buildStory } from './sentences.js';
 
 function pizza() {
   const story = Story.create({ title: 'Order pizza', description: 'Happy path' });
@@ -71,18 +72,18 @@ describe('narrate', () => {
     expect(narrate(story.toDocument())[0]?.sentence).toBe('Clerk sends Invoice to Customer And Accountant and android Phone.');
   });
 
-  it('orders parallel sentences and onward arrows by where they are drawn, so saving does not change the reading', () => {
-    // Egon and save_story write elements sorted by id, which says nothing about the story.
+  it('reads parallel sentences and onward arrows in the order they were added, whatever the element order or drawing', () => {
+    // Egon and save_story write elements sorted by id, and auto_layout moves shapes.
     const story = Story.create({ title: 'T' });
-    const leasing = story.addActor({ name: 'Leasing agent', x: 0, y: 0 });
-    const offer = story.addWorkObject({ name: 'Offer', x: 200, y: 0 });
-    const term = story.addWorkObject({ name: 'Term', x: 400, y: 200 });
-    const rate = story.addWorkObject({ name: 'Rate', x: 400, y: 0 });
-    const customer = story.addActor({ name: 'Customer', x: 0, y: 400 });
-    const signed = story.addWorkObject({ name: 'Signature', x: 200, y: 400 });
+    const leasing = story.addActor({ name: 'Leasing agent', x: 0, y: 400 });
+    const offer = story.addWorkObject({ name: 'Offer', x: 200, y: 400 });
+    const rate = story.addWorkObject({ name: 'Rate', x: 400, y: 200 });
+    const term = story.addWorkObject({ name: 'Term', x: 400, y: 0 });
+    const customer = story.addActor({ name: 'Customer', x: 0, y: 0 });
+    const signed = story.addWorkObject({ name: 'Signature', x: 200, y: 0 });
     story.addActivity({ from: leasing.id, to: offer.id, label: 'prepares' });
-    story.addActivity({ from: offer.id, to: term.id, label: 'and' });
     story.addActivity({ from: offer.id, to: rate.id, label: 'with' });
+    story.addActivity({ from: offer.id, to: term.id, label: 'and' });
     story.addActivity({ from: customer.id, to: signed.id, label: 'gives', number: 1 });
     const doc = story.toDocument();
     const expected = ['Leasing agent prepares Offer with Rate and Term. Customer gives Signature.'];
@@ -90,6 +91,26 @@ describe('narrate', () => {
     for (const order of [[...doc.elements].reverse(), [...doc.elements].sort((a, b) => b.id.localeCompare(a.id))]) {
       expect(narrate({ ...doc, elements: order }).map((step) => step.sentence)).toEqual(expected);
     }
+  });
+
+  it('reads sentences built with build_story in the order the agent wrote them', () => {
+    const recipients = buildStory({
+      title: 'Copies',
+      sentences: [
+        { actor: 'Boss', activity: 'assigns', workObject: 'Case', to: [{ activity: 'to', actor: 'Clerk' }] },
+        { actor: 'Clerk', activity: 'sends', workObject: 'Invoice', to: [{ activity: 'to', actor: 'Customer' }, { activity: 'with a copy to', actor: 'Boss' }] },
+      ],
+    });
+    expect(narrate(recipients.toDocument())[1]?.sentence).toBe('Clerk sends Invoice to Customer and with a copy to Boss.');
+    const parallel = buildStory({
+      title: 'Pizza',
+      sentences: [
+        { actor: 'Customer', activity: 'orders', workObject: 'Pizza', to: [{ activity: 'from', actor: 'Clerk' }] },
+        { actor: 'Clerk', activity: 'bakes', workObject: 'Pizza' },
+        { actor: 'Customer', activity: 'pays', workObject: 'Money', to: [{ activity: 'to', actor: 'Clerk' }], number: 2 },
+      ],
+    });
+    expect(narrate(parallel.toDocument())[1]?.sentence).toBe('Clerk bakes Pizza. Customer pays Money to Clerk.');
   });
 
   it('lists the elements that take part in each step', () => {

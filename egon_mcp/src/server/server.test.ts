@@ -252,13 +252,24 @@ describe('egon-mcp server', () => {
     const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';
     expect(describe('auto_layout')).toMatch(/keeps the members of each group together/);
     expect(describe('validate_story')).toMatch(/group boxes that enclose shapes outside the group/);
-    expect(describe('auto_layout')).toMatch(/A note on a group member joins that group/);
+    expect(describe('auto_layout')).toMatch(/A note goes into the group of the element it is attached to/);
+  });
+
+  it('warns on save about shapes that will join a group when the file is opened again', async () => {
+    await ok('create_story', { title: 'Covered' });
+    await ok('add_actor', { storyId: 'covered', name: 'A', x: 100, y: 100 });
+    await ok('add_work_object', { storyId: 'covered', name: 'W', x: 150, y: 150 });
+    await ok('add_group', { storyId: 'covered', name: 'G', members: ['A'] });
+    const saved = await ok('save_story', { storyId: 'covered' });
+    expect(saved['groupChangesOnOpen']).toEqual([expect.stringContaining('"W"')]);
   });
 
   it('tells agents how shapes get into a group', async () => {
     const { tools } = await client.listTools();
     const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? '';
     expect(describe('add_group')).toMatch(/fits around them and holds only them/);
+    expect(describe('add_group')).toMatch(/join the group when the file is opened again/);
+    expect(describe('save_story')).toMatch(/groupChangesOnOpen/);
     expect(describe('add_group')).toMatch(/takes in every shape whose top-left corner lies inside/);
     expect(describe('update_element')).toMatch(/joins the group whose box it is moved into/);
     expect(describe('update_element')).toMatch(/Moving a group moves everything in it/);

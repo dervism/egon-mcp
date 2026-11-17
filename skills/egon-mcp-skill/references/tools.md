@@ -63,7 +63,7 @@ Closes an open story without saving it. Save first with save_story if it has uns
 
 ## save_story
 
-Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". An existing file is only replaced if this story opened or wrote it and nobody changed it since, or with overwrite: true.
+Writes a story into the workspace directory. groupChangesOnOpen in the result lists shapes inside a group box that are not in the group; opening the file again puts them in. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". An existing file is only replaced if this story opened or wrote it and nobody changed it since, or with overwrite: true.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -173,18 +173,18 @@ Adds one domain story sentence as a new step: actor, verb, work object and optio
 
 ## add_group
 
-Draws a box around elements that belong together, such as a department or subdomain. With members, the box fits around them and holds only them. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.
+Draws a box around elements that belong together, such as a department or subdomain. With members and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and they join the group when the file is opened again. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `storyId` | string | yes | Id of an open story, as returned by create_story, build_story, open_story or list_stories. |
 | `name` | string | yes | Label in the top-left corner of the box. |
-| `members` | array of string | no | Elements to put inside; the box fits around them. |
+| `members` | array of string | no | Elements to put in the group, even outside the box. Without x and y the box fits around them. |
 | `color` | string | no | Color as hex, for example #1E88E5. |
-| `x` | number | no | Left edge in Egon canvas pixels. Omit to place the element automatically. |
-| `y` | number | no | Top edge in Egon canvas pixels. Omit to place the element automatically. |
-| `width` | number | no | Box width when no members are given. |
-| `height` | number | no | Box height when no members are given. |
+| `x` | number | no | Left edge of the box. Give x and y together, or neither to fit the box around the members. |
+| `y` | number | no | Top edge of the box. Give x and y together. |
+| `width` | number | no | Box width with x and y; default 300. |
+| `height` | number | no | Box height with x and y; default 200. |
 
 ## add_annotation
 
@@ -235,7 +235,7 @@ Closes gaps in the step numbers (1, 2, 3 ...) while keeping their order and para
 
 ## auto_layout
 
-Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, refits the group boxes, moves other annotations next to their element and moves groups without members to the end. A note on a group member joins that group, so the story reopens with the same groups. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.
+Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, refits the group boxes, moves other annotations next to their element and moves groups without members to the end. A note goes into the group of the element it is attached to, a note on a group into that group, and notes on nothing go after the story, so the story reopens with the same groups. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

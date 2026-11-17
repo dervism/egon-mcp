@@ -262,6 +262,74 @@ describe('autoLayout', () => {
     expect(positions(reversed)).toEqual(positions(story));
   });
 
+  it('changes nothing on a second run when parallel steps were placed by hand', () => {
+    const story = Story.create({ title: 'T' });
+    const at = (name: string, x: number, y: number, actor = true) => (actor ? story.addActor({ name, x, y }) : story.addWorkObject({ name, x, y })).id;
+    const [a, w, b, w2, c, w3, d, w4] = [
+      at('A', 0, 0),
+      at('W', 200, 0, false),
+      at('B', 400, 0),
+      at('W2', 600, 0, false),
+      at('C', 800, 0),
+      at('W3', 1000, 0, false),
+      at('D', 0, -500),
+      at('W4', 200, -500, false),
+    ] as string[];
+    story.addActivity({ from: a as string, to: w as string, label: 'gives' });
+    story.addActivity({ from: w as string, to: b as string, label: 'to' });
+    story.addActivity({ from: b as string, to: w2 as string, label: 'gives' });
+    story.addActivity({ from: w2 as string, to: c as string, label: 'to' });
+    story.addActivity({ from: c as string, to: w3 as string, label: 'files' });
+    story.addActivity({ from: d as string, to: w4 as string, label: 'signs', number: 3 });
+    autoLayout(story);
+    const before = JSON.stringify(story.toDocument());
+    autoLayout(story);
+    expect(JSON.stringify(story.toDocument())).toBe(before);
+  });
+
+  it('moves a note that belongs to no element out of group boxes', () => {
+    const story = Story.create({ title: 'T' });
+    const a = story.addActor({ name: 'A', x: 0, y: 0 });
+    const w = story.addWorkObject({ name: 'W', x: 200, y: 0 });
+    const b = story.addActor({ name: 'B', x: 0, y: 1000 });
+    const w2 = story.addWorkObject({ name: 'W2', x: 200, y: 1000 });
+    story.addActivity({ from: a.id, to: w.id, label: 'writes' });
+    story.addActivity({ from: b.id, to: w2.id, label: 'reads' });
+    story.addAnnotation({ text: 'a free note', x: 100, y: 330 });
+    story.addGroup({ name: 'G', members: [b.id, w2.id] });
+    autoLayout(story);
+    expect(groupIssues(story)).toEqual([]);
+    expect(story.elements().find((element) => element['text'] === 'a free note')?.['parent']).toBeUndefined();
+    expectStableAfterReopening(story);
+  });
+
+  it('keeps a note on a group with that group', () => {
+    const story = buildStory({ title: 'T', sentences: [{ actor: 'Clerk', activity: 'fills', workObject: 'Form' }, { actor: 'Boss', activity: 'signs', workObject: 'Form' }] });
+    const group = story.addGroup({ name: 'Office', members: ['Boss'] });
+    story.addAnnotation({ text: 'second floor', attachTo: group.id });
+    autoLayout(story);
+    expect(groupIssues(story)).toEqual([]);
+    expect(membersOutsideTheirBox(story)).toEqual([]);
+    expectStableAfterReopening(story);
+  });
+
+  it('keeps a note with the element it is attached to when it lands in another group\'s box', () => {
+    const story = buildStory({
+      title: 'T',
+      sentences: [
+        { actor: 'A', activity: 'writes', workObject: 'X' },
+        { actor: 'B', activity: 'reads', workObject: 'Y' },
+        { actor: 'C', activity: 'files', workObject: 'Z' },
+        { actor: 'D', activity: 'signs', workObject: 'Q' },
+      ],
+      groups: [{ name: 'Writers', members: ['A', 'X'] }],
+      annotations: [{ text: 'D only on Mondays', attachTo: 'D' }],
+    });
+    expect(story.elements().find((element) => element['text'] === 'D only on Mondays')?.['parent']).toBeUndefined();
+    expect(groupIssues(story)).toEqual([]);
+    expectStableAfterReopening(story);
+  });
+
   it('lays out a file whose groups named each other as parent', () => {
     const text = JSON.stringify({
       domain: { name: 'default', actors: {}, workObjects: {} },

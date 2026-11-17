@@ -83,8 +83,13 @@ describe('group membership in an opened file', () => {
     expect(validateStory(story.toDocument()).map((issue) => issue.code)).not.toContain('group-encloses-non-member');
   });
 
+  it('treats a parent that names no group as missing, as Egon does', () => {
+    const story = opened([group('g', 0, 0, 300, 200), actor('a', 50, 50, 'shape_gone')]);
+    expect(parentOf(story, 'a')).toBe('g');
+  });
+
   it('breaks parent loops: a group that names itself, and two groups that name each other', () => {
-    // Drawing A inside B and then resizing A around B leaves B.parent = A in Egon.
+    // Drawing A inside B and then resizing A around B leaves A.parent = B in Egon.
     const story = opened([group('self', 2000, 0, 300, 300, 'self'), group('outer', 0, 0, 1000, 1000, 'inner'), group('inner', 100, 100, 300, 300)]);
     expect(['self', 'outer', 'inner'].map((id) => parentOf(story, id))).toEqual([undefined, undefined, 'outer']);
   });
@@ -115,6 +120,46 @@ describe('group membership while editing', () => {
     const box = story.addGroup({ name: 'G', members: [a.id] });
     expect([parentOf(story, 'A'), parentOf(story, 'W')]).toEqual([box.id, undefined]);
     expect(validateStory(story.toDocument()).map((issue) => issue.code)).toContain('group-encloses-non-member');
+    // A file cannot say "not in the group", so the covered shape joins it when the file is opened again.
+    expect(parentOf(reopened(story), 'W')).toBe(box.id);
+  });
+
+  it('refuses a member group that is not smaller than the box it should go into', () => {
+    const story = Story.create({ title: 'T' });
+    const big = story.addGroup({ name: 'Big', x: 0, y: 0, width: 800, height: 800 });
+    expect(() => story.addGroup({ name: 'Small', members: [big.id], x: 1000, y: 0, width: 300, height: 200 })).toThrow(/not smaller than the new box/);
+  });
+
+  it('wants both x and y for a box, or neither', () => {
+    const story = Story.create({ title: 'T' });
+    expect(() => story.addGroup({ name: 'G', x: 100 })).toThrow(/both x and y/);
+  });
+
+  it('takes a nested group out of a group that shrinks below its size', () => {
+    const story = Story.create({ title: 'T' });
+    const outer = story.addGroup({ name: 'Outer', x: 0, y: 0, width: 1000, height: 1000 });
+    const inner = story.addGroup({ name: 'Inner', x: 100, y: 100, width: 300, height: 300 });
+    expect(parentOf(story, inner.id)).toBe(outer.id);
+    story.updateElement(outer.id, { width: 200, height: 200 });
+    expect(parentOf(story, inner.id)).toBeUndefined();
+    expect(parents(reopened(story))).toEqual(parents(story));
+  });
+
+  it('gives an attached note the group of its element, wherever it lands', () => {
+    const story = Story.create({ title: 'T' });
+    const a = story.addActor({ name: 'A', x: 500, y: 300 });
+    story.addGroup({ name: 'Above', x: 400, y: 0, width: 600, height: 280 });
+    const { annotation } = story.addAnnotation({ text: 'about A', attachTo: a.id });
+    expect(parentOf(story, annotation.id)).toBeUndefined();
+  });
+
+  it('places a shape without a position quickly below a very tall group', () => {
+    const story = Story.create({ title: 'T' });
+    story.addGroup({ name: 'Everything', x: 0, y: 0, width: 2000, height: 1e12 });
+    const started = Date.now();
+    const actor = story.addActor({ name: 'A' });
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(actor.y).toBeGreaterThan(1e12);
   });
 
   it('puts a shape added inside a group box into that group, as dropping it there in Egon does', () => {
@@ -174,6 +219,17 @@ describe('group membership while editing', () => {
     story.addActor({ name: 'A', x: 500, y: 50 });
     story.updateElement(box.id, { width: 700 });
     expect(parentOf(story, 'A')).toBe(box.id);
+  });
+
+  it('hands the members of a removed group to the group whose box holds them', () => {
+    const story = Story.create({ title: 'T' });
+    const a = story.addActor({ name: 'A', x: 150, y: 150 });
+    const fitted = story.addGroup({ name: 'Fitted', members: [a.id] });
+    const other = story.addGroup({ name: 'Other', members: [story.addActor({ name: 'B', x: 600, y: 100 }).id], x: 50, y: 50, width: 900, height: 400 });
+    expect(parentOf(story, 'A')).toBe(fitted.id);
+    story.removeElement(fitted.id);
+    expect(parentOf(story, 'A')).toBe(other.id);
+    expect(parents(reopened(story))).toEqual(parents(story));
   });
 
   it('hands the members of a removed group to the group around it', () => {

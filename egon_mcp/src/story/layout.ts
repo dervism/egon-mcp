@@ -26,11 +26,13 @@ interface BlockRow {
  * when a step introduces an actor that is not on the canvas yet. Members of a
  * group, annotations included, are kept together in a block of their own below
  * the story, one block per outermost group; a group nested in it gets rows of
- * its own inside that block. A note on a group member joins the member's group.
- * So no group box encloses anything else, and the story reopens with the same
- * groups. Groups without members move below everything. Other annotations move
- * next to the element they describe, groups are refitted around their members,
- * and every edge is rerouted. Running it twice changes nothing.
+ * its own inside that block. A note goes with what it is attached to: into the
+ * group of its element, or into the group it describes. So no group box
+ * encloses anything else, and the story reopens with the same groups. Shapes
+ * in no sentence and notes on nothing go on rows after the story, groups
+ * without members below everything. Other notes move next to their element,
+ * groups are refitted around their members, and every edge is rerouted.
+ * Running it twice changes nothing.
  */
 export function autoLayout(story: Story): void {
   joinNotesToGroups(story);
@@ -40,13 +42,18 @@ export function autoLayout(story: Story): void {
   const inGroup = (element: StoryElement) => groupAncestors(element, byId).length > 0;
   const nodeIds = new Set(nodes.filter((node) => !inGroup(node)).map((node) => node.id));
 
+  // Grid cells an element needs: wide or tall notes and empty groups take more than one.
+  const span = (id: string) => {
+    const box = boundsOf(byId.get(id) as ShapeElement);
+    return { cols: Math.max(1, Math.ceil((box.width + 20) / CELL_WIDTH)), rows: Math.max(1, Math.ceil((box.height + 60) / CELL_HEIGHT)) };
+  };
   const placed = new Map<string, Cell>();
   const occupied = new Set<string>();
   const take = (id: string, cell: Cell) => {
     placed.set(id, cell);
     occupied.add(key(cell));
   };
-  const nextRow = () => Math.max(-1, ...[...placed.values()].map((cell) => cell.row)) + 1;
+  const nextRow = () => Math.max(-1, ...[...placed].map(([id, cell]) => cell.row + span(id).rows - 1)) + 1;
 
   const steps = narrate(doc);
   for (const step of steps) {
@@ -63,21 +70,26 @@ export function autoLayout(story: Story): void {
     }
   }
 
-  // Elements that take part in no step go on rows of their own at the end.
+  // Elements that take part in no step, and notes that belong to no element, go on rows of their
+  // own at the end, in the order they are drawn, since the order of elements in a file means nothing.
+  const anchored = new Set(doc.elements.filter(isConnection).filter((link) => isNode(byId.get(link.source))).map((link) => link.target));
+  const freeNotes = doc.elements.filter((element) => isTextAnnotation(element) && !anchored.has(element.id) && !inGroup(element));
+  const leftovers = [...nodes.filter((node) => !placed.has(node.id) && !inGroup(node)), ...freeNotes]
+    .map((element) => element as ShapeElement)
+    .sort((a, b) => compareKeys([...readingPosition(a), a.id], [...readingPosition(b), b.id]));
   let leftoverRow = nextRow();
   let leftoverCol = 0;
-  // In the order they are drawn, since the order of elements in a file means nothing.
-  const drawnOrder = (a: ShapeElement, b: ShapeElement) => compareKeys([...readingPosition(a), a.id], [...readingPosition(b), b.id]);
-  for (const node of [...nodes].sort(drawnOrder)) {
-    if (placed.has(node.id) || inGroup(node)) {
-      continue;
-    }
-    take(node.id, { col: leftoverCol, row: leftoverRow });
-    leftoverCol += 1;
-    if (leftoverCol >= MAX_COLUMNS) {
+  let rowHeight = 1;
+  for (const element of leftovers) {
+    const { cols, rows } = span(element.id);
+    if (leftoverCol > 0 && leftoverCol + cols > MAX_COLUMNS) {
+      leftoverRow += rowHeight;
       leftoverCol = 0;
-      leftoverRow += 1;
+      rowHeight = 1;
     }
+    take(element.id, { col: leftoverCol, row: leftoverRow });
+    leftoverCol += cols;
+    rowHeight = Math.max(rowHeight, rows);
   }
 
   // Reading order decides the order inside group blocks; an annotation follows its element.
@@ -96,14 +108,16 @@ export function autoLayout(story: Story): void {
   }
   const rank = (id: string) => readingOrder.get(id) ?? Number.MAX_SAFE_INTEGER;
   const children = (groupId: string) => doc.elements.filter((element) => element['parent'] === groupId);
-  const firstRank = (groupId: string): number =>
-    Math.min(Number.MAX_SAFE_INTEGER, ...children(groupId).map((child) => (isGroup(child) ? firstRank(child.id) : rank(child.id))));
-
-  // Grid cells an element needs: wide or tall notes and empty groups take more than one.
-  const span = (id: string) => {
-    const box = boundsOf(byId.get(id) as ShapeElement);
-    return { cols: Math.max(1, Math.ceil((box.width + 20) / CELL_WIDTH)), rows: Math.max(1, Math.ceil((box.height + 60) / CELL_HEIGHT)) };
+  const firstRank = (groupId: string, seen = new Set<string>()): number => {
+    seen.add(groupId);
+    return Math.min(
+      Number.MAX_SAFE_INTEGER,
+      ...children(groupId)
+        .filter((child) => !seen.has(child.id))
+        .map((child) => (isGroup(child) ? firstRank(child.id, seen) : rank(child.id))),
+    );
   };
+
   const gap: BlockRow = { ids: [], height: 1 };
 
   // The rows of a group's block: its own members first, then each nested group on rows of its
@@ -218,20 +232,31 @@ function placeAnnotations(story: Story): void {
 }
 
 /**
- * A note on a group member would land inside the group's box, where Egon
- * counts it as part of the group, so it joins the member's innermost group.
+ * A note goes with what it is attached to: a note on an actor or work object
+ * joins that element's innermost group, or leaves every group, and a note on a
+ * group joins that group. Next to its element, a note in any other group would
+ * sit in a box it does not belong to.
  */
 function joinNotesToGroups(story: Story): void {
   const elements = story.elements();
   const byId = new Map(elements.map((element) => [element.id, element]));
+  const done = new Set<string>();
   for (const link of elements.filter(isConnection)) {
     const annotation = byId.get(link.target);
-    const anchorGroup = groupAncestors(byId.get(link.source), byId)[0];
-    if (annotation && isTextAnnotation(annotation) && anchorGroup && groupAncestors(annotation, byId).length === 0) {
-      story.setParent(annotation.id, anchorGroup);
-      annotation['parent'] = anchorGroup;
+    const anchor = byId.get(link.source);
+    if (!annotation || !isTextAnnotation(annotation) || !anchor || done.has(annotation.id)) {
+      continue;
+    }
+    done.add(annotation.id);
+    const wanted = isGroup(anchor) ? anchor.id : isNode(anchor) ? groupAncestors(anchor, byId)[0] : annotation['parent'];
+    if (wanted !== annotation['parent']) {
+      story.setParent(annotation.id, wanted as string | undefined);
     }
   }
+}
+
+function isNode(element: StoryElement | undefined): boolean {
+  return element !== undefined && (isActor(element) || isWorkObject(element));
 }
 
 /** The free cell closest to (col, row), preferring the same row and then rows below. */

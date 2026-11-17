@@ -102,7 +102,7 @@ Rules for good sentences:
 ## Annotations, groups and color
 
 - Annotations hold what the sentences cannot: variations, optional steps, rules, definitions of domain terms, frequencies ("every Thursday"), where something lives, open questions and disagreements. Attach each one to the element it is about with `add_annotation`.
-- Groups (`add_group`) draw a labeled box around elements that belong together: subdomains, organizational boundaries, locations, optional parts, repeated parts, or what a to-be story changes. Always give a group a name that says what it means. A group fitted around `members` holds only them. As in Egon, a box drawn with `x`, `y`, `width` and `height` takes in every shape whose top-left corner lies inside it, a shape added or moved into a box joins the group, and moving a group moves what is in it. Opening a file applies the same rule to shapes the file does not assign to a group.
+- Groups (`add_group`) draw a labeled box around elements that belong together: subdomains, organizational boundaries, locations, optional parts, repeated parts, or what a to-be story changes. Always give a group a name that says what it means. A group fitted around `members` holds only them. A box drawn with `x`, `y`, `width` and `height` takes in every shape whose top-left corner lies inside it, as a box drawn in Egon does; a shape added or moved into a box joins the group, and moving a group moves what is in it. A note goes with the element it is attached to. A file only records who is in a group, so opening a file puts any shape that lies in a group's box but has no group into that group.
 - Color (`color` on actors, work objects and groups, or `update_element`) marks differences, typically what is new or changes in a to-be story.
 
 ## Choose icons
@@ -120,7 +120,7 @@ Run `validate_story` after building or editing. Fix every error; the file would 
 - `unconnected-element`: connect it or remove it. Parts of a story that do not connect are often a gap in the story; ask the user why.
 - `numbering-gap`: call `renumber_steps`.
 - `overlapping-shapes`, `overlapping-groups`: call `auto_layout`, which keeps the members of each group together in a block of their own.
-- `group-encloses-non-member`: decide whether the element belongs in the group. If not, call `auto_layout`. If it does, set its `x` and `y` with `update_element` (its current position will do): a shape placed in a box joins the group.
+- `group-encloses-non-member`: decide whether the element belongs in the group. If not, call `auto_layout`; otherwise the element joins the group when the saved file is opened again (`save_story` lists such shapes in `groupChangesOnOpen`). If it does, set its `x` and `y` with `update_element` (its current position will do): a shape placed in a box joins the group.
 
 Then read `narrate_story` and compare it with what the user said. Each line must read as a correct sentence. Show the user the numbered sentences and retell the whole story from the start: is anything missing, is anything wrong, do all the experts agree? Retelling is where forgotten details come up; put them on the sentence they belong to.
 

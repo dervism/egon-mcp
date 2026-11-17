@@ -20,6 +20,35 @@ describe('Story.create', () => {
   });
 });
 
+describe('element ids', () => {
+  it('count up from the highest id in the story, so the file keeps the order elements were added in', () => {
+    const story = Story.fromDocument(
+      parseStoryFile(
+        JSON.stringify({
+          domain: { name: 'default', actors: {}, workObjects: {} },
+          dst: [
+            { type: 'domainStory:actorPerson', id: 'shape_9999', name: 'A', x: 0, y: 0 },
+            { type: 'domainStory:workObjectDocument', id: 'shape_0042', name: 'W', x: 200, y: 0 },
+            { type: 'domainStory:activity', id: 'connection_0500', name: 'writes', source: 'shape_9999', target: 'shape_0042', number: 1, waypoints: [{ x: 75, y: 37 }, { x: 200, y: 37 }] },
+            { info: '' },
+            { version: '3.2.1' },
+          ],
+        }),
+        'story.egn',
+      ),
+    );
+    const suffix = (id: string) => Number(id.replace(/^\D+_/, ''));
+    const first = story.addActor({ name: 'B' });
+    const second = story.addWorkObject({ name: 'V' });
+    const activity = story.addActivity({ from: first.id, to: second.id, label: 'reads' });
+    expect(first.id).toMatch(/^shape_\d+$/);
+    expect(suffix(first.id)).toBeGreaterThan(9999);
+    expect(suffix(second.id)).toBeGreaterThan(suffix(first.id));
+    expect(activity.id).toMatch(/^connection_\d+$/);
+    expect(suffix(activity.id)).toBeGreaterThan(500);
+  });
+});
+
 describe('adding actors and work objects', () => {
   it('creates elements with Egon types, unique shape ids and default sizes', () => {
     const { story, customer, order } = pizzaStory();

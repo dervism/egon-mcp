@@ -253,7 +253,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Save story to file',
       description:
-        'Writes a story into the workspace directory. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". An existing file is only replaced if this story opened or wrote it and nobody changed it since, or with overwrite: true.',
+        'Writes a story into the workspace directory. groupChangesOnOpen in the result lists shapes inside a group box that are not in the group; opening the file again puts them in. The extension picks the format: .egn (Egon file), .egn.svg (image with the story embedded, importable by Egon), .svg (image only) or .md (narrative). Without a path the story goes back to the file it was opened from, or to "<title>.egn". An existing file is only replaced if this story opened or wrote it and nobody changed it since, or with overwrite: true.',
       inputSchema: {
         storyId,
         path: z.string().optional().describe('Target path relative to the workspace root.'),
@@ -267,7 +267,11 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     },
     run(({ storyId: id, path, overwrite, layout }) => {
       const saved = workspace.save(id, { ...(path ? { path } : {}), ...(overwrite ? { overwrite } : {}), ...(layout ? { layout } : {}) });
-      return json({ ...saved, workspaceRoot: workspace.root });
+      // A file cannot say that a shape inside a box is not in the group, so opening it again adds it.
+      const covered = validateStory(workspace.get(id).story.toDocument())
+        .filter((issue) => issue.code === 'group-encloses-non-member')
+        .map((issue) => `${issue.message} Opening the file again puts it into the group.`);
+      return json({ ...saved, ...(covered.length > 0 ? { groupChangesOnOpen: covered } : {}), workspaceRoot: workspace.root });
     }),
   );
 
@@ -422,16 +426,16 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     {
       title: 'Add group',
       description:
-        'Draws a box around elements that belong together, such as a department or subdomain. With members, the box fits around them and holds only them. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.',
+        'Draws a box around elements that belong together, such as a department or subdomain. With members and no x and y, the box fits around them and holds only them; other shapes it happens to cover get a validate_story warning, and they join the group when the file is opened again. With x, y, width and height, it takes in every shape whose top-left corner lies inside, as a box drawn in Egon does. Shapes added or moved into the box later join the group; a box drawn inside another group goes into that group.',
       inputSchema: {
         storyId,
         name: z.string().describe('Label in the top-left corner of the box.'),
-        members: z.array(elementRef).optional().describe('Elements to put inside; the box fits around them.'),
+        members: z.array(elementRef).optional().describe('Elements to put in the group, even outside the box. Without x and y the box fits around them.'),
         color: color.optional(),
-        x: x.optional(),
-        y: y.optional(),
-        width: z.number().positive().optional().describe('Box width when no members are given.'),
-        height: z.number().positive().optional().describe('Box height when no members are given.'),
+        x: z.number().optional().describe('Left edge of the box. Give x and y together, or neither to fit the box around the members.'),
+        y: z.number().optional().describe('Top edge of the box. Give x and y together.'),
+        width: z.number().positive().optional().describe('Box width with x and y; default 300.'),
+        height: z.number().positive().optional().describe('Box height with x and y; default 200.'),
       },
     },
     run(({ storyId: id, name, members, color: picked, x: left, y: top, width, height }) =>
@@ -535,7 +539,7 @@ export function createEgonServer(options: EgonServerOptions): EgonServer {
     'auto_layout',
     {
       title: 'Auto layout',
-      description: 'Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, refits the group boxes, moves other annotations next to their element and moves groups without members to the end. A note on a group member joins that group, so the story reopens with the same groups. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.',
+      description: 'Arranges actors and work objects on a grid in reading order and reroutes every arrow. It keeps the members of each group together in a block of their own below the story, nested groups and annotations in a group included, refits the group boxes, moves other annotations next to their element and moves groups without members to the end. A note goes into the group of the element it is attached to, a note on a group into that group, and notes on nothing go after the story, so the story reopens with the same groups. Run it after adding many elements without positions, or when validate_story reports overlapping shapes or groups.',
       inputSchema: { storyId },
       annotations: { idempotentHint: true },
     },

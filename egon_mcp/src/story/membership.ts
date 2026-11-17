@@ -64,18 +64,20 @@ export function takeIn(group: GroupElement, elements: StoryElement[]): void {
 }
 
 /**
- * Brings the groups of a story read from a file in line with what Egon shows.
- * Egon reads `parent`, but leaves it out of its files for elements that a
- * group was drawn or resized around, so an element without one goes into the
- * group at its position. A group can only sit in a larger group: a link to a
- * group that is not larger is dropped (Egon keeps one when a group is resized
- * around its old parent), which also rules out loops.
+ * Brings the groups of a story read from a file in line with its drawing.
+ * Egon's import reads `parent` and then drops it, so files saved again from
+ * Egon often lack it for elements that a group was drawn or resized around.
+ * Elements without a `parent` that names a group go into the group at their
+ * position, by the rule Egon uses when a group is drawn. A group can only sit
+ * in a larger group: a link to a group that is not larger is dropped (Egon
+ * keeps one when a group is resized around its old parent), which also rules
+ * out loops.
  */
 export function settleMembership(elements: StoryElement[]): void {
   const byId = new Map(elements.map((element) => [element.id, element]));
-  for (const element of elements.filter(isGroup)) {
+  for (const element of elements) {
     const parent = typeof element['parent'] === 'string' ? byId.get(element['parent']) : undefined;
-    if (parent && isGroup(parent) && area(parent) <= area(element)) {
+    if (element['parent'] !== undefined && (!parent || !isGroup(parent) || (isGroup(element) && area(parent) <= area(element)))) {
       delete element['parent'];
     }
   }
