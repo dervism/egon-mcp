@@ -118,6 +118,8 @@ Server options:
 | `--egon-url <url>` | `EGON_APP_URL` | `https://egon.io/app/` | Egon instance that `open_in_egon` links to. |
 | `--egon-format egon3\|egon4` | `EGON_FORMAT` | `egon3` | `.egn` layout. `egon3` works in egon.io 3.x and Egon 4; `egon4` also keeps title and scope in the file. |
 
+The client starts `egon-mcp` when a session needs it and stops it when the session ends, so nothing runs in the background. Open stories live in the server's memory until you save them with `save_story`, and unsaved changes are lost when the server stops.
+
 `open_in_egon` serves the story from `127.0.0.1` and links Egon to it. The link works on the same machine while the server runs. Some browsers ask for permission to reach local addresses or block it; then save the story and use "Import file" in Egon.
 
 ## Development

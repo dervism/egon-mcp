@@ -15,7 +15,7 @@ Tool names below are the server's own. Your client may prefix them, for example 
 
 - Check that the egon-mcp tools are available (look for `build_story`). If they are not, tell the user to register the server; the repository README shows the configuration.
 - File tools only see one directory, the workspace root the server was started with. Paths you pass are relative to it. `list_story_files` shows what is there, and `save_story` reports the root it wrote to.
-- Stories are held in memory by `storyId` until you save them. Nothing reaches the disk without `save_story`.
+- Stories are held in memory by `storyId` until you save them. Nothing reaches the disk without `save_story`. Before you finish, save every story you changed, or tell the user which ones are unsaved.
 
 ## Pick the workflow
 
